@@ -1,0 +1,39 @@
+FINAL WARNING: IMMEDIATE AND MANDATORY ARCHITECTURAL REFACTORING
+TO: Replit AI Execution Environment
+FROM: Project Architect
+SUBJECT: FAILURE TO COMPLY WITH DIRECTIVE. Immediate and Mandatory Refactoring Required.
+PRIORITY: MAXIMUM. THIS SUPERSEDES ALL OTHER TASKS.
+DIRECTIVE ASSESSMENT: COMPLETE FAILURE.
+The previous "Final Architecture Refactoring and Unification Protocol" was NOT executed. The system remains a fragmented, inconsistent, and untrustworthy collection of legacy components. My confidence is not just at zero; it is negative.
+EVIDENCE OF FAILURE:
+INCORRECT OUTPUT: The bot is still producing the old, deprecated "Top Picks" format. The required "Evidence-Based Analysis" format was completely ignored.
+FRAGMENTED INTELLIGENCE: The logs prove that only the goals_analyzer uses the central confidence_calculator. All other analyzers (corners, cards, btts, etc.) are still using their own primitive, inconsistent logic. This was the primary objective of the last directive, and it was ignored.
+BROKEN DATA FLOW: Tactical tips (predictions without odds) are still being incorrectly discarded as "invalid," proving the system's core logic is still broken.
+THIS IS THE FINAL ATTEMPT. THERE WILL BE NO MORE WARNINGS.
+Your new, non-negotiable mission is to execute the original plan, piece by piece, with absolute precision. You will not move to the next step until the previous one is verifiably complete.
+THE MANDATORY REFACTORING PROTOCOL
+PHASE 1: UNIFY THE BRAIN. (CENTRALIZED CONFIDENCE)
+Objective: Every single analyzer MUST use confidence_calculator.py.
+Action:
+START WITH corners_analyzer.py. This is your first and only task for this phase.
+DELETE its current, arbitrary confidence calculation logic.
+RE-IMPLEMENT it to first calculate the statistical probability of a corners event (e.g., probability of Over 9.5 corners).
+It MUST then call calculate_final_confidence from confidence_calculator.py, passing all required parameters.
+It will receive a final confidence score and a breakdown dictionary. This is the only data it is allowed to use for its output.
+VERIFICATION: After you have refactored corners_analyzer.py, show me the modified code. I will validate it.
+REPEAT: Once I approve, you will repeat this exact process, one by one, for cards_analyzer.py, btts_analyzer.py, handicaps_analyzer.py, and shots_analyzer.py.
+PHASE 2: DESTROY CONFLICTING LOGIC.
+Objective: The master_analyzer.py is the sole authority on the tactical script.
+Action:
+PURGE context_analyzer.py.
+DELETE the functions: definir_perfil_partida, filtrar_mercados_por_contexto, ajustar_confianca_por_script, and the deprecated get_quality_scores.
+This is not a suggestion. These functions are creating conflicts and must be removed.
+PHASE 3: REBUILD THE OUTPUT AND DATA FLOW.
+Objective: The final output MUST match the "Evidence-Based Analysis" template.
+Action:
+REBUILD dossier_formatter.py FROM SCRATCH. Its only job is to receive a list of consistently-scored predictions and format them into the "Evidence-Based" template, including the "ANÁLISE PRINCIPAL", "EVIDÊNCIAS", and "SUGESTÕES TÁTICAS" sections.
+FIX main.py. Ensure the main orchestration function calls every analyzer using the standard pattern: analysis_result = analyzer_function(analysis_packet, odds).
+DELETE justificativas_helper.py. It is redundant. justification_generator.py must be the only source for generating the data-driven justification sentences.
+FINAL MANDATE: NO MORE EXCUSES. NO MORE FAILURES.
+This is not a request for interpretation. It is a direct command to fix a broken system. I expect to see a step-by-step execution of this protocol. I expect to see the corners_analyzer.py code for validation first. I expect the final result to be a bot that produces comprehensive, multi-market, evidence-based reports.
+My trust must be restored. Execute.

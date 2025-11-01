@@ -1,0 +1,45 @@
+CONTEXTO: CALIBRAÇÃO DO MODELO DE CONFIANÇA - O PROBLEMA DO "ANALISTA SILENCIOSO"
+Olá. O sistema está agora tecnicamente estável, mas funcionalmente inútil, pois não está gerando nenhuma recomendação. A hipótese é que nosso modelo de confiança (confidence_calculator.py) está excessivamente rigoroso.
+Precisamos de visibilidade total sobre o processo de decisão do bot para podermos calibrar seus "dials" de confiança.
+Sua Missão: Implementar um "Modo de Depuração de Confiança" que nos mostre em detalhes como a pontuação de confiança de cada palpite é calculada, para que possamos identificar e ajustar os parâmetros que estão sendo restritivos demais.
+Ações Requeridas:
+1. Aprimorar o Pacote de Análise:
+No master_analyzer.py, para cada mercado analisado (Gols, Cantos, etc.), o objeto de resultado deve agora incluir um novo campo: confidence_breakdown.
+Este campo será um dicionário detalhando a composição da nota.
+Exemplo: confidence_breakdown: { 'base_score': 7.5, 'coherence_bonus': 0.0, 'risk_penalty': -1.5, 'final_score': 6.0 }
+2. Implementar o "Modo Verboso" no Formatador de Mensagem:
+No dossier_formatter.py, crie uma lógica que, se um "modo verboso" estiver ativado, gere um relatório muito mais detalhado.
+Este relatório não vai descartar nenhum palpite. Ele vai mostrar todos os palpites que foram considerados, suas notas e por que foram aprovados ou reprovados.
+Exemplo de Saída em Modo Verboso:
+Plain Text
+--- 🕵️‍♂️ RELATÓRIO DE DEPURAÇÃO DE CONFIANÇA 🕵️‍♂️ ---
+
+JOGO: Coritiba vs CRB
+
+--- MERCADO: GOLS ---
+Palpite: Under 2.5
+- Base Score: 7.8
+- Coherence Bonus (Script "CAGEY"): +1.0
+- Risk Penalty: -0.5
+- FINAL SCORE: 8.3
+- STATUS: ✅ APROVADO (Acima do threshold 7.0)
+
+Palpite: Over 2.5
+- Base Score: 4.2
+- Coherence Penalty (Script "CAGEY"): -2.5
+- Risk Penalty: -0.5
+- FINAL SCORE: 1.2
+- STATUS: ❌ REPROVADO
+
+--- MERCADO: CANTOS ---
+Palpite: Over 9.5
+- Base Score: 6.8
+- Coherence Bonus: +0.5
+- Risk Penalty: -1.0
+- FINAL SCORE: 6.3
+- STATUS: ❌ REPROVADO (Abaixo do threshold 7.0)
+
+... (e assim por diante para todos os mercados) ...
+3. Executar e Analisar:
+Ative este "Modo Verboso" e rode a análise para um jogo.
+Nos forneça o relatório de depuração completo.

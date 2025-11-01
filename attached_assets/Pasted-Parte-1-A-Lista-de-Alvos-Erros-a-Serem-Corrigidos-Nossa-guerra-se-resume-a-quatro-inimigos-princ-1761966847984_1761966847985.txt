@@ -1,0 +1,43 @@
+Parte 1: A Lista de Alvos (Erros a Serem Corrigidos)
+Nossa guerra se resume a quatro inimigos principais. Eles estão interligados, mas precisam ser caçados individualmente.
+🎯 ALVO #1: O CÂNCER DA DUPLICIDADE DE DADOS (Prioridade Máxima)
+O Erro: O código possui duas lógicas de coleta de dados conflitantes. Uma correta, que busca estatísticas detalhadas jogo a jogo (/fixtures/statistics), e uma "zumbi" que ainda usa o endpoint quebrado /teams/statistics, resultando em dados zerados e no uso do FALLBACK.
+A Correção: Exorcismo completo. Eliminar TODAS as chamadas ao endpoint /teams/statistics do api_client.py e de qualquer outra parte do código. A única fonte de verdade para estatísticas agregadas (cantos, cartões, etc.) deve ser o loop manual que busca os dados jogo a jogo.
+🎯 ALVO #2: A PONTE QUEBRADA (Mapeamento de Dados)
+O Erro: Os analyzers especialistas (Cantos, Cartões, Finalizações) não estão "lendo" os dados corretos que o master_analyzer calcula. Eles recebem o pacote de dados, mas procuram nos campos errados, resultando em médias 0.0 e no silêncio desses mercados.
+A Correção: Religação dos fios. Modificar corners_analyzer.py, cards_analyzer.py e shots_analyzer.py para que eles extraiam suas estatísticas EXCLUSIVAMENTE do dicionário analysis_packet['weighted_metrics'].
+🎯 ALVO #3: A AMNÉSIA DO FORMATTER (Apresentação Falha)
+O Erro: O dossier_formatter.py não está implementando a formatação completa que projetamos. Ele falha silenciosamente ou omite seções cruciais.
+A Correção: Reconstrução da Lógica de Apresentação.
+Implementar as Evidências: A seção 📊 EVIDÊNCIAS (ÚLTIMOS 4 JOGOS) DEVE ser exibida na Análise Principal, mostrando os dados reais (não zerados) dos últimos jogos.
+Implementar a Diversidade: A seção 🧠 OUTRAS TENDÊNCIAS DEVE usar a "Diversity Logic", mostrando a melhor análise de mercados diferentes, e não apenas uma lista de palpites do mesmo mercado.
+Remover as Odds: Todas as menções a odds (@1.33) devem ser removidas do dossiê final. O bot é um "Analista Puro".
+🎯 ALVO #4: A INSURREIÇÃO DOS ESPECIALISTAS (Contexto Ignorado)
+O Erro: O Roteiro Tático (SCRIPT_DOMINIO_CASA, etc.) é gerado, mas não está sendo usado para influenciar matematicamente as probabilidades nos analyzers especialistas.
+A Correção: Restaurar a Hierarquia. Implementar o "Script-Based Probability Modifier" dentro de cada analyzer. A probabilidade estatística bruta DEVE ser ajustada pelo contexto do roteiro antes do cálculo final da confiança.
+Parte 2: O Voo do Phoenix (Como o Bot Deve Funcionar)
+Após a correção de todos os alvos, o bot se comportará da seguinte maneira, realizando o nosso "Estado de Vitória":
+Cenário de Uso: O Usuário clica em 🎯 Análise Completa
+Início Imediato e Transparente: O bot responderá instantaneamente com "⚡ Analisando X jogos...".
+Coleta de Dados Inteligente (Nos Bastidores):
+O bot buscará a lista de todos os jogos do dia.
+Para cada jogo, o master_analyzer iniciará seu trabalho.
+(CORREÇÃO DO ALVO #1): Para calcular as médias de cantos, cartões, etc., ele NÃO usará o atalho. Ele buscará os últimos 5-10 jogos de cada time e, em um loop, fará uma requisição para CADA JOGO (/fixtures/statistics) para obter os dados reais. O log não mostrará mais a palavra FALLBACK para Weighted Metrics.
+Análise Profunda e Contextual (Nos Bastidores):
+O Cérebro Funciona: O master_analyzer calculará o QSC, o SoS e definirá um Roteiro Tático (ex: SCRIPT_DOMINIO_CASA).
+(CORREÇÃO DO ALVO #2): O pacote de análise (analysis_packet), contendo os dados reais das Weighted Metrics, será enviado para todos os analyzers especialistas.
+(CORREÇÃO DO ALVO #4): O corners_analyzer, ao receber o pacote, verá o Roteiro SCRIPT_DOMINIO_CASA e aumentará matematicamente a probabilidade de "Over Cantos Casa".
+Cada analyzer gerará múltiplas análises (Over/Under 8.5, 9.5, 10.5 para cantos, etc.), cada uma com uma confiança real baseada em dados reais e contexto.
+Entrega do Dossiê Perfeito (O Resultado Visível):
+O bot coletará todas as análises de todos os jogos que passaram no CONFIDENCE_THRESHOLD.
+Ele ordenará tudo por confiança.
+(CORREÇÃO DO ALVO #3): O dossier_formatter entrará em ação. Ele pegará a análise de maior confiança (digamos, "Over 9.5 Cantos" para um jogo do Liverpool) e montará a "ANÁLISE PRINCIPAL".
+A justificativa será baseada em dados: "A média de cantos nos jogos do Liverpool é de 7.5, e a média combinada é de 11.2...".
+A seção 📊 EVIDÊNCIAS aparecerá, mostrando: vs Man City: 8 cantos (Total: 13), vs Arsenal: 6 cantos (Total: 10), etc.
+Para as "OUTRAS TENDÊNCIAS", a "Diversity Logic" garantirá que vejamos algo como:
+A melhor análise de Gols de outro jogo.
+A melhor análise de Cartões de um terceiro jogo.
+A melhor análise de BTTS de um quarto jogo.
+Nenhuma odd será exibida. Apenas a análise pura.
+Interação Contínua: O bot apresentará o primeiro lote de dossiês e um botão "Gerar Mais Análises", permitindo ao usuário navegar por todos os 182 (ou mais) insights que foram gerados, sem nunca ter que esperar pelo processamento novamente.
+Em suma, após as correções, teremos um bot estável, produtivo, inteligente e transparente, que entrega exatamente o produto que projetamos: um dossiê de an

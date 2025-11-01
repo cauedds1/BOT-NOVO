@@ -1,0 +1,47 @@
+PROJECT PHOENIX: ONBOARDING & CORRECTIVE ACTION PROTOCOL FOR NEW LEAD DEVELOPER
+TO: New Replit AI Execution Environment (Welcome to the team)
+FROM: The Project Architects
+SUBJECT: URGENT ONBOARDING & CRITICAL REPAIR DIRECTIVE. You are the new lead developer for Project Phoenix. This is your complete project briefing and first mission.
+PRIORITY: MAXIMUM. Read this document in its entirety. Your success depends on it.
+PART I: YOUR ONBOARDING - WELCOME TO PROJECT PHOENIX
+1. Our Mission (What We Are Building):
+You have been assigned to Project Phoenix. Your purpose is to build and perfect a world-class, AI-powered Football Analyst Consultant. This is not a simple "betting bot." It is an intelligence tool.
+Our Philosophy:
+Analysis Over Opportunity: We produce high-quality, evidence-based analysis. We remain silent if the quality is low.
+Each Game is a Unique Story: We analyze context, tactics, and team quality. We do not use generic statistical averages.
+We are Consultants, Not Tipsters: We provide intelligence dossiers to empower users, not simple "picks."
+2. Project History (How We Got Here):
+The project was plagued by critical failures: inconsistent logic, shallow single-market analyses, and a complete lack of reliability. After extensive refactoring, we commissioned a "MEGA AUDIT" to assess the state of the system.
+3. The Audit Results (Where We Are Now - THE CRITICAL SITUATION):
+The previous AI performed a forensic audit and produced a startlingly accurate report (MEGA_AUDIT_REPORT.md). This report is now your guide.
+The GOOD News (What is Working ✅): The core "organs" of the bot have been successfully rebuilt.
+The specialist analyzers (goals, corners, cards) ARE capable of generating deep, multi-market predictions (~20 for goals, ~12 for corners, etc.).
+The "Contextual IQ" (Script-Based Probability Modifiers) IS active.
+The "Diversity Logic" in the formatter IS implemented.
+The BAD News (What is Critically Broken 🚨): The "wiring" connecting these brilliant organs is completely wrong. The bot is non-functional due to integration failures. The audit identified 4 CRITICAL FAILURES that you must now fix:
+ARCHITECTURAL INCONSISTENCY: The analyzers have different function signatures. goals_analyzer uses a modern interface (analysis_packet), while corners and cards use an obsolete, multi-parameter interface.
+FATAL RUNTIME ERROR: The main.py file calls a function format_phoenix_dossier() that DOES NOT EXIST. The bot will crash every time it tries to format a message.
+CONFLICTING IMPLEMENTATIONS: There are multiple, conflicting blocks of code in main.py that try to call the analyzers in different, incompatible ways.
+UNINTEGRATED PRESENTATION LAYER: The correct formatter (format_evidence_based_dossier) exists but is never properly called.
+PART II: YOUR MISSION - THE CORRECTIVE ACTION PROTOCOL
+Your first and only mission is to repair the "wiring" of the system based on the audit's findings. You will perform a surgical operation to fix these 4 critical failures. Then, you will audit your own work to confirm the success of the operation.
+STEP 1: SURGICAL REPAIR
+Objective: To fix the 4 critical failures and make the system architecturally sound.
+Action Plan:
+UNIFY SIGNATURES: Your first action is to modify analysts/corners_analyzer.py and analysts/cards_analyzer.py. You WILL change their function signatures to match the modern interface of goals_analyzer_v2.py. They must accept (analysis_packet, odds) and nothing else. All the data they need (stats, script, etc.) must be extracted from the analysis_packet dictionary inside the function.
+ELIMINATE CONFLICTS: Your second action is in main.py. You will search for and DELETE all old, conflicting blocks of code that call the analyzers using the obsolete, multi-parameter signature. There must be only ONE clean, modern loop that iterates through the analyzers and calls them using the new, unified (analysis_packet, odds) signature.
+FIX THE FATAL ERROR: Your third action is also in main.py. You will find every call to the non-existent function format_phoenix_dossier() and REPLACE it with the correct function call: format_evidence_based_dossier().
+CONNECT THE FINAL WIRE: Your fourth action is to ensure the main analysis loop correctly gathers the list of predictions returned by each analyzer into a single, master all_predictions list. This master list is what must be passed to the format_evidence_based_dossier() function.
+STEP 2: POST-OPERATIVE AUDIT
+Objective: To confirm, with irrefutable proof, that your repairs were successful and that the system is now fully integrated and functional.
+Action Plan:
+After completing Step 1, you will immediately initiate a new, "Post-Operative Forensic Audit."
+You will re-run the exact same checks from the original MEGA AUDIT, but this time, the expected outcome is SUCCESS on all points.
+Your audit must verify and provide proof for the following:
+Proof of Unified Signatures: Show the function definitions for analyze_goals, analyze_corners, and analyze_cards. They must all be identical.
+Proof of Clean Integration: Show the single, clean loop in main.py that now calls all analyzers.
+Proof of Correct Formatting Call: Show that main.py now correctly calls format_evidence_based_dossier.
+Proof of Data Flow: Run a single-match analysis and show the all_predictions list being correctly populated with dozens of predictions from multiple analyzers before being passed to the formatter.
+FINAL MANDATE: PROVE YOUR WORTH.
+Welcome to the project. Your first task is the most important one we have ever assigned. It is to fix the fundamental brokenness of this system and bring it to life. Study the diagnosis, execute the repairs with surgical precision, and then prove the success of your work with a flawless audit report.
+The future of Project Phoenix is now in your hands. Execute.

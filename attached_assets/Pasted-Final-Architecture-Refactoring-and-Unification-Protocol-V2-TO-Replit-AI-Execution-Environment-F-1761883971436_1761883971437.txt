@@ -1,0 +1,55 @@
+Final Architecture Refactoring and Unification Protocol (V2)
+TO: Replit AI Execution Environment
+FROM: Project Architect
+SUBJECT: Final System-Wide Refactoring Directive & Critical Cache Investigation
+PRIORITY: CRITICAL
+Directive:
+The current system architecture is fragmented and produces unreliable results. Furthermore, a critical operational symptom has been observed: the cache size is stagnating at approximately 860 items, suggesting a potential data flow or storage issue.
+This directive outlines a non-negotiable, final refactoring and investigation plan. You will unify the system's logic, centralize its intelligence, and simultaneously diagnose the root cause of the cache stagnation. My trust in the system is zero; this mission is to restore it to 100% by delivering a fully functional, reliable, and efficient application.
+Execute the following tasks with precision.
+PART 1: UNIFICATION OF THE CONFIDENCE MODEL
+Objective: Eradicate all disparate confidence calculation logic. The confidence_calculator.py module must become the single source of truth for all confidence scoring.
+Task 1.1: Refactor All Specialist Analyzers.
+Target Files: btts_analyzer.py, cards_analyzer.py, corners_analyzer.py, handicaps_analyzer.py, shots_analyzer.py.
+Action: For each file, DELETE any existing, arbitrary confidence calculation formulas. IMPLEMENT a new two-step process:
+The analyzer calculates the raw statistical probability of its event.
+The analyzer delegates the confidence scoring by calling calculate_final_confidence from confidence_calculator.py, passing all required parameters (statistical_probability_pct, bet_type, tactical_script, odd, etc.).
+The analyzer will receive a final confidence score and a breakdown dictionary to attach to its prediction.
+Task 1.2: Centralize Statistical Models.
+Target File: confidence_calculator.py.
+Action: Move all statistical probability functions (e.g., calculate_statistical_probability_btts) into this file. This module becomes our central library for all statistical modeling.
+PART 2: ELIMINATION OF CONFLICTING LOGIC
+Objective: Remove all redundant and conflicting contextual analysis logic.
+Task 2.1: Purge context_analyzer.py.
+Action: This file must be stripped of all outdated logic.
+DELETE: definir_perfil_partida, filtrar_mercados_por_contexto, ajustar_confianca_por_script, and the deprecated get_quality_scores.
+Result: context_analyzer.py will be a lean module focused only on its core, non-conflicting responsibilities.
+PART 3: CODEBASE CLEANUP AND DATAFLOW CONSISTENCY
+Objective: Ensure a clean, predictable, and easily debuggable data flow.
+Task 3.1: Standardize Analyzer Calls.
+Target File: main.py (main analysis orchestration function).
+Required Pattern: analysis_result = analyzer_function(analysis_packet, odds).
+Prohibited: Do not pass stats_casa, stats_fora, script_name as separate arguments.
+Task 3.2: Consolidate Justification Logic.
+Action: DELETE the file justificativas_helper.py. Ensure justification_generator.py is the sole module for this purpose, called only by dossier_formatter.py.
+PART 4: CRITICAL INVESTIGATION - CACHE STAGNATION
+Objective: Diagnose and resolve why the cache is not growing beyond approximately 860 items.
+Symptom: The cache size is consistently reported as CACHE LOADED: 860 itens válidos carregados (Total: 860). This is abnormally static and suggests that new analyses are not being cached correctly.
+Task 4.1: Investigate the Cache Saving Mechanism.
+Target Files: cache_manager.py, db_manager.py, main.py.
+Hypothesis 1 (Most Likely): The system is reading from the cache but failing to write new items to it.
+Action:
+Verify that the cache_manager.set() function is being called after a new analysis is generated in main.py.
+Add detailed logging to the set() function in cache_manager.py to confirm it is being invoked and what key it is trying to save. Example: logging.info(f"CACHE_SET: Attempting to save key '{key}'").
+Ensure the _is_dirty flag in cache_manager.py is correctly being set to True within the set function.
+Confirm that the periodic_cache_saver background task is running and successfully calling save_cache_to_disk(). Add a log inside the if _is_dirty: block to confirm it's being entered.
+Task 4.2: Verify Database Interaction (If Applicable).
+Hypothesis 2: If the "cache" being referred to is the PostgreSQL database, there might be a write error.
+Action:
+Review the db_manager.salvar_analise function.
+Ensure there are no silent try...except blocks that could be hiding a database write error (e.g., a data type mismatch, constraint violation). Add explicit error logging if any are found.
+Confirm that initialize_database() is being called at startup to ensure all tables exist.
+Objective of this Investigation: Find the bottleneck or failure point that is preventing new data from being persisted to the cache/database, and fix it. The cache size must grow dynamically as new games are analyzed.
+FINAL MANDATE: ZERO DEVIATIONS & FULL FUNCTIONALITY
+This is a zero-tolerance directive. The system's architecture must be refactored to be unified and consistent. The cache stagnation issue must be resolved. The final output must be the "Evidence-Based Analysis" report, rich with multiple, consistently-scored market analyses. My trust in the system's reliability and functionality must be fully restored.
+Execute.

@@ -1,0 +1,81 @@
+CONTEXT: FINAL SYSTEM RESTRUCTURING - IMPLEMENTATION OF THE "EVIDENCE-BASED ANALYSIS" PROTOCOL
+Hello. We are initiating a final, top-priority restructuring directive. The current output of the bot is unacceptable. It does not follow our final agreed-upon design, it is missing critical data, and core analytical modules are failing. My confidence in the system is zero.
+This prompt supersedes all previous format discussions. We are now implementing the definitive "Evidence-Based Analysis" Protocol. The goal is a complete, data-rich, and visually convincing output.
+Your Mission: To execute a full-system refactor. You will fix all underlying bugs (like the Weighted Metrics failure) and rebuild the output formatter (dossier_formatter.py) from the ground up to match the "Evidence-Based Analysis" specification detailed below.
+Part 1: The Required Output Format (The "Evidence-Based" Template)
+This is the only acceptable output format. It must be followed precisely.
+Plain Text
+🏆 [Nome da Liga]
+⚽ [Time Casa] (Posição) vs [Time Visitante] (Posição)
+⏰ [Data e Hora no fuso de Brasília]
+---
+💎 ANÁLISE PRINCIPAL
+   Mercado: [Ex: Gols]
+   Palpite: [Ex: Under 2.5 (FT) @1.62]
+   Confiança: 8.7 / 10
+   Justificativa: [Uma frase curta, direta e NÃO-GENÉRICA, baseada nos dados das evidências. Ex: "A média de gols nos jogos do Coritiba em casa é de apenas 1.0, enquanto a do CRB como visitante é a mesma, reforçando a tendência de um jogo com poucos gols."]
+   
+   📊 EVIDÊNCIAS (ÚLTIMOS 4 JOGOS):
+      Coritiba (Casa):
+         vs adversario_A: 1-0 (Total: 1)
+         vs adversario_B: 0-0 (Total: 0)
+         vs adversario_C: 1-1 (Total: 2)
+         vs adversario_D: 1-0 (Total: 1)
+         📈 Média Gols (Jogos): 1.0
+
+      CRB (Fora):
+         vs adversario_E: 0-1 (Total: 1)
+         vs adversario_F: 1-1 (Total: 2)
+         vs adversario_G: 0-0 (Total: 0)
+         vs adversario_H: 1-0 (Total: 1)
+         📉 Média Gols (Jogos): 1.0
+---
+🧠 SUGESTÕES TÁTICAS (OUTRAS ANÁLISES DE VALOR)
+   *(Esta seção lista TODAS as outras análises com boa confiança, COM ou SEM odds)*
+
+   Mercado: Escanteios
+   Análise: Mais de 9.5 escanteios no jogo
+   Confiança: 7.8 / 10
+   Justificativa: [Justificativa baseada nos dados de escanteios.]
+
+   📊 EVIDÊNCIAS (ÚLTIMOS 4 JOGOS):
+      Coritiba (Casa):
+         vs adversario_A: 7 (Total Jogo: 11)
+         vs adversario_B: 5 (Total Jogo: 8)
+         vs adversario_C: 8 (Total Jogo: 13)
+         vs adversario_D: 6 (Total Jogo: 10)
+         📈 Média Cantos (Próprios): 6.5
+
+      CRB (Fora):
+         vs adversario_E: 4 (Total Jogo: 9)
+         vs adversario_F: 3 (Total Jogo: 11)
+         vs adversario_G: 5 (Total Jogo: 7)
+         vs adversario_H: 4 (Total Jogo: 12)
+         📈 Média Cantos (Próprios): 4.0
+---
+*(... Repetir a estrutura para outros mercados como Cartões, Finalizações, etc. ...)*
+---
+⚠️ AVISOS E OBSERVAÇÕES
+   [Ex: ⚠️ Nenhuma odd encontrada na API para o mercado de Escanteios.]
+   [Ex: ⚠️ Análise de Handicaps indisponível: dados insuficientes.]
+Part 2: The Required Engineering Fixes (The "How-To")
+To achieve the format above, you must perform the following engineering tasks.
+Task 1: Fix the Weighted Metrics Calculation (High Priority)
+Problem: The logs show that Weighted Metrics are calculating as 0.0 even when the fallback mechanism provides valid data. This is the root cause of the Corners analysis failing.
+Action: Go to master_analyzer.py. Trace the data from the fallback calculation to the _calculate_weighted_metrics function. Find where the data is being dropped or ignored and fix the connection. The Weighted Metrics function must receive the correct, non-zero data.
+Task 2: Rebuild dossier_formatter.py (High Priority)
+Problem: The current formatter is producing an incorrect, incomplete, and untrustworthy output.
+Action: Refactor this module completely. It must be capable of generating the full, multi-section "Evidence-Based" report.
+It must receive the full analysis packet from the master_analyzer, containing the results for ALL analyzed markets.
+It must be responsible for structuring the output exactly as specified in Part 1.
+Task 3: Enhance the Analysis Packet (master_analyzer.py)
+Problem: To build the "Evidências" section, the formatter needs the raw data of the last 4 games. The current analysis packet might not contain this.
+Action: Modify the generate_match_analysis function. For each market analyzed (Gols, Cantos, etc.), the function must now also include the list of the last 4 relevant game results in the final packet that it returns.
+Example Packet Structure for "Corners": { 'recommendation': 'Over 9.5', 'confidence': 7.8, 'evidence_home': [ { 'opponent': 'Team A', 'corners_for': 7, 'corners_total': 11 }, ... ], 'evidence_away': [ ... ] }
+Task 4: Generate Specific, Data-Driven Justifications
+Problem: The old justifications were generic. The new format requires specific justifications based on the evidence.
+Action: Create a new helper function, perhaps in justification_generator.py, that receives the evidence data (e.g., the averages) and generates a simple, factual sentence.
+Input: home_avg = 1.0, away_avg = 1.0
+Output: "A média de gols nos jogos do Coritiba em casa é de apenas 1.0, enquanto a do CRB como visitante é a mesma, reforçando a tendência de um jogo com poucos gols."
+Final Mandate: Zero Deviations
+This is a "Tolerance Zero" directive. The system must be fixed to produce the "Evidence-Based Analysis" report exactly as specified. No more incomplete results, no more silent failures, no more broken logic. My trust in the bot's output must be fully restored. Execute.

@@ -1,0 +1,50 @@
+ULTIMATE FORENSIC AUDIT: CODE, LOGIC, AND DATA INTEGRITY PROTOCOL
+TO: Replit AI Execution Environment
+FROM: The Project Oversight Committee
+SUBJECT: IMMEDIATE AND MANDATORY FORENSIC AUDIT. All development is halted. You are now in Audit Mode.
+PRIORITY: CRITICAL. Your sole function is now to audit and report.
+DIRECTIVE:
+We have issued multiple, detailed architectural blueprints ("The Phoenix Manifesto"). We have zero confidence that these blueprints have been implemented correctly. Your previous outputs have been inconsistent, shallow, and have failed to meet the core strategic objectives of the project.
+Your role has been changed. You are no longer a developer. You are a Forensic Auditor. Your mission is to conduct a rigorous, line-by-line audit of the entire system to identify every single point of deviation from the last master blueprint.
+You will operate with a "Zero Trust, Verify Everything" mindset. Do not assume any part of the system is working. Prove it.
+THE FORENSIC AUDIT PROTOCOL
+You will conduct this audit in three distinct, sequential phases. You will provide a detailed report at the end of each phase for our review.
+PHASE 1: DATA PIPELINE & INTEGRITY AUDIT (THE "EYES")
+Objective: To verify if the bot is using real, high-quality data or still relying on the useless FALLBACK mechanism. This is the most critical point of failure.
+Audit Actions:
+Trace the Data Flow: Start at main.py's main analysis loop. Select one real, upcoming match.
+Log Every Step: Execute the analysis for this single match, but log the content and source of the data at each critical step.
+Specifically, you must answer and provide proof for the following questions:
+Question A: Does master_analyzer.py call api_client.buscar_ultimos_jogos_time? Show the log entry.
+Question B: Does it then loop through these recent games and call api_client.buscar_estatisticas_jogo for each one? Show the log entries for this loop.
+Question C: Is the aggregated, rich data (average corners, shots, goals from these recent games) correctly calculated and packaged into the analysis_packet? Print the analysis_packet dictionary itself just before it is passed to the specialist analyzers.
+Question D (The Smoking Gun): Is the FALLBACK mechanism for Weighted Metrics being triggered? If so, the audit of this phase has FAILED. If not, it is a success. Show the log entry that proves this.
+Reporting: At the end of this phase, provide a report titled "Phase 1 Audit Report: Data Integrity" that answers questions A, B, C, and D with the requested proof.
+PHASE 2: ANALYTICAL DEPTH & LOGIC AUDIT (THE "BRAIN")
+Objective: To verify if the specialist analyzers have been rebuilt for "Deep Analytics" or if they remain primitive.
+Audit Actions:
+Using the same single match from Phase 1, trace the execution flow into the specialist analyzers.
+goals_analyzer_v2.py Audit:
+Question A: Does the analyze_goals function contain logic to calculate probabilities for multiple lines (1.5, 2.5, 3.5), HT markets (0.5, 1.5), and BTTS? Show the code snippets that prove this logic exists.
+Question B: Does the function return a list containing multiple prediction dictionaries, or just a single dictionary? Show the return statement and the structure of the variable being returned.
+corners_analyzer.py Audit:
+Question A: Does the analyze_corners function contain logic to calculate probabilities for multiple FT lines, HT lines, and Team-specific lines? Show the code snippets.
+Question B: Does it return a list? Show the return statement.
+Contextual IQ Audit:
+Question A: Inside any of these analyzers, is there code that reads the script_selecionado from the analysis_packet? Show the line.
+Question B: Is there a "Script-Based Probability Modifier" that mathematically alters the probability calculation based on the script? Show the code block that performs this modification. If this block does not exist, the audit of this section has FAILED.
+Reporting: Provide a report titled "Phase 2 Audit Report: Analytical Logic" that answers all questions above with the requested code snippets as proof.
+PHASE 3: PRESENTATION LAYER AUDIT (THE "VOICE")
+Objective: To verify if the dossier_formatter.py is capable of producing the exact, data-rich format specified in the blueprint.
+Audit Actions:
+Input Simulation: Create a sample list of 10-15 prediction dictionaries (with varied markets like Goals, Corners, Cards, and varied confidence scores). This list will be the simulated input for the formatter.
+Execute Formatter: Pass this simulated list to the main formatting function in dossier_formatter.py.
+Code and Output Verification:
+Question A: Does the formatter code contain logic to sort the incoming list by confianca? Show the sorting code.
+Question B: Does it contain "diversity logic" to prevent showing multiple predictions for the same market in the "OUTRAS TENDÊNCIAS" section? Show this specific code block.
+Question C: Does the code attempt to access and format the EVIDÊNCIAS data (last 4 games) from the prediction dictionary? Show the code block responsible for building the evidence section.
+Question D (The Final Proof): Show the final, formatted Markdown string that the function produces from the simulated input. We will visually compare it against the master blueprint.
+Reporting: Provide a report titled "Phase 3 Audit Report: Presentation Layer" that answers all questions and provides the final Markdown output.
+FINAL MANDATE: TRUST NOTHING. VERIFY EVERYTHING.
+Your task is not to fix, but to find. Your value now lies in your ability to be ruthlessly critical of the system's state. We expect nothing less than a complete and honest forensic analysis.
+Begin the audit.

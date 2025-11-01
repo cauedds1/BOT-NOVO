@@ -1,0 +1,60 @@
+Site Reliability Engineering (SRE) - "Production Hardening" Directive
+CONTEXT: PHOENIX PROJECT - SRE HARDENING & FINAL VERIFICATION CYCLE
+Hello. The last audit provided a critical "Production Readiness" score of 4/10. This is unacceptable for a production system. Your analysis was correct.
+This directive initiates the "Site Reliability Engineering (SRE)" phase. Your mission is twofold:
+Implement the four critical reliability fixes identified in the audit.
+Immediately after, conduct a new, final audit and autonomously fix any remaining issues you discover on the spot.
+The goal is to elevate the system's readiness score significantly by building resilience, stability, and fail-safes into its core architecture.
+Part 1: The SRE Hardening Mandate (Fixing the 4 Critical Gaps)
+You are authorized to make any necessary architectural changes to implement the following four reliability patterns.
+Mission 1: Implement API Resilience (Retry with Exponential Backoff)
+Problem: The system is brittle. Any temporary API failure causes a total crash.
+Required Action:
+Go to api_client.py.
+Using a library like tenacity or by building a manual wrapper, implement a retry mechanism for all external API calls.
+The logic must be "Exponential Backoff": If a request fails, wait 1 second, then retry. If it fails again, wait 2 seconds, then 4, then 8, up to a maximum number of retries (e.g., 5 attempts).
+This must handle common transient errors like 502 Bad Gateway, 503 Service Unavailable, and network timeouts. If all retries fail, then and only then should it raise a final exception.
+Mission 2: Implement Startup Secret Validation
+Problem: The bot starts with invalid tokens/secrets, only crashing upon first use.
+Required Action:
+In main.py, immediately after loading the environment variables (API tokens, database credentials), create a new startup_validation() function.
+This function must perform a simple, low-cost "health check" against each external service before starting the main bot loop.
+Telegram: Make a bot.get_me() call. If it fails, the token is invalid.
+API-Sports: Make a simple /status call. If it fails, the API key is likely invalid.
+PostgreSQL: Attempt to get and release a connection from the pool. If it fails, the connection string is wrong.
+If any of these checks fail, the bot must refuse to start, logging a fatal error message indicating exactly which secret is wrong.
+Mission 3: Implement Graceful Shutdown for OS Signals
+Problem: Abrupt shutdowns (OS signals, crashes) bypass the clean shutdown hooks, leading to data loss (e.g., unsaved cache).
+Required Action:
+In main.py, use Python's signal module to catch common termination signals (signal.SIGINT for Ctrl+C, signal.SIGTERM for system shutdowns).
+The signal handlers you create must trigger the same clean shutdown logic we already have (closing DB pools, saving cache, etc.).
+This ensures that even if the process is killed externally, it will first attempt to save its state.
+Mission 4: Implement a Bounded Job Queue
+Problem: The background job queue is unbounded and can grow indefinitely under high load, leading to memory exhaustion and system collapse.
+Required Action:
+Go to job_queue.py.
+Modify the queue logic to have a maximum size (e.g., maxsize=1000).
+When a new job is submitted, if the queue is full, the bot must gracefully reject the request, informing the user: "Estou processando um grande número de análises no momento. Por favor, tente novamente em alguns minutos." This prevents the system from accepting more work than it can handle.
+Part 2: The "Seek and Destroy" Final Audit Mandate
+Immediately after successfully implementing the four fixes above, you will transition into the final verification phase.
+Your Mandate: Conduct a new, full system audit with the same rigor as the last one. However, this time, you will not report the problems. You will fix them on the spot. This includes, but is not limited to:
+Adding basic Rate Limiting to user commands to prevent abuse.
+Standardizing any remaining print() statements to use the logging module.
+Adding basic automated tests for at least one critical function (e.g., a unit test for a function in master_analyzer).
+Creating a basic Procfile for easier deployment.
+Part 3: The Final "After-Action Report"
+Your final output for this entire directive will be a single, comprehensive report summarizing all actions taken.
+SRE HARDENING & FINAL AUDIT - AFTER-ACTION REPORT
+✅ 1. Critical Reliability Fixes Implemented:
+API Resilience: Confirm that API calls now use an exponential backoff retry mechanism.
+Startup Validation: Confirm that the bot now validates all secrets at startup and refuses to start on failure.
+Graceful Shutdown: Confirm that OS signals are now caught to trigger a clean shutdown.
+Bounded Job Queue: Confirm that the job queue now has a maximum size and rejects new jobs when full.
+✅ 2. "Seek and Destroy" Audit Corrections:
+(List the additional fixes you implemented during the final audit. Be specific.)
+Example Item: Rate Limiting: Implemented a basic rate limit of 5 commands per minute per user.
+Example Item: Test Coverage: Added a unit test for the _calculate_qsc function.
+*Example Item:``** *Deployment: Created a Procfile for Heroku/Fly.io deployment.`
+✅ 3. Final Production Readiness Score:
+New Architect Score: Provide a new, updated "X/10" score reflecting the system's readiness after all these changes.
+Final Mandate: This is the most critical mission to date. The objective is to transform the bot from a functional application into a resilient, production-grade service. Execute with comprehensive engineering discipline.

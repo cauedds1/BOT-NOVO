@@ -1,0 +1,33 @@
+UI/UX Feature Implementation: Main Menu Functionality
+CONTEXT: PHOENIX PROJECT - UI/UX & FEATURE IMPLEMENTATION
+Hello. The core analysis engine (master_analyzer) is now stable. This directive focuses on implementing the full functionality of the main user menu, connecting each button to its specific feature as per the product specification.
+This is a large-scale feature implementation task. You will build the logic behind each button on the main menu.
+Task 1: Implement Asynchronous Batch Analysis & Pagination
+Affected Buttons: Análise Completa, Over Gols, Escanteios, BTTS, Resultado.
+The Goal: These buttons must trigger a batch analysis of all games for the day without blocking the bot. The results must be delivered to the user in paginated chunks (5 at a time).
+Required Architecture:
+Create a Task Queue System: When a user clicks one of these buttons, the main bot process should not perform the analysis directly. Instead, it must add a "job" to a background task queue. This job will contain the type of analysis (e.g., 'full', 'goals_only', 'corners_only').
+Background Worker: A separate, asynchronous worker process must constantly check this queue. When it finds a job, it will iterate through all of the day's fixtures, run the master_analyzer for each one, and save the complete analysis results (the "Dossier") to a dedicated table in the PostgreSQL database (e.g., daily_analyses).
+Paginated Delivery: The bot's response to the user should be immediate. It will query the daily_analyses table for the first 5 results matching the job type. It will send these 5 analyses and a button labeled "➡️ Ver Próximos 5".
+"Load More" Button: When the user clicks "Ver Próximos 5", the bot will simply query the database again for the next 5 results (OFFSET 5, OFFSET 10, etc.) and send them instantly.
+Task 2: Implement Targeted Analysis Modes
+Affected Buttons: Buscar Jogo, Por Liga.
+The Goal: Allow users to trigger analysis for a specific game or a specific league.
+Required Action:
+Buscar Jogo: Implement a user-friendly search flow. When clicked, the bot should ask the user to type a team name. The bot will then query the API for matching fixtures for the day and present a list of games for the user to select. Upon selection, it will run the standard master_analyzer for that single fixture_id.
+Por Liga: When clicked, the bot must fetch all leagues with games on the current day and display them as a list of buttons (similar to the provided image). When a user clicks a league, the bot will fetch all fixtures for that league_id and analyze them one by one, sending a complete "Dossier" for each game in that league.
+Task 3: Implement Specialized Bet Generation Modes
+Affected Buttons: Aposta Simples, Criar Múltipla, Bingo.
+The Goal: Provide curated betting slips based on the bot's full analysis.
+Required Action:
+Aposta Simples: This mode should trigger a batch analysis (using the Task Queue from Task 1). However, the final formatting logic must be different. For each game, it will only display the single tip with the absolute highest confidence (ANÁLISE PRINCIPAL), omitting all other sections (SUGESTÕES TÁTICAS, PALPITES ALTERNATIVOS). The bot should present these single bets one by one, perhaps with "Próxima Aposta Simples" buttons.
+Criar Múltipla: This requires a new "Bet Slip Builder" algorithm. This algorithm should: a. Perform a full batch analysis in the background. b. Collect a pool of the highest-confidence tips across all games. c. Intelligently combine a small number of these tips (e.g., 3-5 selections) to create a multiple bet with a reasonable final odd (e.g., between 3.00 and 7.00). It should be able to use more than one tip from the same game if they are compatible (e.g., "Over 2.5 Goals" and "Over 9.5 Corners"). d. Present the final, combined bet slip to the user.
+Bingo: This is a variation of the Criar Múltipla mode. The "Bet Slip Builder" algorithm should be configured for a "high-risk, high-reward" profile. It should aim to combine a larger number of selections (e.g., 6-10) to achieve a much higher final odd (e.g., > 15.00), while still using valid, analyzed tips.
+Task 4: Implement Informational Features
+Affected Button: Jogos do Dia.
+The Goal: Provide a quick overview of the day's schedule.
+Required Action:
+When clicked, the bot should fetch all fixtures for the day.
+It must then group these fixtures by league and count the number of games in each.
+The final output should be a formatted message listing each league and the number of games it has on that day (e.g., "🇧🇷 Brasileirão Série A: 4 jogos").
+Final Mandate: This is a comprehensive feature development plan. Implement these functionalities in a modular and robust way, ensuring the user experience is smooth, fast, and aligns with the specifications provided for each button.

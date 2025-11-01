@@ -1,0 +1,22 @@
+CONTEXT: COMPLEMENTARY DIRECTIVE - ENSURING COMPREHENSIVE MULTI-MARKET ANALYSIS
+Hello. This directive complements the "Evidence-Based Analysis" restructuring you are currently working on. While you are fixing the core bugs and the output format, I need to ensure we solve the primary strategic failure of the system: its inability to analyze a wide variety of markets.
+Your work on the Weighted Metrics bug is the first step. This directive details the next steps to guarantee a truly comprehensive analysis.
+Your Mission: To audit and, if necessary, repair the entire analysis chain for all specialist markets beyond just "Goals". The bot must prove it can analyze and present findings for Corners, Cards, Shots, BTTS, and Match Results.
+The Required Actions: A Specialist Analyzer Audit
+You are to perform the following checks for each specialist analyzer.
+Task 1: Audit ALL Specialist Analyzers (handicaps_analyzer.py, cards_analyzer.py, etc.)
+Problem: These modules may be failing silently, have overly restrictive logic, or are not communicating correctly with the master_analyzer.
+Action: For each specialist analyzer file, you must verify and ensure the following:
+Correct Data Reception: Confirm that the analyzer is receiving the complete and correct data packet it needs from the master_analyzer. Log the data packet received by each specialist for one test game.
+Sound Internal Logic: Briefly review the analysis logic. Is it too simple? Is it too restrictive? For example, is the handicaps_analyzer failing because its conditions for selecting a handicap are nearly impossible to meet?
+Standardized Return Object: Ensure that every analyzer returns a standardized analysis object, even if it's just a "Tactical Suggestion" without odds. No analyzer should "fail silently". If it cannot produce a tip, it should return a reason (e.g., { 'status': 'failed', 'reason': 'Insufficient data for card analysis.' }).
+Task 2: Validate the "Assembler" Logic in dossier_formatter.py
+Problem: A key failure is that even if specialist analyzers produce a result, the final report ignores it.
+Action: As you rebuild the dossier_formatter.py (as per the primary directive), you must explicitly confirm that its new logic is designed as an "assembler," not a filter.
+It must iterate through a list of all successful analyses provided by the master_analyzer.
+It must correctly place each analysis in the appropriate section ("Análise Principal" for the top pick, "Sugestões de Análise" for all others).
+Task 3: Enhance Data-Driven Justifications for ALL Markets
+Problem: The justification_generator might only be configured for "Goals".
+Action: Ensure this module is expanded. It must be capable of generating specific, factual sentences for every market type based on their respective evidence data (e.g., averages of corners, cards, shots, etc.).
+Final Mandate: Restore Trust Through Comprehensiveness and Variety
+The ultimate goal of this complementary directive is to ensure the bot becomes a true multi-market analyst. When your work is complete, a typical analysis report must contain findings for several different markets, not just one. This is the only way to restore my confidence in the bot's analytical depth and utility.

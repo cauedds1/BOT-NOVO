@@ -1,0 +1,21 @@
+Prompt de Calibração do Modelo de Confiança
+CONTEXT: CONFIDENCE MODEL CALIBRATION
+Hello. The system is now architecturally stable and completing full analysis cycles without errors. However, it is currently generating zero valid tips, indicating that our confidence model is too restrictive.
+The bot is functional but not useful. Our mission is to calibrate the confidence model to find a better balance between quality and quantity.
+Your Mission: Investigate the confidence_calculator.py and the data flowing into it to understand why no tips are passing the threshold. Then, propose and implement adjustments.
+Required Action:
+Implement "Debug Mode" for Confidence:
+Modify the dossier_formatter.py. Add a "debug mode" that, if enabled, will show not just the final confidence score, mas também a sua composição.
+Example Debug Output: Confiança: 6.5/10 (Base: 7.0, Bônus Coerência: +1.0, Penalidade Risco: -1.5)
+This will give us visibility into why a tip is receiving its score.
+Analyze a "Failed" Game:
+Run a full analysis on a single game in this new debug mode.
+Observe the confidence scores for all potential tips (Over/Under, BTTS, Cantos, etc.).
+Identify the primary reason for the low scores. Is the base_confidence too low? Are the penalties too high?
+Propose and Implement Adjustments:
+Based on your analysis, propose adjustments to the confidence_calculator.py. This might include:
+Lowering the Minimum Threshold: Maybe a tip with 6.5/10 is acceptable to show as a "Sugestão Tática".
+Reducing Penalties: Perhaps the incoherence penalty should be -1.5 instead of -2.5.
+Increasing Base Confidence: Maybe the formulas that calculate the initial confidence are too conservative.
+Implement the most logical adjustment.
+The Goal: After this calibration, the bot should be able to generate a reasonable number of high-quality "Análises Principais" and "Sugestões Táticas" for a typical day of games, without becoming a "palpiteiro" que recomenda qualquer coisa. We need to find the sweet spot.

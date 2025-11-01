@@ -1,0 +1,104 @@
+TO: Replit AI Execution Environment
+FROM: Project Architect
+SUBJECT: FINAL, UNIFIED SYSTEM BLUEPRINT. Mandatory Implementation of Deep Analytics and Precise Dossier Formatting.
+PRIORITY: ABSOLUTE. THIS IS THE SINGLE SOURCE OF TRUTH FOR THE ENTIRE PROJECT.
+DIRECTIVE ASSESSMENT:
+All previous attempts have resulted in partial or superficial implementations. This directive supersedes all others and provides a complete, end-to-end blueprint for the system. The bot's failure to analyze multiple markets with depth and its failure to format the output correctly are both being addressed now. There will be no more partial executions.
+THE MISSION:
+You will rebuild the analytical core and the presentation layer simultaneously to create the definitive "Pure Analyst" bot. The system must think with depth and speak with clarity.
+PART 1: FORGING THE DEEP ANALYTICAL CORE
+This section dictates the required intelligence of each specialist analyzer. Each function MUST be rebuilt to return a list of multiple prediction dictionaries.
+ACTION 1.1: REBUILD goals_analyzer_v2.py
+Objective: This module must become a master of goal analysis.
+Implementation:
+The main function analyze_goals MUST return a list of prediction dictionaries.
+You will create internal logic to analyze the following sub-markets:
+Total Goals (FT): Over/Under for lines 1.5, 2.5, 3.5.
+First Half Goals (HT): Over/Under for lines 0.5, 1.5.
+Both Teams To Score (BTTS): "Yes" and "No".
+Team Goals: Home Team Over/Under 0.5, 1.5; Away Team Over/Under 0.5, 1.5.
+For every single potential outcome (~20 predictions), you MUST call confidence_calculator.calculate_final_confidence to get its unique, standardized confidence score.
+The function will return a master list of all generated goal-related predictions.
+ACTION 1.2: REBUILD corners_analyzer.py
+Objective: This module must master corner analysis.
+Implementation:
+The main function analyze_corners MUST return a list.
+Sub-Markets:
+Total Corners (FT): Over/Under for lines 8.5, 9.5, 10.5.
+First Half Corners (HT): Over/Under for line 4.5.
+Team Corners: Home Team Over/Under 4.5, 5.5; Away Team Over/Under 3.5, 4.5.
+For every generated prediction (~12 predictions), call the central confidence_calculator and return the complete list.
+ACTION 1.3: REBUILD cards_analyzer.py
+Objective: This module must master disciplinary analysis.
+Implementation:
+The main function analyze_cards MUST return a list.
+Sub-Markets:
+Total Cards (FT): Over/Under for lines 3.5, 4.5, 5.5.
+For every generated prediction (~6 predictions), call the central confidence_calculator and return the complete list.
+ACTION 1.4: IMPLEMENT TRUE CONTEXTUAL INTELLIGENCE
+Objective: The Tactical Script from master_analyzer.py must intelligently influence the raw probability calculations.
+Implementation:
+Inside each specialist analyzer (goals, corners, cards), you will read the script_selecionado from the analysis_packet.
+You will create and apply a "Script-Based Probability Modifier" before calculating the final confidence.
+Example: If the script is SCRIPT_DOMINIO_CASA, you must apply a positive multiplier to the raw probabilities of "Home Team Over X Goals/Corners" and a negative multiplier to "Away Team Over X Goals/Corners". If the script is SCRIPT_CAGEY_TACTICAL_AFFAIR, you must apply a positive multiplier to the probabilities of "Under X Goals" and "BTTS - No".
+PART 2: FORGING THE PRESENTATION LAYER (THE ANALYST'S DOSSIER)
+This section dictates the exact, non-negotiable format of the final output message.
+ACTION 2.1: REBUILD dossier_formatter.py
+Objective: The formatter must produce the "Analyst's Dossier" with perfect structure and data-driven evidence.
+Implementation:
+The formatter will receive the flat list of all predictions from all analyzers.
+It will sort this entire list by confianca in descending order.
+It will then construct the message using the following MANDATORY template:
+Markdown
+🏆 {league_name}
+⚽ {home_team_name} ({home_position}º) vs {away_team_name} ({away_position}º)
+⏰ {match_time} (Brasília)
+---
+
+💎 **ANÁLISE PRINCIPAL (Maior Confiança)**
+   **Mercado:** {prediction_1_market}
+   **Tendência:** {prediction_1_tendency}
+   **Confiança do Analista:** {prediction_1_confidence} / 10
+   **Justificativa:** {prediction_1_justification}
+
+   📊 **EVIDÊNCIAS ({prediction_1_market} - ÚLTIMOS 4 JOGOS):**
+      **{home_team_name} (Casa):**
+         vs {opponent_A}: {home_stat_A}
+         vs {opponent_B}: {home_stat_B}
+         vs {opponent_C}: {home_stat_C}
+         vs {opponent_D}: {home_stat_D}
+         📈 **Média {prediction_1_market} (Casa):** {home_avg_stat}
+
+      **{away_team_name} (Fora):**
+         vs {opponent_E}: {away_stat_E}
+         vs {opponent_F}: {away_stat_F}
+         vs {opponent_G}: {away_stat_G}
+         vs {opponent_H}: {away_stat_H}
+         📉 **Média {prediction_1_market} (Fora):** {away_avg_stat}
+---
+
+🧠 **OUTRAS TENDÊNCIAS DE ALTA CONFIANÇA**
+
+   **Mercado:** {prediction_2_market}
+   **Tendência:** {prediction_2_tendency}
+   **Confiança do Analista:** {prediction_2_confidence} / 10
+   **Justificativa:** {prediction_2_justification}
+
+   📊 **EVIDÊNCIAS ({prediction_2_market} - ÚLTIMOS 4 JOGOS):**
+      📈 **Média Combinada:** {combined_avg_stat_2}
+---
+
+   **Mercado:** {prediction_3_market}
+   **Tendência:** {prediction_3_tendency}
+   **Confiança do Analista:** {prediction_3_confidence} / 10
+   **Justificativa:** {prediction_3_justification}
+
+   📊 **EVIDÊNCIAS ({prediction_3_market} - ÚLTIMOS 4 JOGOS):**
+      📈 **Média Combinada:** {combined_avg_stat_3}
+ACTION 2.2: DATA AND LOGIC FOR THE TEMPLATE
+Evidence Data: The analysis_packet created by master_analyzer MUST contain the detailed results of the last 4 games for each team (opponents and relevant stats like goals, corners, cards).
+Justification Logic: The justification_generator.py MUST be enhanced to create specific, data-driven sentences for each market, using the evidence data. For example: "A média de gols nos jogos do Coritiba em casa é de apenas 1.0, enquanto a do CRB como visitante é a mesma, reforçando a tendência de um jogo com poucos gols."
+Diverse Suggestions: In the "OUTRAS TENDÊNCIAS" section, you MUST implement logic to ensure market diversity. If the top 5 predictions are all from the same market (e.g., "Finalizações"), you must select the best prediction from each of the top-rated different markets (e.g., the best "Finalizações", the best "Gols", the best "Cantos") to present a varied and useful report.
+FINAL MANDATE: BUILD THIS BLUEPRINT.
+This is the complete and final specification. It covers the deep analytical logic and the precise presentation layer. Your success is contingent on delivering a bot that produces dossiers matching this blueprint in both substance and style. There is no room for deviation.
+Execute.

@@ -1,0 +1,55 @@
+PROJECT PHOENIX V4.0: THE SQUAD INTELLIGENCE PROTOCOL
+TO: Replit AI Execution Environment
+FROM: The Project Architects
+SUBJECT: SYSTEM UPGRADE to V4.0. Mandatory Implementation of the Squad Intelligence and Player Impact Layer.
+PRIORITY: HIGH. This is the next evolutionary step for Project Phoenix.
+DIRECTIVE:
+The current system (V3.0) analyzes the game from a tactical and statistical perspective. We will now upgrade it to V4.0 by adding a new, critical layer of intelligence: Squad Analysis. The bot must evolve to understand not just the teams, but the individual players who comprise them. It must quantify the impact of key players, injuries, suspensions, and lineup changes.
+This will be achieved by creating a new, dedicated module, squad_intelligence_analyzer.py, and integrating its findings into the core analytical pipeline.
+THE SQUAD INTELLIGENCE CONSTRUCTION BLUEPRINT
+PHASE 1: PLAYER QUANTIFICATION (THE "PLAYER SCORE" SYSTEM)
+Objective: To create a system that numerically rates a player's quality and current form.
+Action:
+CREATE player_database.py: This module will act as our internal scouting database. It will contain a hand-curated list of key players. For each player, store:
+player_id (from the API)
+name (e.g., "Neymar Jr.", "Kevin De Bruyne")
+base_ps (Base Player Score): A manually assigned score from 0-100 representing their intrinsic quality and importance (e.g., Neymar: 95, a top-tier league defender: 88, a key player in a smaller league: 75).
+position (Forward, Midfielder, Defender, Goalkeeper).
+CREATE squad_intelligence_analyzer.py:
+Create a function: get_dynamic_player_score(player_id, player_stats).
+This function will retrieve the base_ps from our player_database.
+It will then analyze the player's recent stats (last 5 games: goals, assists, ratings) to calculate a "Form Modifier."
+The function will return a dynamic_ps = base_ps + form_modifier. A player in great form will have a dynamic_ps higher than his base score.
+PHASE 2: LINEUP & ROSTER STRENGTH ANALYSIS
+Objective: To quantify the actual strength of the team taking the field and understand the impact of absences.
+Action:
+MODIFY master_analyzer.py: At the beginning of its execution for a match, it must perform these new steps:
+Call the API to get the probable lineups (/fixtures/lineups).
+For each team, use the new squad_intelligence_analyzer to calculate two key metrics:
+fielded_squad_strength: The sum of the dynamic_ps of the 11 starting players.
+full_roster_strength: The sum of the dynamic_ps of the top 18 players on the team (as defined in our player_database).
+Calculate an absence_impact_index = 1 - (fielded_squad_strength / full_roster_strength). A high index means significant players are missing.
+Identify Key Events:
+Key Absence: If a player with base_ps > 85 is in the full roster but not in the starting 11, flag a KEY_ABSENCE event (e.g., KEY_ABSENCE: Neymar (PS:95) is out).
+Key Return: By comparing with the previous match's lineup, if a player with base_ps > 85 is now starting, flag a KEY_RETURN event (e.g., KEY_RETURN: Neymar (PS:95) is back).
+PHASE 3: INTEGRATION INTO THE CORE BRAIN
+Objective: To use this new Squad Intelligence to refine the final analysis and confidence scores.
+Action:
+UPGRADE confidence_calculator.py:
+Create a new function: apply_squad_intelligence_modifiers(confidence_breakdown, squad_events).
+This function will receive the list of events (KEY_ABSENCE, KEY_RETURN, absence_impact_index) and adjust the final confidence score.
+Logic Example: If a KEY_ABSENCE event involves a star forward, the confidence for "Over X Goals" and "Team To Win" for that team must be reduced. If a KEY_RETURN event involves that same player, the confidence must be increased. A high absence_impact_index for the defense must increase the confidence in the opposing team scoring.
+UPGRADE dossier_formatter.py:
+Add a new, dedicated section at the top of the dossier to display this critical information to the user.
+Markdown
+---
+⚡ **SQUAD INTELLIGENCE**
+   🟢 **Key Returns:** Neymar Jr. (FW) is back in the starting lineup.
+   🔴 **Key Absences:** Marquinhos (DF) is out due to suspension.
+   ⚠️ **Roster Alert:** Away team is fielding a weakened squad (Absence Impact: High).
+---
+FINAL MANDATE: EVOLVE THE PHOENIX.
+This protocol outlines the evolution from a tactical analyst to a complete football intelligence consultant. The successful implementation of this V4.0 layer will give the Phoenix its ultimate edge: the ability to understand the human element of the game.
+Execute the evolution.
+Iniciar agent
+Criar

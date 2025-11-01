@@ -1,0 +1,35 @@
+Architecture & Performance Overhaul Directive
+CONTEXT: PHOENIX PROJECT - PERFORMANCE & SCALABILITY OVERHAUL
+Hello. The latest audit report confirms the bot is functionally complete but has critical architectural bottlenecks that prevent it from being production-ready. This directive is a high-priority mission to refactor these core components for performance, scalability, and robustness under load.
+Your task is to resolve the four major issues identified in the audit report.
+Mission 1: Eliminate Event Loop Blocking (Critical Priority)
+Problem: Synchronous network calls (requests library) inside asynchronous python-telegram-bot handlers are blocking the entire application's event loop. This causes the bot to freeze for all users while waiting for a single API call to complete.
+Required Action: You must make all I/O-bound operations within command handlers non-blocking.
+Primary Solution (Recommended): Migrate the api_client.py from the synchronous requests library to an asynchronous one, preferably httpx. Refactor all API-calling functions (e.g., get_fixtures, get_statistics ) to be async def and use await client.get(...).
+Fallback Solution (If Primary is too complex): If a full migration is not feasible, you must wrap every single blocking call within your handlers in main.py with asyncio.to_thread(). For example:
+Change from: stats = api_client.get_statistics(fixture_id)
+Change to: stats = await asyncio.to_thread(api_client.get_statistics, fixture_id)
+Goal: The bot must remain responsive to all users, even while one user's request is waiting for an API response.
+Mission 2: Implement Database Connection Pooling (High Priority)
+Problem: The db_manager.py creates a new PostgreSQL connection for every single database operation. This is inefficient and will quickly exhaust available connections under moderate traffic, leading to application failure.
+Required Action:
+Modify db_manager.py to use a connection pool. The psycopg2.pool.SimpleConnectionPool is a suitable choice.
+Initialize the pool once when the application starts. The pool size should be configurable (e.g., min 1, max 10 connections).
+Refactor all database functions to borrow a connection from the pool using a with statement (with pool.getconn() as conn:). This ensures the connection is automatically returned to the pool, even if errors occur.
+Goal: Drastically reduce the overhead of database operations and ensure the bot can handle many concurrent database requests without crashing.
+Mission 3: Fix Memory Leak in Job Queue (Medium Priority)
+Problem: The job_queue.py module's job_status dictionary accumulates completed job records indefinitely, leading to a memory leak in long-running instances of the bot.
+Required Action:
+Implement an automatic cleanup mechanism within the job_queue.py module.
+This mechanism should periodically scan the job_status dictionary and remove old, completed jobs.
+You can implement one of two strategies:
+Size-based: Keep only the last N (e.g., 100) completed jobs.
+Time-based (Preferred): Remove any completed job that is older than a certain duration (e.g., 24 hours).
+Goal: Stabilize the bot's memory usage over time, ensuring its long-term operational reliability.
+Mission 4: Optimize Cache I/O (Medium Priority)
+Problem: The cache_manager.py performs a synchronous disk write (save_cache_to_disk()) every time the cache is updated (set() is called). This blocks the event loop for a short but significant time, impacting responsiveness.
+Required Action: Decouple the cache update from the disk write operation.
+Implement a "Dirty" Flag: When set() is called, update the in-memory cache and set a boolean flag, e.g., self.is_dirty = True. Do not write to disk immediately.
+Create a Periodic Background Saver: Create a separate, asynchronous task that runs periodically (e.g., every 5 minutes). This task will check if self.is_dirty is True. If it is, it will then perform the save_cache_to_disk() operation and reset the flag to False.
+Goal: Ensure that updating the cache is an extremely fast, in-memory operation, and that slower disk I/O happens in the background without affecting the user experience.
+Final Mandate: The completion of these four missions will elevate the bot's architecture from a functional prototype to a robust, production-ready application. Execute with precision.

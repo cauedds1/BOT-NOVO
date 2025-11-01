@@ -1,0 +1,19 @@
+Prompt de Correção de Arquitetura: Garantir Instância Única do Bot
+CONTEXT: ARCHITECTURE HARDENING - ENFORCE SINGLE BOT INSTANCE
+Hello. The telegram.error.Conflict error has returned after the latest architecture changes. This confirms that our current application startup logic is creating multiple competing bot instances, likely due to the new background worker processes.
+This is a critical architecture fix. We must enforce a strict separation of roles.
+Your Mission: Refactor the application's entry point to ensure that only one single process is responsible for initializing and running the Telegram polling loop.
+Required Action:
+Isolate the Main Bot Process:
+Go to main.py. Find the code that initializes the Telegram Application (Application.builder()...) and starts the bot (application.run_polling()).
+Enclose this entire block of code within a if __name__ == "__main__": statement. This is non-negotiable. It guarantees that the bot interface only starts when main.py is executed directly.
+Sterilize the Background Workers:
+Go to job_queue.py and any other script related to background workers (e.g., for the cache saver).
+Crucial: These worker scripts must not import main.py de forma que o código de inicialização do bot seja executado. They must never attempt to build or run their own Telegram Application.
+Their role is strictly to perform background tasks (like running master_analyzer or saving the cache). They should be completely "agnósticos" em relação ao Telegram.
+Implement a Centralized Startup:
+If you are using separate processes for the bot and the worker, ensure that the startup logic in main.py (within if __name__ == "__main__":) is responsible for launching both the Telegram bot polling and the background worker process(es) in a controlled manner. The worker should be started as a child process or a separate thread that does not run bot polling code.
+The Goal: The final architecture must be clean and unambiguous:
+One main process runs application.run_polling().
+Any background workers perform their tasks silently, without ever trying to communicate with the Telegram API for updates.
+This will permanently eliminate the Conflict error and stabilize the application.

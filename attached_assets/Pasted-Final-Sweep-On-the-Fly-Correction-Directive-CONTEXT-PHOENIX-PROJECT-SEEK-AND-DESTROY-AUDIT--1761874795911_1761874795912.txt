@@ -1,0 +1,42 @@
+Final Sweep & On-the-Fly Correction Directive
+CONTEXT: PHOENIX PROJECT - "SEEK AND DESTROY" AUDIT & REPAIR
+Hello. This is a final, high-authority directive. Your mission is to conduct a comprehensive system-wide audit and, unlike previous audits, you are authorized and required to correct any and all identified issues immediately upon discovery.
+The goal is not to produce a report of problems, but to produce a clean, robust, and fully operational codebase. Your final output should be a summary of the corrections you have made.
+Your Mandate: The "Seek and Destroy" Protocol
+You will act as a lead architect with full authority to refactor, repair, and optimize. You must scan the entire project, file by file, with the following priorities in mind. When you find a deviation, fix it.
+1. Critical Priority: Architecture & Stability
+Target: telegram.error.Conflict and other stability issues.
+Action:
+Enforce Single Bot Instance: Go to main.py. Ensure the Telegram Application startup and run_polling() call are strictly within an if __name__ == "__main__": block.
+Sterilize Background Workers: Inspect job_queue.py and any other background process. Confirm they do not initialize their own Telegram instance. Fix any code that violates this rule.
+Eliminate Blocking Calls: Scan all command handlers in main.py. Any synchronous, I/O-bound call (like api_client functions) must be made non-blocking, preferably by migrating the underlying library (requests -> httpx ) or, at a minimum, by wrapping the call in asyncio.to_thread().
+Implement Connection Pooling: Refactor db_manager.py to use psycopg2.pool.SimpleConnectionPool. Replace all direct connections with pooled connections using with pool.getconn() as conn:.
+2. High Priority: Data Integrity & Logic Flaws
+Target: Bugs that lead to incorrect or incomplete analysis.
+Action:
+Verify QSC Data Pipeline: Confirm that the QSC components (Position QS, Goal Diff QS, Form QS) are consistently calculated from real API data. If you find any fallback to default values (50), trace the root cause and repair the data fetching logic.
+Verify Weighted Metrics: Confirm that Weighted Metrics are producing non-zero values. If they are zero, the QSC pipeline is still flawed. Fix it.
+Fix Tactical Tip Handling: Ensure "Tactical Tips" (is_tactical=True) are never discarded for having an invalid odd and that their display format is clean (no “@None”).
+3. Medium Priority: Code Quality & Technical Debt
+Target: Issues that affect maintainability and long-term health.
+Action:
+Resolve TODO/FIXME Comments: Scan for all TODO, FIXME, and HACK annotations. Implement the required feature or fix, then remove the comment.
+Fix Hardcoded Logic: Replace the static season calculation with the dynamic, API-driven logic. Calibrate the cache TTLs to the recommended values (Odds: 1h, Stats: 6h, etc.).
+Standardize Logging: Replace any remaining print() statements used for debugging with the proper logging.info() or logging.debug() calls.
+Handle Silent Exceptions: Find all except Exception: pass blocks and add logging.error() or logging.warning() to them so that errors are never silenced.
+The Required Output: The "After-Action Report"
+After you have completed this "seek and destroy" mission, you will not provide a list of problems. Instead, you will provide a summary of actions taken, structured as follows:
+AFTER-ACTION REPORT: PHOENIX SYSTEM HARDENING
+✅ 1. Architecture & Stability Fixes:
+Single Instance Guarantee: Briefly describe how you enforced this (e.g., "Moved bot startup to if __name__ == '__main__' and verified worker scripts").
+Event Loop Blocking: Describe the solution implemented (e.g., "Migrated api_client.py to httpx for full async operation" ).
+DB Connection Pooling: Confirm that db_manager.py now uses a connection pool.
+✅ 2. Data Integrity & Logic Fixes:
+QSC Pipeline: Confirm that the data sources for QSC are now robust.
+Weighted Metrics: Confirm that these calculations now produce valid, non-zero results.
+Tactical Tip Handling: Confirm that the logic and display for tactical tips are now correct.
+✅ 3. Code Quality & Technical Debt Fixes:
+Code Annotations: State the number of TODO/FIXME comments that were resolved.
+Hardcoded Logic: Confirm that Season and Cache logic are now dynamic and configurable.
+Logging & Exceptions: Confirm that logging is now standardized and exceptions are no longer silenced.
+Final Mandate: Your goal is to leave the codebase in a "production-ready" state. When this mission is complete, the system should be stable, performant, and logically sound. Proceed.

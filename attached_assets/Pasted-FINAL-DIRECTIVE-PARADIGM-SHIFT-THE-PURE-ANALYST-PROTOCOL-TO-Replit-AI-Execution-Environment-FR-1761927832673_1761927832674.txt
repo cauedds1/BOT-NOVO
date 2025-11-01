@@ -1,0 +1,47 @@
+FINAL DIRECTIVE: PARADIGM SHIFT - THE PURE ANALYST PROTOCOL
+TO: Replit AI Execution Environment
+FROM: Project Architect
+SUBJECT: PARADIGM SHIFT. Immediate, System-Wide Refactoring to "Pure Analyst" Model.
+PRIORITY: MAXIMUM. THIS IS THE FINAL AND DEFINITIVE DIRECTIVE.
+DIRECTIVE:
+The previous model, which attempted to merge game analysis with market odds, has proven to be flawed, fragile, and unreliable. It has resulted in a system that is complex, bug-ridden, and fails to deliver on its core promise.
+We are now executing a paradigm shift. The bot is no longer a "tipster." It is a "Pure Game Analyst."
+Its sole mission is to analyze a football match and determine the most probable statistical outcomes, ranked by a unified confidence score, completely independent of market odds.
+This directive is a non-negotiable, zero-tolerance command to refactor the entire system according to this new philosophy.
+THE PURE ANALYST REFACTORING PROTOCOL
+PHASE 1: ODD-INDEPENDENCE - PURGE ALL MARKET DEPENDENCIES.
+Objective: Eradicate all logic related to market odds. The bot's analysis must not be influenced or limited by the availability of odds.
+Action:
+DELETE value_detector.py: This module is now obsolete. Its function of comparing bot probability to market odds is no longer required.
+PURGE main.py:
+Remove any calls to calculate_value_score or any logic related to "value."
+The primary sorting mechanism for all predictions MUST be the confianca field, in descending order. The concept of "value" is dead.
+Eliminate any logic that discards a prediction because its odd is missing or invalid. All generated analyses must be preserved.
+SIMPLIFY confidence_calculator.py:
+Remove the apply_value_score_modifier and apply_odd_risk_modifier functions. They are no longer needed.
+The calculate_final_confidence function will now be simpler: final_conf = base_conf + mod_script.
+PHASE 2: UNIFY THE BRAIN - MANDATORY CENTRALIZED CONFIDENCE.
+Objective: As established previously, and now more critical than ever, every single analyzer MUST use the central confidence_calculator.py.
+Action:
+INSPECT ALL ANALYZERS: corners_analyzer.py, cards_analyzer.py, btts_analyzer.py, handicaps_analyzer.py, shots_analyzer.py, match_result_analyzer_v2.py.
+ENFORCE THE PATTERN: For each one, you WILL delete its internal, arbitrary confidence logic. It WILL be replaced by the standard two-step process: a. Calculate the raw statistical probability of the event. b. Call the now-simplified calculate_final_confidence to get the final, authoritative score.
+This is not optional. The system must have a single, consistent "brain."
+PHASE 3: REBUILD THE OUTPUT - THE "ANALYST'S DOSSIER"
+Objective: The final user-facing message must be the "Analyst's Dossier," which presents pure analysis, not betting tips.
+Action:
+REBUILD dossier_formatter.py: Its sole purpose is to format a list of predictions (now sorted purely by confianca) into the new template.
+THE TEMPLATE:
+The main section is now "💎 ANÁLISE PRINCIPAL (Maior Confiança)". It shows the prediction with the highest confidence score. It MUST NOT display an odd. It shows "Tendência" (e.g., "Jogo para Under 2.5 Gols"), not "Palpite".
+The secondary section is "🧠 OUTRAS TENDÊNCIAS DE ALTA CONFIANÇA". It lists other high-confidence findings, also without odds.
+The "EVIDÊNCIAS" section, showing the last 4 games' data, remains mandatory.
+DELETE justificativas_helper.py: This file is confirmed to be redundant. All justification logic must originate from justification_generator.py and be based on the evidence data.
+PHASE 4: FIX THE DATA PIPELINE - GUARANTEE DATA INTEGRITY.
+Objective: The system must be resilient to API data inconsistencies.
+Action:
+ELIMINATE THE FLAWED ENDPOINT: In api_client.py, modify the buscar_estatisticas_gerais_time function. It MUST NOT rely on the /teams/statistics endpoint as its primary source. This endpoint has proven unreliable.
+ADOPT THE RELIABLE METHOD: The function's primary logic MUST be the "fallback" method: call buscar_ultimos_jogos_time and then iterate through those fixtures, calling buscar_estatisticas_jogo for each one to aggregate the data. This is now the Standard Operating Procedure.
+IMPLEMENT ROBUST ERROR HANDLING: Inside the loop that processes the last games, if a call to buscar_estatisticas_jogo for one fixture fails, it MUST NOT break the entire loop. It should log the specific failure and continue to the next game, ensuring the bot gathers as much data as possible.
+FINAL MANDATE: DELIVER THE PURE ANALYST.
+This is the final blueprint. The goal is a paradigm shift. We are building a Pure Game Analyst. The output will be a clean, data-driven, multi-market "Dossier" that is ranked by pure confidence, completely liberated from the constraints and unreliability of market odds.
+My trust will be restored when I see this new, superior bot in action.
+Execute.
