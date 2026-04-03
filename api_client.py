@@ -1385,6 +1385,18 @@ def normalizar_odds(odds_formatadas):
                     linha_num = linha.replace("Away ", "").replace("away ", "").strip()
                     odds_normalizadas[f"handicap_fora_{linha_num}"] = valor
 
+        elif mercado_key == "first_goal_team":
+            # Mercado Primeiro a Marcar (Equipe) — 3 desfechos: Casa / Fora / Nenhum
+            # API-Football: "Home", "Away", "No Goal" (ou "None")
+            for raw_val, odd_val in odds_dict.items():
+                raw_lower = raw_val.lower().strip()
+                if raw_lower in ("home", "casa", "home team", "time casa"):
+                    odds_normalizadas["primeiro_marcador_casa"] = odd_val
+                elif raw_lower in ("away", "fora", "away team", "time fora", "visitante"):
+                    odds_normalizadas["primeiro_marcador_fora"] = odd_val
+                elif raw_lower in ("no goal", "no goals", "none", "nenhum", "no scorer", "0-0"):
+                    odds_normalizadas["primeiro_marcador_nenhum"] = odd_val
+
         elif mercado_key == "correct_score":
             # Mercado Placar Exato — armazena dict completo E chaves individuais normalizadas
             # Dict: {"placar_exato": {"1:0": 6.5, ...}}
@@ -1480,6 +1492,15 @@ async def buscar_odds_do_jogo(id_jogo: int):
 
                 elif "Handicap" in bet_name or "Spread" in bet_name:
                     odds_formatadas["handicap"] = {v['value']: float(v['odd']) for v in values_raw}
+
+                elif bet_name in (
+                    "1st Goal Team",
+                    "First Goal Team",
+                    "First Goalscorer Team",
+                    "Next Goal",
+                    "Primeiro a Marcar",
+                ):
+                    odds_formatadas["first_goal_team"] = {v['value']: float(v['odd']) for v in values_raw}
 
                 elif bet_name in (
                     "Correct Score",

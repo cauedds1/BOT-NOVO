@@ -28,6 +28,7 @@ from analysts.double_chance_analyzer import analisar_mercado_dupla_chance
 from analysts.gabt_analyzer import analisar_mercado_gabt
 from analysts.correct_score_analyzer import analisar_mercado_placar_exato
 from analysts.european_handicap_analyzer import analisar_mercado_handicap_europeu
+from analysts.first_goal_analyzer import analisar_mercado_primeiro_a_marcar
 # PHOENIX V3.0: filtrar_mercados_por_contexto e get_quality_scores foram removidas na refatoração
 # PURE ANALYST PROTOCOL: value_detector removido - análise independente de odds
 from analysts.justification_generator import generate_persuasive_justification
@@ -456,6 +457,9 @@ async def gerar_analise_completa_todos_mercados(jogo):
 
     analise_handicap_europeu = analisar_mercado_handicap_europeu(analysis_packet, odds)
     print("--- ✅ EUROPEAN HANDICAP ANALYZER DONE ---")
+
+    analise_primeiro_marcador = analisar_mercado_primeiro_a_marcar(analysis_packet, odds)
+    print("--- ✅ FIRST GOAL ANALYZER DONE ---")
     
     # 4️⃣ EXTRAIR INFORMAÇÕES DO MASTER PACKET
     reasoning = analysis_packet['analysis_summary']['reasoning']
@@ -494,6 +498,7 @@ async def gerar_analise_completa_todos_mercados(jogo):
         ('Gols Ambos Tempos', '⏱️', analise_gabt),
         ('Placar Exato', '🎯', analise_placar_exato),
         ('Handicap Europeu', '🏷️', analise_handicap_europeu),
+        ('Primeiro a Marcar', '🥇', analise_primeiro_marcador),
     ]
     
     for mercado_nome, mercado_emoji, analise in mercados_analise:
@@ -653,6 +658,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 analises_brutas.append(analise_db['analise_placar_exato'])
             if analise_db.get('analise_handicap_europeu'):
                 analises_brutas.append(analise_db['analise_handicap_europeu'])
+            if analise_db.get('analise_primeiro_marcador'):
+                analises_brutas.append(analise_db['analise_primeiro_marcador'])
 
             analises_encontradas = [a for a in analises_brutas if a]
             stats_casa = analise_db['stats_casa']
@@ -779,6 +786,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                             analises_dict['finalizacoes'] = a
                         elif 'europeu' in mercado_lower:
                             analises_dict['handicap_europeu'] = a
+                        elif 'primeiro' in mercado_lower or 'first goal' in mercado_lower:
+                            analises_dict['primeiro_marcador'] = a
                         elif 'handicap' in mercado_lower:
                             analises_dict['handicaps'] = a
                         elif 'placar' in mercado_lower or 'correct' in mercado_lower or 'score' in mercado_lower:
@@ -1046,9 +1055,10 @@ async def coletar_todos_palpites_disponiveis():
         analise_gabt_local = analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
         analise_placar_exato_local = analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
         analise_he_local = analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
+        analise_pm_local = analisar_mercado_primeiro_a_marcar(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
 
         # Coletar palpites
-        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local, analise_placar_exato_local, analise_he_local]:
+        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local, analise_placar_exato_local, analise_he_local, analise_pm_local]:
             if analise and 'palpites' in analise:
                 mercado_nome = analise.get('mercado', '')
                 for palpite in analise['palpites']:

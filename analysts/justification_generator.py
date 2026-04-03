@@ -49,6 +49,8 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     elif mercado == "Handicap Europeu":
         return _justificar_handicap_europeu_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
+    elif mercado == "Primeiro a Marcar":
+        return _justificar_primeiro_marcador_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -705,4 +707,62 @@ def _justificar_generica(tipo, value_score, odd):
             f"de valor positivo sobre nossa estimativa de probabilidade."
         )
     
+    return justificativa
+
+
+def _justificar_primeiro_marcador_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para Primeiro a Marcar baseada em médias ofensivas e λ."""
+    extra = extra or {}
+    lambda_home = extra.get('lambda_home')
+    lambda_away = extra.get('lambda_away')
+    edge = extra.get('edge', 0.0)
+    probabilidade = extra.get('probabilidade', 0.0)
+
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    media_home = sum(j['team_goals'] for j in gols_home) / len(gols_home) if gols_home else None
+    media_away = sum(j['team_goals'] for j in gols_away) / len(gols_away) if gols_away else None
+
+    tipo_lower = tipo.lower()
+
+    if 'nenhum' in tipo_lower or 'no goal' in tipo_lower or 'sem gol' in tipo_lower:
+        if lambda_home and lambda_away:
+            lambda_total = lambda_home + lambda_away
+            justificativa = (
+                f"Com λ_total={lambda_total:.2f} gols esperados no jogo, a probabilidade de "
+                f"zero gols (jogo terminar sem marcar) é de {probabilidade:.1f}%. "
+            )
+        else:
+            justificativa = f"A probabilidade de jogo sem gols é de {probabilidade:.1f}%. "
+        if edge > 0:
+            justificativa += f"A odd implica apenas {(probabilidade - edge):.1f}%, gerando um edge de +{edge:.1f}%."
+        return justificativa
+
+    if 'casa' in tipo_lower or 'home' in tipo_lower:
+        team_name = home_team_name
+        media_ataque = media_home
+        lambda_team = lambda_home
+    else:
+        team_name = away_team_name
+        media_ataque = media_away
+        lambda_team = lambda_away
+
+    if media_ataque is not None and lambda_team is not None:
+        justificativa = (
+            f"{team_name} marca em média {media_ataque:.1f} gols por jogo recentemente "
+            f"(λ={lambda_team:.2f} para esta partida), resultando em {probabilidade:.1f}% "
+            f"de probabilidade de abrir o placar. "
+        )
+    elif lambda_team is not None:
+        justificativa = (
+            f"Modelo Poisson atribui λ={lambda_team:.2f} gols esperados a {team_name}, "
+            f"resultando em {probabilidade:.1f}% de chance de marcar primeiro. "
+        )
+    else:
+        justificativa = f"Probabilidade de {probabilidade:.1f}% de {team_name} marcar primeiro. "
+
+    if edge > 0:
+        justificativa += f"Edge de valor: +{edge:.1f}% acima da probabilidade implícita da odd."
+
     return justificativa

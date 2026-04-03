@@ -52,7 +52,8 @@ def format_evidence_based_dossier(
     palpites_gabt = [p for p in todos_palpites if p.get('mercado') == 'Gols Ambos Tempos']
     palpites_placar_exato = [p for p in todos_palpites if p.get('mercado') == 'Placar Exato']
     palpites_he = [p for p in todos_palpites if p.get('mercado') == 'Handicap Europeu']
-    _MERCADOS_DEDICADOS = ('Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu')
+    palpites_pm = [p for p in todos_palpites if p.get('mercado') == 'Primeiro a Marcar']
+    _MERCADOS_DEDICADOS = ('Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu', 'Primeiro a Marcar')
     palpites_outros = [p for p in todos_palpites if p.get('mercado') not in _MERCADOS_DEDICADOS]
 
     # === SECTION 2: ANÁLISE PRINCIPAL ===
@@ -119,7 +120,17 @@ def format_evidence_based_dossier(
             away_team_name
         )
 
-    # === SECTION 8: AVISOS (se houver) ===
+    # === SECTION 8: PRIMEIRO A MARCAR (seção dedicada) ===
+    if palpites_pm:
+        msg += _format_primeiro_marcador_section(
+            palpites_pm,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 9: AVISOS (se houver) ===
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
@@ -207,6 +218,8 @@ def _format_evidence_section(
         msg += _format_placar_exato_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Handicap Europeu":
         msg += _format_handicap_europeu_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Primeiro a Marcar":
+        msg += _format_primeiro_marcador_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         msg += f"      (Evidências não disponíveis para este mercado)\n"
     
@@ -672,6 +685,97 @@ def _format_gabt_section(
 
     msg += f"   📊 EVIDÊNCIAS:\n"
     msg += _format_gabt_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += f"\n---\n\n"
+
+    return msg
+
+
+def _format_primeiro_marcador_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Formata evidências de Primeiro a Marcar usando média de gols marcados (ataque)."""
+    msg = f"      {home_team_name} (Casa) - Poder Ofensivo Recente:\n"
+
+    gols_home = evidencias_home.get('gols', [])
+    if gols_home:
+        for jogo in gols_home[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            team_goals = jogo.get('team_goals', 0)
+            msg += f"         vs {opponent}: {result} ({team_goals} gols marcados)\n"
+        media = sum(j['team_goals'] for j in gols_home) / len(gols_home)
+        msg += f"         📈 Média Gols Marcados (Casa): {media:.1f}/jogo\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    msg += f"\n      {away_team_name} (Fora) - Poder Ofensivo Recente:\n"
+
+    gols_away = evidencias_away.get('gols', [])
+    if gols_away:
+        for jogo in gols_away[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            team_goals = jogo.get('team_goals', 0)
+            msg += f"         vs {opponent}: {result} ({team_goals} gols marcados)\n"
+        media = sum(j['team_goals'] for j in gols_away) / len(gols_away)
+        msg += f"         📉 Média Gols Marcados (Fora): {media:.1f}/jogo\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    return msg
+
+
+def _format_primeiro_marcador_section(
+    palpites_pm: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str
+) -> str:
+    """
+    Seção DEDICADA de Primeiro a Marcar — renderizada quando há picks aprovados.
+    Exibe probabilidades calculadas, odds e edge para cada desfecho: Casa / Fora / Nenhum.
+    """
+    msg = f"🥇 PRIMEIRO A MARCAR\n\n"
+    msg += (
+        f"   ℹ️  Qual equipe marcará o primeiro gol? Calculado via modelo de Poisson:\n"
+        f"   P(casa) ∝ λ_casa / λ_total; P(nenhum) = e^(-λ_total).\n\n"
+    )
+
+    for palpite in palpites_pm:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        prob_implicita = palpite.get('prob_implicita', 0.0)
+        edge = palpite.get('edge', 0.0)
+        odd = palpite.get('odd', 0)
+        lambda_home = palpite.get('lambda_home')
+        lambda_away = palpite.get('lambda_away')
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.2f}% | Prob. Implícita: {prob_implicita:.2f}%\n"
+        if edge > 0:
+            msg += f"   Edge de Valor: +{edge:.2f}%\n"
+        if lambda_home is not None and lambda_away is not None:
+            msg += f"   λ_casa={lambda_home:.3f} | λ_fora={lambda_away:.3f}\n"
+        if odd and odd > 0:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += f"   Odd: Não disponível\n"
+
+        from analysts.justification_generator import generate_evidence_based_justification
+        justificativa = generate_evidence_based_justification(
+            'Primeiro a Marcar', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name,
+            extra={
+                'lambda_home': lambda_home,
+                'lambda_away': lambda_away,
+                'edge': edge,
+                'probabilidade': probabilidade,
+            }
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += f"   📊 EVIDÊNCIAS:\n"
+    msg += _format_primeiro_marcador_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     msg += f"\n---\n\n"
 
     return msg
