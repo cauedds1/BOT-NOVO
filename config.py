@@ -94,11 +94,11 @@ QUALITY_SCORES = {
     
     # Serie A - Itália
     505: 91,  # Inter
-    489: 90,  # AC Milan
+    487: 90,  # AC Milan
     492: 89,  # Napoli
     496: 88,  # Juventus
     497: 86,  # AS Roma
-    487: 84,  # Lazio
+    488: 84,  # Lazio
     
     # Bundesliga - Alemanha
     157: 93,  # Bayern Munich
