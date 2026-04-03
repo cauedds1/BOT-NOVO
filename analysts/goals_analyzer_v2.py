@@ -5,66 +5,13 @@ BLUEPRINT IMPLEMENTATION:
 - Retorna LISTA de múltiplas predições (~20 predições)
 - Analisa submercados: Total Goals (FT), HT Goals, BTTS, Team Goals
 - Cada predição tem confiança calculada via confidence_calculator
-- Implementa Script-Based Probability Modifier
+- Modificador tático centralizado em confidence_calculator.apply_tactical_script_modifier()
 """
 
 from config import (MIN_CONFIANCA_GOLS_OVER_UNDER,
                     MIN_CONFIANCA_GOLS_OVER_1_5, MIN_CONFIANCA_GOLS_OVER_3_5)
 from analysts.confidence_calculator import calculate_final_confidence
 import math
-
-
-def apply_script_modifier_to_probability(base_prob_pct, bet_type, tactical_script):
-    """
-    ACTION 1.4: Script-Based Probability Modifier
-    
-    Aplica modificador de probabilidade baseado no script tático ANTES do cálculo de confiança.
-    Esta função aumenta ou diminui a probabilidade bruta baseada na coerência com o script.
-    
-    Args:
-        base_prob_pct: Probabilidade base em % (0-100)
-        bet_type: Tipo da aposta (ex: "Over 2.5", "BTTS Sim")
-        tactical_script: Script tático selecionado
-    
-    Returns:
-        float: Probabilidade modificada (0-100%)
-    """
-    if not tactical_script:
-        return base_prob_pct
-    
-    modifier = 1.0  # Multiplicador neutro
-    
-    # Mapear modificadores por script e tipo de aposta
-    if "Over" in bet_type or "over" in bet_type:
-        if tactical_script in ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_DOMINIO_CASA", 
-                               "SCRIPT_DOMINIO_VISITANTE", "SCRIPT_TIME_EM_CHAMAS_CASA", 
-                               "SCRIPT_TIME_EM_CHAMAS_FORA"]:
-            modifier = 1.25  # +25% na probabilidade
-        elif tactical_script in ["SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_RELEGATION_BATTLE", 
-                                 "SCRIPT_JOGO_DE_COMPADRES", "SCRIPT_TIGHT_LOW_SCORING"]:
-            modifier = 0.70  # -30% na probabilidade
-    
-    elif "Under" in bet_type or "under" in bet_type:
-        if tactical_script in ["SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_RELEGATION_BATTLE", 
-                               "SCRIPT_JOGO_DE_COMPADRES", "SCRIPT_TIGHT_LOW_SCORING", 
-                               "SCRIPT_BALANCED_TACTICAL_BATTLE"]:
-            modifier = 1.25  # +25% na probabilidade
-        elif tactical_script in ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_TIME_EM_CHAMAS_CASA", 
-                                 "SCRIPT_TIME_EM_CHAMAS_FORA"]:
-            modifier = 0.70  # -30% na probabilidade
-    
-    elif "BTTS" in bet_type:
-        if "Sim" in bet_type or "Yes" in bet_type:
-            if tactical_script in ["SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_OPEN_HIGH_SCORING_GAME"]:
-                modifier = 1.20
-        else:  # BTTS Não
-            if tactical_script in ["SCRIPT_GIANT_VS_MINNOW", "SCRIPT_DOMINIO_CASA", 
-                                   "SCRIPT_DOMINIO_VISITANTE"]:
-                modifier = 1.20
-    
-    # Aplicar modificador e garantir range 0-100
-    modified_prob = base_prob_pct * modifier
-    return min(max(modified_prob, 0.0), 100.0)
 
 
 def analisar_mercado_gols(analysis_packet, odds):

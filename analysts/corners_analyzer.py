@@ -17,56 +17,6 @@ from analysts.confidence_calculator import (
 )
 
 
-def apply_script_modifier_to_probability_corners(base_prob_pct, bet_type, tactical_script):
-    """
-    Script-Based Probability Modifier para CANTOS
-    
-    Aplica modificador de probabilidade baseado no script tático.
-    
-    Args:
-        base_prob_pct: Probabilidade base em % (0-100)
-        bet_type: Tipo da aposta (ex: "Over 9.5 Cantos")
-        tactical_script: Script tático selecionado
-    
-    Returns:
-        float: Probabilidade modificada (0-100%)
-    """
-    if not tactical_script:
-        return base_prob_pct
-    
-    modifier = 1.0
-    
-    # Jogos ofensivos/dominantes geram mais cantos
-    if "Over" in bet_type or "over" in bet_type:
-        if tactical_script in ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_DOMINIO_CASA", 
-                               "SCRIPT_DOMINIO_VISITANTE", "SCRIPT_TIME_EM_CHAMAS_CASA", 
-                               "SCRIPT_TIME_EM_CHAMAS_FORA"]:
-            modifier = 1.20  # +20% na probabilidade
-        elif tactical_script in ["SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_TIGHT_LOW_SCORING"]:
-            modifier = 0.80  # -20% na probabilidade
-    
-    elif "Under" in bet_type or "under" in bet_type:
-        if tactical_script in ["SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_TIGHT_LOW_SCORING", 
-                               "SCRIPT_JOGO_DE_COMPADRES"]:
-            modifier = 1.20
-        elif tactical_script in ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_DOMINIO_CASA", 
-                                 "SCRIPT_DOMINIO_VISITANTE"]:
-            modifier = 0.80
-    
-    # Casa dominante gera mais cantos para casa
-    if "Casa" in bet_type and "Over" in bet_type:
-        if tactical_script in ["SCRIPT_DOMINIO_CASA", "SCRIPT_TIME_EM_CHAMAS_CASA"]:
-            modifier = 1.25
-    
-    # Fora dominante gera mais cantos para visitante
-    if "Fora" in bet_type and "Over" in bet_type:
-        if tactical_script in ["SCRIPT_DOMINIO_VISITANTE", "SCRIPT_TIME_EM_CHAMAS_FORA"]:
-            modifier = 1.25
-    
-    modified_prob = base_prob_pct * modifier
-    return min(max(modified_prob, 0.0), 100.0)
-
-
 def analisar_mercado_cantos(analysis_packet, odds):
     """
     FUNÇÃO PRINCIPAL - Análise profunda do mercado de cantos.

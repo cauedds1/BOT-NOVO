@@ -16,44 +16,6 @@ from analysts.confidence_calculator import (
 )
 
 
-def apply_script_modifier_to_probability_cards(base_prob_pct, bet_type, tactical_script):
-    """
-    Script-Based Probability Modifier para CARTÕES
-    
-    Aplica modificador de probabilidade baseado no script tático.
-    Jogos tensos, rivais ou desesperados tendem a ter mais cartões.
-    
-    Args:
-        base_prob_pct: Probabilidade base em % (0-100)
-        bet_type: Tipo da aposta (ex: "Over 4.5 Cartões")
-        tactical_script: Script tático selecionado
-    
-    Returns:
-        float: Probabilidade modificada (0-100%)
-    """
-    if not tactical_script:
-        return base_prob_pct
-    
-    modifier = 1.0
-    
-    # Jogos tensos/disputados/desesperados = mais cartões
-    if "Over" in bet_type or "over" in bet_type:
-        if tactical_script in ["SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_RELEGATION_BATTLE", 
-                               "SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_TIGHT_LOW_SCORING"]:
-            modifier = 1.25  # +25% na probabilidade
-        elif tactical_script in ["SCRIPT_GIANT_VS_MINNOW", "SCRIPT_JOGO_DE_COMPADRES"]:
-            modifier = 0.80  # -20% na probabilidade (jogo tranquilo)
-    
-    elif "Under" in bet_type or "under" in bet_type:
-        if tactical_script in ["SCRIPT_GIANT_VS_MINNOW", "SCRIPT_JOGO_DE_COMPADRES"]:
-            modifier = 1.25  # Jogos tranquilos = menos cartões
-        elif tactical_script in ["SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_RELEGATION_BATTLE"]:
-            modifier = 0.80
-    
-    modified_prob = base_prob_pct * modifier
-    return min(max(modified_prob, 0.0), 100.0)
-
-
 def analisar_mercado_cartoes(analysis_packet, odds):
     """
     FUNÇÃO PRINCIPAL - Análise profunda do mercado de cartões.
