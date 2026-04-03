@@ -51,8 +51,9 @@ def format_evidence_based_dossier(
     palpites_dc = [p for p in todos_palpites if p.get('mercado') == 'Dupla Chance']
     palpites_gabt = [p for p in todos_palpites if p.get('mercado') == 'Gols Ambos Tempos']
     palpites_placar_exato = [p for p in todos_palpites if p.get('mercado') == 'Placar Exato']
-    palpites_outros = [p for p in todos_palpites
-                       if p.get('mercado') not in ('Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato')]
+    palpites_he = [p for p in todos_palpites if p.get('mercado') == 'Handicap Europeu']
+    _MERCADOS_DEDICADOS = ('Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu')
+    palpites_outros = [p for p in todos_palpites if p.get('mercado') not in _MERCADOS_DEDICADOS]
 
     # === SECTION 2: ANÁLISE PRINCIPAL ===
     if palpites_outros:
@@ -108,7 +109,17 @@ def format_evidence_based_dossier(
             away_team_name
         )
 
-    # === SECTION 7: AVISOS (se houver) ===
+    # === SECTION 7: HANDICAP EUROPEU (seção dedicada) ===
+    if palpites_he:
+        msg += _format_handicap_europeu_section(
+            palpites_he,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 8: AVISOS (se houver) ===
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
@@ -194,6 +205,8 @@ def _format_evidence_section(
         msg += _format_gabt_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Placar Exato":
         msg += _format_placar_exato_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Handicap Europeu":
+        msg += _format_handicap_europeu_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         msg += f"      (Evidências não disponíveis para este mercado)\n"
     
@@ -537,6 +550,94 @@ def _format_placar_exato_section(
     return msg
 
 
+def _format_handicap_europeu_section(
+    palpites_he: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str
+) -> str:
+    """
+    Seção DEDICADA de Handicap Europeu — 3 desfechos por linha (Casa/Empate/Fora).
+    Exibe odds, probabilidade, edge e confiança para cada desfecho com valor real.
+    Visualmente distinto do Handicap Asiático.
+    """
+    msg = f"🏷️ HANDICAP EUROPEU\n\n"
+    msg += (
+        f"   ℹ️  Handicap Europeu: mercado de 3 desfechos (Casa/Empate/Fora) com ajuste\n"
+        f"   de gols aplicado antes do jogo. Sem push — há sempre um vencedor.\n\n"
+    )
+
+    for palpite in palpites_he:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        prob_implicita = palpite.get('prob_implicita', 0.0)
+        edge = palpite.get('edge', 0.0)
+        odd = palpite.get('odd', 0)
+        lambda_home = palpite.get('lambda_home')
+        lambda_away = palpite.get('lambda_away')
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.2f}% | Prob. Implícita: {prob_implicita:.2f}%\n"
+        if edge > 0:
+            msg += f"   Edge de Valor: +{edge:.2f}%\n"
+        if odd and odd > 0:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += f"   Odd: Não disponível\n"
+
+        from analysts.justification_generator import generate_evidence_based_justification
+        justificativa = generate_evidence_based_justification(
+            'Handicap Europeu', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name,
+            extra={
+                'lambda_home': lambda_home,
+                'lambda_away': lambda_away,
+                'edge': edge,
+                'probabilidade': probabilidade,
+            }
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += f"   📊 EVIDÊNCIAS:\n"
+    msg += _format_handicap_europeu_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += f"\n---\n\n"
+
+    return msg
+
+
+def _format_handicap_europeu_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Formata evidências para Handicap Europeu (resultados recentes para contexto de margem)."""
+    msg = f"      {home_team_name} (Casa) - Resultados Recentes:\n"
+
+    gols_home = evidencias_home.get('gols', [])
+    if gols_home:
+        for jogo in gols_home[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            msg += f"         vs {opponent}: {result}\n"
+        media = sum(j['total_goals'] for j in gols_home) / len(gols_home)
+        msg += f"         📈 Média Gols/Jogo (Casa): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    msg += f"\n      {away_team_name} (Fora) - Resultados Recentes:\n"
+
+    gols_away = evidencias_away.get('gols', [])
+    if gols_away:
+        for jogo in gols_away[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            msg += f"         vs {opponent}: {result}\n"
+        media = sum(j['total_goals'] for j in gols_away) / len(gols_away)
+        msg += f"         📉 Média Gols/Jogo (Fora): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    return msg
+
+
 def _format_gabt_section(
     palpites_gabt: List[Dict],
     evidencias_home: Dict,
@@ -745,6 +846,16 @@ def _format_evidence_summary(mercado, evidencias_home, evidencias_away, home_tea
             media_away = sum(j['total_goals'] for j in gols_away) / len(gols_away)
             msg += f"      {away_team_name}: {media_away:.1f} gols/jogo (fora)\n"
 
+    elif mercado == "Handicap Europeu":
+        gols_home = evidencias_home.get('gols', [])
+        gols_away = evidencias_away.get('gols', [])
+        if gols_home:
+            media_home = sum(j['total_goals'] for j in gols_home) / len(gols_home)
+            msg += f"      {home_team_name}: {media_home:.1f} gols/jogo (casa)\n"
+        if gols_away:
+            media_away = sum(j['total_goals'] for j in gols_away) / len(gols_away)
+            msg += f"      {away_team_name}: {media_away:.1f} gols/jogo (fora)\n"
+
     return msg
 
 
@@ -807,7 +918,7 @@ def format_confidence_debug_report(
     msg += f"THRESHOLD DE APROVAÇÃO: {threshold:.1f}\n\n"
     
     # Processar cada mercado
-    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps', 'Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato']
+    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps', 'Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu']
     
     for mercado_nome in mercados_ordem:
         if mercado_nome not in all_predictions or not all_predictions[mercado_nome]:

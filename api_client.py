@@ -1346,8 +1346,32 @@ def normalizar_odds(odds_formatadas):
                 elif "under" in linha.lower():
                     odds_normalizadas[f"cartoes_{time}_under_{linha_limpa}"] = valor
 
+        elif mercado_key == "european_handicap":
+            # Mercado Handicap Europeu — 3 desfechos por linha (Casa / Empate / Fora)
+            # API-Football usa valores como "Home -1", "Draw -1", "Away -1"
+            import re as _re_he
+            for raw_val, odd_val in odds_dict.items():
+                raw_lower = raw_val.lower().strip()
+                # Extrair número da linha (pode ser -2, -1, 0, +1, +2)
+                m = _re_he.search(r'([+-]?\d+)$', raw_val.strip())
+                if not m:
+                    continue
+                linha_num = m.group(1)
+                # Normalizar sinal positivo explicitamente
+                try:
+                    linha_int = int(linha_num)
+                    linha_key = f"+{linha_int}" if linha_int > 0 else str(linha_int)
+                except ValueError:
+                    linha_key = linha_num
+                if raw_lower.startswith("home") or raw_lower.startswith("casa"):
+                    odds_normalizadas[f"he_casa_{linha_key}"] = odd_val
+                elif raw_lower.startswith("draw") or raw_lower.startswith("empate"):
+                    odds_normalizadas[f"he_empate_{linha_key}"] = odd_val
+                elif raw_lower.startswith("away") or raw_lower.startswith("fora"):
+                    odds_normalizadas[f"he_fora_{linha_key}"] = odd_val
+
         elif "handicap" in mercado_key.lower() or "spread" in mercado_key.lower():
-            # Mercado Handicaps
+            # Mercado Handicaps (Asiático / genérico)
             for linha, valor in odds_dict.items():
                 if "Home" in linha:
                     linha_num = linha.replace("Home ", "").replace("home ", "").strip()
@@ -1445,6 +1469,9 @@ async def buscar_odds_do_jogo(id_jogo: int):
                         odds_formatadas["cards_away"] = {v['value']: float(v['odd']) for v in values_raw}
                     else:
                         odds_formatadas["cards_total"] = {v['value']: float(v['odd']) for v in values_raw}
+
+                elif bet_name in ("European Handicap", "European Handicap Result"):
+                    odds_formatadas["european_handicap"] = {v['value']: float(v['odd']) for v in values_raw}
 
                 elif "Handicap" in bet_name or "Spread" in bet_name:
                     odds_formatadas["handicap"] = {v['value']: float(v['odd']) for v in values_raw}

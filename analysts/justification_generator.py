@@ -47,6 +47,8 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Placar Exato":
         return _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
+    elif mercado == "Handicap Europeu":
+        return _justificar_handicap_europeu_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -632,6 +634,46 @@ def _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_aw
         return (
             f"O modelo Poisson bivariado (λ_casa={lh_str}, λ_fora={la_str}) "
             f"aponta {tipo} como o resultado estatisticamente mais provável{edge_str}{prob_str}."
+        )
+
+
+def _justificar_handicap_europeu_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para Handicap Europeu com λ do modelo Poisson e edge de valor."""
+    extra = extra or {}
+    lambda_home = extra.get('lambda_home')
+    lambda_away = extra.get('lambda_away')
+    edge = extra.get('edge')
+    prob_pct = extra.get('probabilidade')
+
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    lh_str = f"{lambda_home:.2f}" if lambda_home is not None else "N/A"
+    la_str = f"{lambda_away:.2f}" if lambda_away is not None else "N/A"
+    edge_str = f" (edge de valor: +{edge:.2f}%)" if edge is not None and edge > 0 else ""
+    prob_str = f" — probabilidade Poisson: {prob_pct:.2f}%" if prob_pct is not None else ""
+
+    tipo_lower = tipo.lower()
+
+    if 'casa' in tipo_lower:
+        return (
+            f"Com λ_casa={lh_str} e λ_fora={la_str}, o modelo Poisson indica que "
+            f"{home_team_name} cobre o handicap europeu com valor real identificado{edge_str}{prob_str}."
+        )
+    elif 'fora' in tipo_lower:
+        return (
+            f"Com λ_fora={la_str} e λ_casa={lh_str}, o modelo Poisson indica que "
+            f"{away_team_name} cobre o handicap europeu com valor real identificado{edge_str}{prob_str}."
+        )
+    elif 'empate' in tipo_lower:
+        return (
+            f"Com λ equilibrados (casa={lh_str}, fora={la_str}), o modelo Poisson identifica "
+            f"empate no Handicap Europeu como desfecho com valor real{edge_str}{prob_str}."
+        )
+    else:
+        return (
+            f"O modelo Poisson bivariado (λ_casa={lh_str}, λ_fora={la_str}) aponta "
+            f"{tipo} como desfecho de Handicap Europeu com valor real{edge_str}{prob_str}."
         )
 
 

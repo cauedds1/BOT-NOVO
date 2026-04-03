@@ -27,6 +27,7 @@ from analysts.handicaps_analyzer import analisar_mercado_handicaps
 from analysts.double_chance_analyzer import analisar_mercado_dupla_chance
 from analysts.gabt_analyzer import analisar_mercado_gabt
 from analysts.correct_score_analyzer import analisar_mercado_placar_exato
+from analysts.european_handicap_analyzer import analisar_mercado_handicap_europeu
 # PHOENIX V3.0: filtrar_mercados_por_contexto e get_quality_scores foram removidas na refatoração
 # PURE ANALYST PROTOCOL: value_detector removido - análise independente de odds
 from analysts.justification_generator import generate_persuasive_justification
@@ -452,6 +453,9 @@ async def gerar_analise_completa_todos_mercados(jogo):
 
     analise_placar_exato = analisar_mercado_placar_exato(analysis_packet, odds)
     print("--- ✅ CORRECT SCORE ANALYZER DONE ---")
+
+    analise_handicap_europeu = analisar_mercado_handicap_europeu(analysis_packet, odds)
+    print("--- ✅ EUROPEAN HANDICAP ANALYZER DONE ---")
     
     # 4️⃣ EXTRAIR INFORMAÇÕES DO MASTER PACKET
     reasoning = analysis_packet['analysis_summary']['reasoning']
@@ -489,6 +493,7 @@ async def gerar_analise_completa_todos_mercados(jogo):
         ('Dupla Chance', '🔀', analise_dupla_chance),
         ('Gols Ambos Tempos', '⏱️', analise_gabt),
         ('Placar Exato', '🎯', analise_placar_exato),
+        ('Handicap Europeu', '🏷️', analise_handicap_europeu),
     ]
     
     for mercado_nome, mercado_emoji, analise in mercados_analise:
@@ -725,9 +730,10 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
             analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script),
             analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
             analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+            analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
         ]
 
-        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}")
+        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}, HE={bool(analises_brutas[9])}")
 
         # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
         # Apenas retorna análises válidas (não None)
@@ -769,6 +775,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                             analises_dict['cartoes'] = a
                         elif 'finaliza' in mercado_lower or 'shot' in mercado_lower:
                             analises_dict['finalizacoes'] = a
+                        elif 'europeu' in mercado_lower:
+                            analises_dict['handicap_europeu'] = a
                         elif 'handicap' in mercado_lower:
                             analises_dict['handicaps'] = a
                         elif 'placar' in mercado_lower or 'correct' in mercado_lower or 'score' in mercado_lower:

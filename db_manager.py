@@ -99,9 +99,10 @@ class DatabaseManager:
             atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
-        -- Adicionar colunas GABT e Placar Exato em tabelas existentes (migration segura)
+        -- Adicionar colunas GABT, Placar Exato e Handicap Europeu em tabelas existentes (migration segura)
         ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_gabt JSONB;
         ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_placar_exato JSONB;
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_handicap_europeu JSONB;
 
         -- Índices para performance
         CREATE INDEX IF NOT EXISTS idx_analises_jogos_fixture_id ON analises_jogos(fixture_id);
@@ -195,9 +196,9 @@ class DatabaseManager:
                             (fixture_id, data_jogo, liga, time_casa, time_fora, 
                              stats_casa, stats_fora, classificacao,
                              analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_contexto,
-                             analise_gabt, analise_placar_exato,
+                             analise_gabt, analise_placar_exato, analise_handicap_europeu,
                              palpites_totais, confianca_media, data_analise, atualizado_em)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (fixture_id) 
                             DO UPDATE SET
                                 stats_casa = EXCLUDED.stats_casa,
@@ -211,6 +212,7 @@ class DatabaseManager:
                                 analise_contexto = EXCLUDED.analise_contexto,
                                 analise_gabt = EXCLUDED.analise_gabt,
                                 analise_placar_exato = EXCLUDED.analise_placar_exato,
+                                analise_handicap_europeu = EXCLUDED.analise_handicap_europeu,
                                 palpites_totais = EXCLUDED.palpites_totais,
                                 confianca_media = EXCLUDED.confianca_media,
                                 atualizado_em = EXCLUDED.atualizado_em
@@ -233,6 +235,7 @@ class DatabaseManager:
                             Json(analises.get('contexto', {})),
                             Json(analises.get('gabt', {})),
                             Json(analises.get('placar_exato', {})),
+                            Json(analises.get('handicap_europeu', {})),
                             total_palpites,
                             confianca_media,
                             agora_brasilia(),
