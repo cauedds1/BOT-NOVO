@@ -147,6 +147,8 @@ def _format_evidence_section(
         msg += _format_cartoes_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Finalizações":
         msg += _format_finalizacoes_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Dupla Chance":
+        msg += _format_dupla_chance_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         msg += f"      (Evidências não disponíveis para este mercado)\n"
     
@@ -299,6 +301,41 @@ def _format_finalizacoes_evidence(evidencias_home, evidencias_away, home_team_na
     return msg
 
 
+def _format_dupla_chance_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Formata evidências de DUPLA CHANCE usando dados de gols dos últimos 4 jogos"""
+    msg = f"      {home_team_name} (Casa) - Resultados Recentes:\n"
+
+    gols_home = evidencias_home.get('gols', [])
+    if gols_home:
+        for jogo in gols_home[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            team_goals = jogo.get('team_goals', 0)
+            msg += f"         vs {opponent}: {result} ({team_goals} gols marcados)\n"
+
+        media = sum(j['team_goals'] for j in gols_home) / len(gols_home)
+        msg += f"         📈 Média Gols Marcados (Casa): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    msg += f"\n      {away_team_name} (Fora) - Resultados Recentes:\n"
+
+    gols_away = evidencias_away.get('gols', [])
+    if gols_away:
+        for jogo in gols_away[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            team_goals = jogo.get('team_goals', 0)
+            msg += f"         vs {opponent}: {result} ({team_goals} gols marcados)\n"
+
+        media = sum(j['team_goals'] for j in gols_away) / len(gols_away)
+        msg += f"         📉 Média Gols Marcados (Fora): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    return msg
+
+
 def _select_diverse_predictions(palpites: List[Dict], max_predictions: int = 5) -> List[Dict]:
     """
     ACTION 2.2 - DIVERSITY LOGIC: Seleciona predições garantindo variedade de mercados.
@@ -437,7 +474,17 @@ def _format_evidence_summary(mercado, evidencias_home, evidencias_away, home_tea
             media_away = sum(j['shots_for'] for j in shots_away) / len(shots_away)
             msg += f"      {home_team_name}: {media_home:.1f} finalizações/jogo (casa)\n"
             msg += f"      {away_team_name}: {media_away:.1f} finalizações/jogo (fora)\n"
-    
+
+    elif mercado == "Dupla Chance":
+        gols_home = evidencias_home.get('gols', [])
+        gols_away = evidencias_away.get('gols', [])
+        if gols_home:
+            media_home = sum(j['team_goals'] for j in gols_home) / len(gols_home)
+            msg += f"      {home_team_name}: {media_home:.1f} gols marcados/jogo (casa)\n"
+        if gols_away:
+            media_away = sum(j['team_goals'] for j in gols_away) / len(gols_away)
+            msg += f"      {away_team_name}: {media_away:.1f} gols marcados/jogo (fora)\n"
+
     return msg
 
 
@@ -500,7 +547,7 @@ def format_confidence_debug_report(
     msg += f"THRESHOLD DE APROVAÇÃO: {threshold:.1f}\n\n"
     
     # Processar cada mercado
-    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps']
+    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps', 'Dupla Chance']
     
     for mercado_nome in mercados_ordem:
         if mercado_nome not in all_predictions or not all_predictions[mercado_nome]:

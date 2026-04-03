@@ -40,6 +40,8 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_cartoes_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Finalizações":
         return _justificar_finalizacoes_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Dupla Chance":
+        return _justificar_dupla_chance_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -496,6 +498,46 @@ def _justificar_btts(tipo, value_score, expectativa_gols, **kwargs):
     
     else:
         return _justificar_generica(tipo, value_score, odd)
+
+
+def _justificar_dupla_chance_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Gera justificativa para Dupla Chance baseada nos dados de resultado dos últimos jogos."""
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    if not gols_home and not gols_away:
+        return f"Análise probabilística das tendências de resultado favorece {tipo}."
+
+    media_marcados_home = (
+        sum(g['team_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
+    )
+    media_marcados_away = (
+        sum(g['team_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
+    )
+
+    if '1X' in tipo:
+        return (
+            f"{home_team_name} marca em média {media_marcados_home:.1f} gols em casa "
+            f"e tem bom aproveitamento como mandante. Combinando vitória do anfitrião "
+            f"ou empate, a probabilidade de acerto é elevada para {tipo}."
+        )
+    elif 'X2' in tipo:
+        return (
+            f"{away_team_name} produz {media_marcados_away:.1f} gols por jogo fora de casa "
+            f"e tem capacidade de pontuar como visitante. Unindo empate e vitória do "
+            f"visitante, a cobertura probabilística sustenta {tipo}."
+        )
+    elif '12' in tipo:
+        return (
+            f"Com {home_team_name} marcando {media_marcados_home:.1f} gols/jogo em casa "
+            f"e {away_team_name} produzindo {media_marcados_away:.1f} fora, ambos os times "
+            f"apresentam capacidade ofensiva suficiente para sustentar {tipo} (sem empate)."
+        )
+    else:
+        return (
+            f"A combinação de resultados cobre a maior parte do espectro probabilístico "
+            f"para este confronto, favorecendo {tipo}."
+        )
 
 
 def _justificar_generica(tipo, value_score, odd):

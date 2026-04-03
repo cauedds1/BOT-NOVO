@@ -24,6 +24,7 @@ from analysts.btts_analyzer import analisar_mercado_btts
 from analysts.cards_analyzer import analisar_mercado_cartoes
 from analysts.shots_analyzer import analisar_mercado_finalizacoes
 from analysts.handicaps_analyzer import analisar_mercado_handicaps
+from analysts.double_chance_analyzer import analisar_mercado_dupla_chance
 # PHOENIX V3.0: filtrar_mercados_por_contexto e get_quality_scores foram removidas na refatoração
 # PURE ANALYST PROTOCOL: value_detector removido - análise independente de odds
 from analysts.justification_generator import generate_persuasive_justification
@@ -441,6 +442,9 @@ async def gerar_analise_completa_todos_mercados(jogo):
     analise_handicaps = analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script)
     print("--- ✅ HANDICAPS ANALYZER DONE ---")
     
+    analise_dupla_chance = analisar_mercado_dupla_chance(analysis_packet, odds)
+    print("--- ✅ DOUBLE CHANCE ANALYZER DONE ---")
+    
     # 4️⃣ EXTRAIR INFORMAÇÕES DO MASTER PACKET
     reasoning = analysis_packet['analysis_summary']['reasoning']
     power_home = analysis_packet['analysis_summary']['power_score_home']
@@ -473,7 +477,8 @@ async def gerar_analise_completa_todos_mercados(jogo):
         ('Resultado', '🏁', analise_resultado),
         ('Cartões', '🟨', analise_cartoes),
         ('Finalizações', '🎯', analise_finalizacoes),
-        ('Handicaps', '⚖️', analise_handicaps)
+        ('Handicaps', '⚖️', analise_handicaps),
+        ('Dupla Chance', '🔀', analise_dupla_chance),
     ]
     
     for mercado_nome, mercado_emoji, analise in mercados_analise:

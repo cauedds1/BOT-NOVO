@@ -70,39 +70,6 @@ def extract_match_result_suggestions(analysis_packet, odds):
                 "probabilidade": away_win_prob
             })
     
-    if 'double_chance_1x' in odds:
-        double_1x_prob = home_win_prob + draw_prob
-        confianca = _convert_probability_to_confidence(double_1x_prob)
-        if confianca >= 6.0:
-            palpites.append({
-                "tipo": "Chance Dupla (1X)",
-                "confianca": confianca,
-                "odd": odds['double_chance_1x'],
-                "probabilidade": double_1x_prob
-            })
-    
-    if 'double_chance_x2' in odds:
-        double_x2_prob = draw_prob + away_win_prob
-        confianca = _convert_probability_to_confidence(double_x2_prob)
-        if confianca >= 6.0:
-            palpites.append({
-                "tipo": "Chance Dupla (X2)",
-                "confianca": confianca,
-                "odd": odds['double_chance_x2'],
-                "probabilidade": double_x2_prob
-            })
-    
-    if 'double_chance_12' in odds:
-        double_12_prob = home_win_prob + away_win_prob
-        confianca = _convert_probability_to_confidence(double_12_prob)
-        if confianca >= 6.0:
-            palpites.append({
-                "tipo": "Chance Dupla (12)",
-                "confianca": confianca,
-                "odd": odds['double_chance_12'],
-                "probabilidade": double_12_prob
-            })
-    
     if not palpites:
         return None
     
