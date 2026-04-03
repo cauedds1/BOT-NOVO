@@ -177,7 +177,8 @@ class DatabaseManager:
             periodo VARCHAR(10) DEFAULT 'FT',
             acertou BOOLEAN,
             roi_unitario DECIMAL(8,4),
-            criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            CONSTRAINT palpites_historico_unique UNIQUE (fixture_id, mercado, linha, periodo)
         );
         CREATE INDEX IF NOT EXISTS idx_palpites_historico_fixture_id ON palpites_historico(fixture_id);
         CREATE INDEX IF NOT EXISTS idx_palpites_historico_mercado ON palpites_historico(mercado);
@@ -409,6 +410,7 @@ class DatabaseManager:
                         INSERT INTO palpites_historico
                             (fixture_id, mercado, linha, confianca, odd, resultado_esperado, periodo)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (fixture_id, mercado, linha, periodo) DO NOTHING
                         """,
                         (fixture_id, mercado_nome, tipo, confianca, odd_val, tipo, periodo),
                     )

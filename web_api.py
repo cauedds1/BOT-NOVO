@@ -563,7 +563,13 @@ async def get_analise(fixture_id: int):
     status_atual = _processing_status.get(fixture_id)
     if status_atual == "processing":
         return {"fixture_id": fixture_id, "status": "processing"}
+
+    # Se houve erro no processamento, tentar servir cache stale antes de falhar
     if status_atual == "error":
+        analise_stale = db.buscar_analise(fixture_id, permitir_stale=True)
+        if analise_stale:
+            print(f"⚠️ [WebAPI] Servindo análise stale para fixture #{fixture_id} (erro na última tentativa)")
+            return _db_to_api_response(analise_stale, fixture_id)
         raise HTTPException(status_code=500, detail="Erro na análise. Tente novamente.")
 
     analise_db = db.buscar_analise(fixture_id, max_idade_horas=24, permitir_stale=True)

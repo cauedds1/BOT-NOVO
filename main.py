@@ -631,7 +631,17 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
 
     # 🎯 VERIFICAR BANCO DE DADOS PRIMEIRO (análise completa sem filtros)
     if not filtro_mercado and not filtro_tipo_linha:
-        analise_db = db_manager.buscar_analise(id_jogo, max_idade_horas=12)
+        # Extrair data do kickoff para TTL inteligente
+        _data_kickoff = None
+        try:
+            from zoneinfo import ZoneInfo as _ZI
+            _dt_utc = datetime.fromisoformat(
+                jogo.get('fixture', {}).get('date', '').replace('Z', '+00:00')
+            )
+            _data_kickoff = _dt_utc.astimezone(_ZI("America/Sao_Paulo"))
+        except Exception:
+            pass
+        analise_db = db_manager.buscar_analise(id_jogo, data_jogo=_data_kickoff, permitir_stale=True)
         if analise_db:
             usar_cache_otimizado = True
             print(f"💾 CACHE OTIMIZADO: Usando análise salva do Fixture #{id_jogo}")
@@ -997,8 +1007,17 @@ async def coletar_todos_palpites_disponiveis():
     for jogo in jogos:
         fixture_id = jogo['fixture']['id']
 
-        # Buscar cache de análise do banco
-        analise_db = db_manager.buscar_analise(fixture_id, max_idade_horas=12)
+        # Buscar cache de análise do banco com TTL inteligente
+        _data_kickoff_loop = None
+        try:
+            from zoneinfo import ZoneInfo as _ZI2
+            _dt_utc2 = datetime.fromisoformat(
+                jogo.get('fixture', {}).get('date', '').replace('Z', '+00:00')
+            )
+            _data_kickoff_loop = _dt_utc2.astimezone(_ZI2("America/Sao_Paulo"))
+        except Exception:
+            pass
+        analise_db = db_manager.buscar_analise(fixture_id, data_jogo=_data_kickoff_loop, permitir_stale=True)
 
         if analise_db:
             # Usar análise do cache
