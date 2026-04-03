@@ -202,19 +202,64 @@ class DatabaseManager:
         COMMENT ON TABLE palpites_historico IS 'Palpites individuais gerados para cada jogo analisado com resultado real';
         COMMENT ON TABLE resultado_jogos IS 'Resultado real (placar final) dos jogos analisados';
 
-        -- Tabela de performance por mercado (atualizada após cada avaliação de resultado)
+        -- Tabela de performance por mercado+liga+script (atualizada após cada avaliação)
         CREATE TABLE IF NOT EXISTS performance_mercados (
             id SERIAL PRIMARY KEY,
-            mercado VARCHAR(100) UNIQUE NOT NULL,
-            total_palpites INTEGER NOT NULL DEFAULT 0,
+            mercado VARCHAR(100) NOT NULL,
+            liga_id INTEGER NOT NULL DEFAULT 0,
+            script VARCHAR(100) NOT NULL DEFAULT '',
+            n_amostras INTEGER NOT NULL DEFAULT 0,
             total_acertos INTEGER NOT NULL DEFAULT 0,
             total_erros INTEGER NOT NULL DEFAULT 0,
             taxa_acerto DECIMAL(5,2) DEFAULT 0,
             roi_total DECIMAL(10,4) DEFAULT 0,
-            atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            CONSTRAINT performance_mercados_unique UNIQUE (mercado, liga_id, script)
         );
         CREATE INDEX IF NOT EXISTS idx_performance_mercados_mercado ON performance_mercados(mercado);
-        COMMENT ON TABLE performance_mercados IS 'Acurácia e ROI por mercado, atualizado após cada avaliação noturna';
+        COMMENT ON TABLE performance_mercados IS 'Acurácia e ROI por mercado+liga+script, atualizado após cada avaliação noturna';
+
+        -- Tabela de estatísticas por jogador por partida
+        CREATE TABLE IF NOT EXISTS estatisticas_jogadores (
+            id SERIAL PRIMARY KEY,
+            jogador_id INTEGER NOT NULL,
+            fixture_id INTEGER NOT NULL,
+            time_id INTEGER NOT NULL,
+            minutos INTEGER DEFAULT 0,
+            gols INTEGER DEFAULT 0,
+            assistencias INTEGER DEFAULT 0,
+            finalizacoes INTEGER DEFAULT 0,
+            finalizacoes_no_gol INTEGER DEFAULT 0,
+            cartao_amarelo BOOLEAN DEFAULT FALSE,
+            cartao_vermelho BOOLEAN DEFAULT FALSE,
+            eh_mandante BOOLEAN,
+            foi_titular BOOLEAN DEFAULT TRUE,
+            criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            CONSTRAINT estatisticas_jogadores_unique UNIQUE (jogador_id, fixture_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_estatisticas_jogadores_jogador ON estatisticas_jogadores(jogador_id);
+        CREATE INDEX IF NOT EXISTS idx_estatisticas_jogadores_time ON estatisticas_jogadores(time_id);
+
+        -- Tabela de perfis acumulados por jogador (médias + desvio padrão)
+        CREATE TABLE IF NOT EXISTS perfis_jogadores (
+            id SERIAL PRIMARY KEY,
+            jogador_id INTEGER UNIQUE NOT NULL,
+            time_id INTEGER NOT NULL,
+            nome VARCHAR(255),
+            n_jogos_total INTEGER DEFAULT 0,
+            n_jogos_casa INTEGER DEFAULT 0,
+            n_jogos_fora INTEGER DEFAULT 0,
+            n_jogos_titular INTEGER DEFAULT 0,
+            media_gols DECIMAL(6,3) DEFAULT 0,
+            media_assistencias DECIMAL(6,3) DEFAULT 0,
+            media_finalizacoes DECIMAL(6,3) DEFAULT 0,
+            stddev_gols DECIMAL(6,3) DEFAULT 0,
+            stddev_finalizacoes DECIMAL(6,3) DEFAULT 0,
+            atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_perfis_jogadores_time ON perfis_jogadores(time_id);
+        COMMENT ON TABLE estatisticas_jogadores IS 'Estatísticas individuais de jogadores por partida';
+        COMMENT ON TABLE perfis_jogadores IS 'Perfil acumulado de cada jogador: médias, stddev, contagem por contexto';
         """
         
         try:
@@ -225,14 +270,109 @@ class DatabaseManager:
                 
                 cursor = conn.cursor()
                 
-                # Executar todo o schema
+                # Executar todo o schema (CREATE TABLE IF NOT EXISTS — seguro re-executar)
                 cursor.execute(schema_sql)
-                
                 conn.commit()
+
+                # ── Migrações de schema incremental ──────────────────────────────────
+                # Task #17: performance_mercados ganhou colunas compostas (liga_id, script)
+                # e a coluna total_palpites foi renomeada para n_amostras.
+                migrations = [
+                    # Adicionar colunas novas na performance_mercados se não existirem
+                    """
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='performance_mercados' AND column_name='liga_id'
+                        ) THEN
+                            ALTER TABLE performance_mercados ADD COLUMN liga_id INTEGER NOT NULL DEFAULT 0;
+                        END IF;
+                    END $$;
+                    """,
+                    """
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='performance_mercados' AND column_name='script'
+                        ) THEN
+                            ALTER TABLE performance_mercados ADD COLUMN script VARCHAR(100) NOT NULL DEFAULT '';
+                        END IF;
+                    END $$;
+                    """,
+                    # Renomear total_palpites → n_amostras se ainda existir com nome antigo
+                    """
+                    DO $$ BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='performance_mercados' AND column_name='total_palpites'
+                        ) AND NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='performance_mercados' AND column_name='n_amostras'
+                        ) THEN
+                            ALTER TABLE performance_mercados RENAME COLUMN total_palpites TO n_amostras;
+                        END IF;
+                    END $$;
+                    """,
+                    # Garantir coluna n_amostras existe (se tabela foi criada com nome antigo e já renomeada)
+                    """
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='performance_mercados' AND column_name='n_amostras'
+                        ) THEN
+                            ALTER TABLE performance_mercados ADD COLUMN n_amostras INTEGER NOT NULL DEFAULT 0;
+                        END IF;
+                    END $$;
+                    """,
+                    # Remover UNIQUE constraint antigo em mercado (agora é composto)
+                    """
+                    DO $$ BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints
+                            WHERE table_name='performance_mercados'
+                              AND constraint_type='UNIQUE'
+                              AND constraint_name NOT LIKE '%performance_mercados_unique%'
+                        ) THEN
+                            -- Dropar qualquer unique que não seja o nosso composite
+                            BEGIN
+                                ALTER TABLE performance_mercados DROP CONSTRAINT IF EXISTS performance_mercados_mercado_key;
+                            EXCEPTION WHEN OTHERS THEN NULL;
+                            END;
+                        END IF;
+                    END $$;
+                    """,
+                    # Adicionar constraint composta se não existir
+                    """
+                    DO $$ BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints
+                            WHERE table_name='performance_mercados'
+                              AND constraint_name='performance_mercados_unique'
+                        ) THEN
+                            BEGIN
+                                ALTER TABLE performance_mercados
+                                    ADD CONSTRAINT performance_mercados_unique
+                                    UNIQUE (mercado, liga_id, script);
+                            EXCEPTION WHEN OTHERS THEN NULL;
+                            END;
+                        END IF;
+                    END $$;
+                    """,
+                    "CREATE INDEX IF NOT EXISTS idx_performance_mercados_liga ON performance_mercados(liga_id);",
+                ]
+
+                for migration_sql in migrations:
+                    try:
+                        cursor.execute(migration_sql)
+                        conn.commit()
+                    except Exception as m_err:
+                        print(f"  ⚠️ Migração ignorada (provavelmente já aplicada): {m_err}")
+                        conn.rollback()
+
                 cursor.close()
                 
                 print("✅ Database schema inicializado com sucesso!")
-                print("   📋 Tabelas criadas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados")
+                print("   📋 Tabelas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados, estatisticas_jogadores, perfis_jogadores")
                 return True
                 
         except Exception as e:
@@ -953,25 +1093,53 @@ class DatabaseManager:
             print(f"❌ Erro ao atualizar palpite #{palpite_id}: {e}")
             return False
 
-    def get_market_confidence_adjustment(self, mercado: str) -> float:
+    def get_market_confidence_adjustment(
+        self,
+        mercado: str,
+        liga_id: int = 0,
+        script: str = '',
+    ) -> float:
         """
-        Retorna um ajuste de confiança (+/-) baseado na performance histórica do mercado.
+        Retorna um ajuste de confiança (+/-) baseado na performance histórica do mercado
+        para uma combinação específica de mercado + liga + script.
 
-        Lógica:
-          - Taxa de acerto >= 65%: bônus +0.5
-          - Taxa de acerto entre 50%-65%: neutro 0.0
-          - Taxa de acerto entre 40%-50%: penalidade -0.3
-          - Taxa de acerto < 40%: penalidade -0.7
-          - Menos de 20 palpites avaliados: retorna 0.0 (sem dados suficientes)
+        Damping por tamanho de amostra (n_amostras):
+          < 30:   sem ajuste (0.0) — dados insuficientes
+          30-99:  50% do ajuste calculado
+          100+:   100% do ajuste calculado
+
+        Fórmula do ajuste bruto (antes do damping):
+          taxa >= 65%: +0.5 (bônus)
+          taxa 50-65%: 0.0 (neutro)
+          taxa 40-50%: -0.3 (penalidade leve)
+          taxa < 40%:  -0.7 (penalidade severa)
+
+        Fallback: se não há dados específicos de liga+script, usa dados do mercado global (liga_id=0, script='').
 
         Args:
-            mercado: Nome do mercado (ex: "Gols", "Cantos", "BTTS")
+            mercado:  Nome do mercado (ex: "Gols", "Cantos", "BTTS")
+            liga_id:  ID da liga (0 = global)
+            script:   Script tático ('' = global)
 
         Returns:
-            float: Ajuste de confiança entre -1.0 e +0.5
+            float: Ajuste de confiança dampened entre -0.7 e +0.5
         """
         if not self.enabled:
             return 0.0
+
+        def _calc_adj(taxa: float, n: int) -> float:
+            if n < 30:
+                return 0.0
+            if taxa >= 65:
+                raw = 0.5
+            elif taxa >= 50:
+                raw = 0.0
+            elif taxa >= 40:
+                raw = -0.3
+            else:
+                raw = -0.7
+            damping = 0.5 if n < 100 else 1.0
+            return round(raw * damping, 3)
 
         try:
             with self._get_connection() as conn:
@@ -979,30 +1147,39 @@ class DatabaseManager:
                     return 0.0
 
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+                # Tentar primeiro com contexto específico
                 cursor.execute(
                     """
-                    SELECT total_palpites, total_acertos, taxa_acerto
+                    SELECT n_amostras, taxa_acerto
+                    FROM performance_mercados
+                    WHERE mercado = %s AND liga_id = %s AND script = %s
+                    """,
+                    (mercado, liga_id, script),
+                )
+                row = cursor.fetchone()
+
+                if row and row["n_amostras"] >= 30:
+                    cursor.close()
+                    return _calc_adj(float(row["taxa_acerto"] or 0), int(row["n_amostras"]))
+
+                # Fallback: dados globais do mercado (liga_id=0, script='')
+                cursor.execute(
+                    """
+                    SELECT SUM(n_amostras) AS total, SUM(total_acertos) AS acertos
                     FROM performance_mercados
                     WHERE mercado = %s
                     """,
                     (mercado,),
                 )
-                row = cursor.fetchone()
+                agg = cursor.fetchone()
                 cursor.close()
 
-                if not row or row["total_palpites"] < 20:
+                if not agg or not agg["total"] or int(agg["total"]) < 30:
                     return 0.0
 
-                taxa = float(row["taxa_acerto"] or 0)
-
-                if taxa >= 65:
-                    return 0.5
-                elif taxa >= 50:
-                    return 0.0
-                elif taxa >= 40:
-                    return -0.3
-                else:
-                    return -0.7
+                taxa_global = float(agg["acertos"] or 0) / float(agg["total"]) * 100
+                return _calc_adj(taxa_global, int(agg["total"]))
 
         except Exception as e:
             print(f"❌ Erro ao buscar performance do mercado '{mercado}': {e}")
@@ -1013,20 +1190,27 @@ class DatabaseManager:
         mercado: str,
         acertou: bool,
         roi_unitario: float,
+        liga_id: int = 0,
+        script: str = '',
     ) -> bool:
         """
-        Atualiza (ou cria) o registro de performance de um mercado após avaliar um palpite.
+        Atualiza (ou cria) o registro de performance para (mercado, liga_id, script).
 
         Args:
-            mercado: Nome do mercado
-            acertou: True se o palpite acertou
-            roi_unitario: Lucro/prejuízo unitário do palpite
+            mercado:      Nome do mercado
+            acertou:      True se o palpite acertou
+            roi_unitario: Lucro/prejuízo unitário
+            liga_id:      ID da liga (0 = desconhecido)
+            script:       Script tático ('' = desconhecido)
 
         Returns:
             True se atualizado com sucesso
         """
         if not self.enabled:
             return False
+
+        acertou_int = 1 if acertou else 0
+        errou_int = 0 if acertou else 1
 
         try:
             with self._get_connection() as conn:
@@ -1037,30 +1221,28 @@ class DatabaseManager:
                 cursor.execute(
                     """
                     INSERT INTO performance_mercados
-                        (mercado, total_palpites, total_acertos, total_erros, taxa_acerto, roi_total, atualizado_em)
-                    VALUES (%s, 1, %s, %s, %s, %s, %s)
-                    ON CONFLICT (mercado) DO UPDATE SET
-                        total_palpites = performance_mercados.total_palpites + 1,
-                        total_acertos  = performance_mercados.total_acertos  + %s,
-                        total_erros    = performance_mercados.total_erros    + %s,
-                        taxa_acerto    = ROUND(
+                        (mercado, liga_id, script, n_amostras, total_acertos, total_erros,
+                         taxa_acerto, roi_total, atualizado_em)
+                    VALUES (%s, %s, %s, 1, %s, %s, %s, %s, %s)
+                    ON CONFLICT (mercado, liga_id, script) DO UPDATE SET
+                        n_amostras    = performance_mercados.n_amostras + 1,
+                        total_acertos = performance_mercados.total_acertos + %s,
+                        total_erros   = performance_mercados.total_erros   + %s,
+                        taxa_acerto   = ROUND(
                             (performance_mercados.total_acertos + %s)::DECIMAL
-                            / (performance_mercados.total_palpites + 1) * 100,
+                            / (performance_mercados.n_amostras + 1) * 100,
                             2
                         ),
-                        roi_total      = performance_mercados.roi_total + %s,
-                        atualizado_em  = %s
+                        roi_total     = performance_mercados.roi_total + %s,
+                        atualizado_em = %s
                     """,
                     (
-                        mercado,
-                        1 if acertou else 0,
-                        0 if acertou else 1,
+                        mercado, liga_id, script,
+                        acertou_int, errou_int,
                         100.0 if acertou else 0.0,
                         roi_unitario,
                         agora_brasilia(),
-                        1 if acertou else 0,
-                        0 if acertou else 1,
-                        1 if acertou else 0,
+                        acertou_int, errou_int, acertou_int,
                         roi_unitario,
                         agora_brasilia(),
                     ),
@@ -1075,10 +1257,11 @@ class DatabaseManager:
 
     def buscar_performance_mercados(self) -> List[Dict]:
         """
-        Retorna a performance de todos os mercados ordenada por taxa de acerto.
+        Retorna performance agregada por mercado (soma de todas as ligas/scripts).
+        Ordenada por taxa de acerto DESC.
 
         Returns:
-            Lista de dicts com mercado, total_palpites, total_acertos, taxa_acerto, roi_total
+            Lista de dicts com mercado, n_amostras, total_acertos, taxa_acerto, roi_total
         """
         if not self.enabled:
             return []
@@ -1091,10 +1274,19 @@ class DatabaseManager:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 cursor.execute(
                     """
-                    SELECT mercado, total_palpites, total_acertos, total_erros,
-                           taxa_acerto, roi_total, atualizado_em
+                    SELECT
+                        mercado,
+                        SUM(n_amostras) AS total_palpites,
+                        SUM(total_acertos) AS total_acertos,
+                        SUM(total_erros) AS total_erros,
+                        CASE WHEN SUM(n_amostras) > 0
+                             THEN ROUND(SUM(total_acertos)::DECIMAL / SUM(n_amostras) * 100, 2)
+                             ELSE 0 END AS taxa_acerto,
+                        SUM(roi_total) AS roi_total,
+                        MAX(atualizado_em) AS atualizado_em
                     FROM performance_mercados
-                    WHERE total_palpites > 0
+                    WHERE n_amostras > 0
+                    GROUP BY mercado
                     ORDER BY taxa_acerto DESC, total_palpites DESC
                     """
                 )
@@ -1104,6 +1296,100 @@ class DatabaseManager:
 
         except Exception as e:
             print(f"❌ Erro ao buscar performance de mercados: {e}")
+            return []
+
+    def buscar_performance_por_liga(self) -> List[Dict]:
+        """
+        Retorna performance detalhada por mercado + liga_id para breakdown no frontend.
+
+        Returns:
+            Lista de dicts com mercado, liga_id, n_amostras, taxa_acerto, roi_total
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT mercado, liga_id,
+                           SUM(n_amostras) AS n_amostras,
+                           SUM(total_acertos) AS total_acertos,
+                           CASE WHEN SUM(n_amostras) > 0
+                                THEN ROUND(SUM(total_acertos)::DECIMAL / SUM(n_amostras) * 100, 2)
+                                ELSE 0 END AS taxa_acerto,
+                           SUM(roi_total) AS roi_total
+                    FROM performance_mercados
+                    WHERE n_amostras >= 5 AND liga_id > 0
+                    GROUP BY mercado, liga_id
+                    ORDER BY mercado, taxa_acerto DESC
+                    """
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [dict(r) for r in rows]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar performance por liga: {e}")
+            return []
+
+    def buscar_evolucao_acerto(self, dias: int = 30) -> List[Dict]:
+        """
+        Retorna a taxa de acerto diária dos últimos N dias para gráfico de evolução.
+
+        Args:
+            dias: Janela de dias para calcular a evolução (padrão: 30)
+
+        Returns:
+            Lista de dicts com data, total, acertos, taxa_acerto ordenados por data
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                limite = agora_brasilia() - timedelta(days=dias)
+                cursor.execute(
+                    """
+                    SELECT
+                        DATE(ph.criado_em AT TIME ZONE 'America/Sao_Paulo') AS data,
+                        COUNT(*) AS total,
+                        SUM(CASE WHEN ph.acertou = TRUE THEN 1 ELSE 0 END) AS acertos,
+                        ROUND(
+                            SUM(CASE WHEN ph.acertou = TRUE THEN 1 ELSE 0 END)::DECIMAL
+                            / COUNT(*) * 100,
+                            1
+                        ) AS taxa_acerto
+                    FROM palpites_historico ph
+                    WHERE ph.acertou IS NOT NULL
+                      AND ph.criado_em >= %s
+                    GROUP BY DATE(ph.criado_em AT TIME ZONE 'America/Sao_Paulo')
+                    ORDER BY data ASC
+                    """,
+                    (limite,),
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [
+                    {
+                        "data": str(r["data"]),
+                        "total": int(r["total"]),
+                        "acertos": int(r["acertos"]),
+                        "taxa_acerto": float(r["taxa_acerto"] or 0),
+                    }
+                    for r in rows
+                ]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar evolução de acerto: {e}")
             return []
 
     def buscar_ultimos_palpites(self, limite: int = 20) -> List[Dict]:
@@ -1146,3 +1432,243 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Erro ao buscar últimos palpites: {e}")
             return []
+
+    def salvar_estatisticas_jogador(
+        self,
+        jogador_id: int,
+        fixture_id: int,
+        time_id: int,
+        nome: str,
+        minutos: int,
+        gols: int,
+        assistencias: int,
+        finalizacoes: int,
+        finalizacoes_no_gol: int,
+        cartao_amarelo: bool,
+        cartao_vermelho: bool,
+        eh_mandante: bool,
+        foi_titular: bool,
+    ) -> bool:
+        """
+        Insere ou ignora estatísticas de um jogador para uma partida.
+        Usa ON CONFLICT DO NOTHING — idempotente.
+
+        Returns:
+            True se inserido ou já existia (sem erro)
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return False
+
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO estatisticas_jogadores
+                        (jogador_id, fixture_id, time_id, minutos, gols, assistencias,
+                         finalizacoes, finalizacoes_no_gol, cartao_amarelo, cartao_vermelho,
+                         eh_mandante, foi_titular)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (jogador_id, fixture_id) DO NOTHING
+                    """,
+                    (
+                        jogador_id, fixture_id, time_id, minutos, gols, assistencias,
+                        finalizacoes, finalizacoes_no_gol, cartao_amarelo, cartao_vermelho,
+                        eh_mandante, foi_titular,
+                    ),
+                )
+                conn.commit()
+                cursor.close()
+
+                # Recalcular perfil acumulado do jogador
+                self._recalcular_perfil_jogador(jogador_id, time_id, nome)
+                return True
+
+        except Exception as e:
+            print(f"❌ Erro ao salvar stats do jogador #{jogador_id}: {e}")
+            return False
+
+    def _recalcular_perfil_jogador(self, jogador_id: int, time_id: int, nome: str) -> None:
+        """
+        Recalcula e faz upsert do perfil acumulado de um jogador em perfis_jogadores.
+        Calcula médias e desvio padrão de gols e finalizações.
+        """
+        if not self.enabled:
+            return
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS n_total,
+                        SUM(CASE WHEN eh_mandante THEN 1 ELSE 0 END) AS n_casa,
+                        SUM(CASE WHEN NOT eh_mandante THEN 1 ELSE 0 END) AS n_fora,
+                        SUM(CASE WHEN foi_titular THEN 1 ELSE 0 END) AS n_titular,
+                        AVG(gols) AS media_gols,
+                        AVG(assistencias) AS media_assistencias,
+                        AVG(finalizacoes) AS media_finalizacoes,
+                        STDDEV_POP(gols) AS stddev_gols,
+                        STDDEV_POP(finalizacoes) AS stddev_finalizacoes
+                    FROM estatisticas_jogadores
+                    WHERE jogador_id = %s
+                    """,
+                    (jogador_id,),
+                )
+                row = cursor.fetchone()
+                cursor.close()
+
+                if not row or not row["n_total"]:
+                    return
+
+                cursor2 = conn.cursor()
+                cursor2.execute(
+                    """
+                    INSERT INTO perfis_jogadores
+                        (jogador_id, time_id, nome, n_jogos_total, n_jogos_casa, n_jogos_fora,
+                         n_jogos_titular, media_gols, media_assistencias, media_finalizacoes,
+                         stddev_gols, stddev_finalizacoes, atualizado_em)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (jogador_id) DO UPDATE SET
+                        nome               = EXCLUDED.nome,
+                        n_jogos_total      = EXCLUDED.n_jogos_total,
+                        n_jogos_casa       = EXCLUDED.n_jogos_casa,
+                        n_jogos_fora       = EXCLUDED.n_jogos_fora,
+                        n_jogos_titular    = EXCLUDED.n_jogos_titular,
+                        media_gols         = EXCLUDED.media_gols,
+                        media_assistencias = EXCLUDED.media_assistencias,
+                        media_finalizacoes = EXCLUDED.media_finalizacoes,
+                        stddev_gols        = EXCLUDED.stddev_gols,
+                        stddev_finalizacoes= EXCLUDED.stddev_finalizacoes,
+                        atualizado_em      = EXCLUDED.atualizado_em
+                    """,
+                    (
+                        jogador_id, time_id, nome,
+                        int(row["n_total"]),
+                        int(row["n_casa"] or 0),
+                        int(row["n_fora"] or 0),
+                        int(row["n_titular"] or 0),
+                        float(row["media_gols"] or 0),
+                        float(row["media_assistencias"] or 0),
+                        float(row["media_finalizacoes"] or 0),
+                        float(row["stddev_gols"] or 0),
+                        float(row["stddev_finalizacoes"] or 0),
+                        agora_brasilia(),
+                    ),
+                )
+                conn.commit()
+                cursor2.close()
+
+        except Exception as e:
+            print(f"⚠️ Erro ao recalcular perfil do jogador #{jogador_id}: {e}")
+
+    def get_player_confidence_tier(
+        self,
+        jogador_id: int,
+        contexto: str = 'total',
+    ) -> Dict:
+        """
+        Retorna o nível de confiança e metadados do perfil de um jogador.
+
+        Níveis baseados em n_jogos_total:
+          < 3 jogos:  tier='none'     — sem mercados de jogador
+          3-5 jogos:  tier='low'      — confiança reduzida (aviso de amostra pequena)
+          6-9 jogos:  tier='medium'   — confiança moderada
+          10+ jogos:  tier='high'     — confiança plena
+
+        Alta inconstância (stddev > 1.5× média): reduz tier em um nível.
+
+        Args:
+            jogador_id: ID do jogador na API-Football
+            contexto:   'total' | 'casa' | 'fora'
+
+        Returns:
+            Dict com {tier, n_jogos, media_gols, media_finalizacoes, stddev_gols,
+                      stddev_finalizacoes, aviso}
+        """
+        default = {
+            "tier": "none",
+            "n_jogos": 0,
+            "media_gols": 0.0,
+            "media_finalizacoes": 0.0,
+            "stddev_gols": 0.0,
+            "stddev_finalizacoes": 0.0,
+            "aviso": None,
+        }
+
+        if not self.enabled:
+            return default
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return default
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT n_jogos_total, n_jogos_casa, n_jogos_fora,
+                           media_gols, media_assistencias, media_finalizacoes,
+                           stddev_gols, stddev_finalizacoes
+                    FROM perfis_jogadores
+                    WHERE jogador_id = %s
+                    """,
+                    (jogador_id,),
+                )
+                row = cursor.fetchone()
+                cursor.close()
+
+                if not row:
+                    return default
+
+                if contexto == 'casa':
+                    n = int(row["n_jogos_casa"] or 0)
+                elif contexto == 'fora':
+                    n = int(row["n_jogos_fora"] or 0)
+                else:
+                    n = int(row["n_jogos_total"] or 0)
+
+                media_gols = float(row["media_gols"] or 0)
+                media_fin = float(row["media_finalizacoes"] or 0)
+                stddev_gols = float(row["stddev_gols"] or 0)
+                stddev_fin = float(row["stddev_finalizacoes"] or 0)
+
+                # Determinar tier base
+                if n < 3:
+                    tier = "none"
+                elif n < 6:
+                    tier = "low"
+                elif n < 10:
+                    tier = "medium"
+                else:
+                    tier = "high"
+
+                # Penalidade por alta inconstância: stddev > 1.5 × média
+                aviso = None
+                if tier != "none":
+                    if media_gols > 0 and stddev_gols > 1.5 * media_gols:
+                        tier = {"high": "medium", "medium": "low", "low": "none"}.get(tier, tier)
+                        aviso = "Alta inconstância nos gols — confiança reduzida"
+                    elif media_fin > 0 and stddev_fin > 1.5 * media_fin:
+                        aviso = "Alta inconstância nas finalizações"
+
+                return {
+                    "tier": tier,
+                    "n_jogos": n,
+                    "media_gols": media_gols,
+                    "media_finalizacoes": media_fin,
+                    "stddev_gols": stddev_gols,
+                    "stddev_finalizacoes": stddev_fin,
+                    "aviso": aviso,
+                }
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar tier do jogador #{jogador_id}: {e}")
+            return default

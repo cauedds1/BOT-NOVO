@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
+from api_client import buscar_players_stats_jogo
 
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -324,6 +325,7 @@ async def rastrear_resultados(db) -> dict:
 
             fixture_info = dados.get("fixture", {})
             status_short = fixture_info.get("status", {}).get("short", "")
+            liga_id = int(dados.get("league", {}).get("id") or 0)
 
             if status_short not in STATUS_ENCERRADO:
                 print(f"  ⏳ Fixture #{fixture_id} ainda não encerrou (status: {status_short})")
@@ -380,10 +382,43 @@ async def rastrear_resultados(db) -> dict:
                 roi = round(odd - 1, 4) if acertou else -1.0
 
                 db.atualizar_palpite_resultado(p["id"], acertou, roi)
-                db.upsert_performance_mercado(p.get("mercado", "Outros"), acertou, roi)
+                db.upsert_performance_mercado(
+                    p.get("mercado", "Outros"),
+                    acertou,
+                    roi,
+                    liga_id=liga_id,
+                )
                 stats["palpites_avaliados"] += 1
                 if acertou:
                     stats["palpites_acertados"] += 1
+
+            # Best-effort: salvar estatísticas individuais de jogadores
+            home_team_id = int(dados.get("teams", {}).get("home", {}).get("id") or 0)
+            away_team_id = int(dados.get("teams", {}).get("away", {}).get("id") or 0)
+            try:
+                player_stats = await buscar_players_stats_jogo(fixture_id)
+                for ps in player_stats:
+                    if ps.get("jogador_id") and ps.get("time_id"):
+                        eh_mandante = ps["time_id"] == home_team_id
+                        db.salvar_estatisticas_jogador(
+                            jogador_id=ps["jogador_id"],
+                            fixture_id=fixture_id,
+                            time_id=ps["time_id"],
+                            nome=ps.get("nome", ""),
+                            minutos=ps.get("minutos", 0),
+                            gols=ps.get("gols", 0),
+                            assistencias=ps.get("assistencias", 0),
+                            finalizacoes=ps.get("finalizacoes", 0),
+                            finalizacoes_no_gol=ps.get("finalizacoes_no_gol", 0),
+                            cartao_amarelo=ps.get("cartao_amarelo", False),
+                            cartao_vermelho=ps.get("cartao_vermelho", False),
+                            eh_mandante=eh_mandante,
+                            foi_titular=ps.get("foi_titular", True),
+                        )
+                if player_stats:
+                    print(f"  👤 {len(player_stats)} estatísticas de jogadores salvas para fixture #{fixture_id}")
+            except Exception as pe:
+                print(f"  ⚠️ [ResultTracker] Stats de jogadores ignoradas para fixture #{fixture_id}: {pe}")
 
             stats["fixtures_verificados"] += 1
 

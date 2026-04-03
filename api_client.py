@@ -1720,3 +1720,63 @@ async def buscar_estatisticas_jogo(fixture_id: int):
         traceback.print_exc()
 
     return None
+
+
+async def buscar_players_stats_jogo(fixture_id: int):
+    """
+    Busca estatísticas individuais de jogadores para um fixture já encerrado.
+    Endpoint: GET /fixtures/players?fixture={id}
+    Retorna lista de dicts com jogador_id, nome, time_id, minutos, gols, assistencias,
+    finalizacoes, finalizacoes_no_gol, cartao_amarelo, cartao_vermelho, foi_titular.
+    Retorna [] em caso de erro ou ausência de dados (best-effort).
+    """
+    cache_key = f"players_stats_{fixture_id}"
+    if cached := cache_manager.get(cache_key):
+        return cached
+
+    try:
+        await asyncio.sleep(1.6)
+        response = await api_request_with_retry(
+            "GET",
+            API_URL + "fixtures/players",
+            params={"fixture": str(fixture_id)},
+        )
+        response.raise_for_status()
+        data = response.json().get("response", [])
+        if not data:
+            return []
+
+        result = []
+        for team_entry in data:
+            team_id = team_entry.get("team", {}).get("id")
+            players = team_entry.get("players", [])
+            for entry in players:
+                p = entry.get("player", {})
+                s_list = entry.get("statistics", [{}])
+                s = s_list[0] if s_list else {}
+
+                gols_obj = s.get("goals", {}) or {}
+                shots_obj = s.get("shots", {}) or {}
+                cards_obj = s.get("cards", {}) or {}
+                games_obj = s.get("games", {}) or {}
+
+                result.append({
+                    "jogador_id": int(p.get("id") or 0),
+                    "nome": p.get("name", ""),
+                    "time_id": int(team_id or 0),
+                    "minutos": int(games_obj.get("minutes") or 0),
+                    "gols": int(gols_obj.get("total") or 0),
+                    "assistencias": int(gols_obj.get("assists") or 0),
+                    "finalizacoes": int(shots_obj.get("total") or 0),
+                    "finalizacoes_no_gol": int(shots_obj.get("on") or 0),
+                    "cartao_amarelo": bool(cards_obj.get("yellow")),
+                    "cartao_vermelho": bool(cards_obj.get("red")),
+                    "foi_titular": bool(games_obj.get("captain") or games_obj.get("minutes", 0) >= 45),
+                })
+
+        cache_manager.set(cache_key, result, expiration_minutes=480)
+        return result
+
+    except Exception as e:
+        print(f"  ⚠️ [buscar_players_stats_jogo] fixture #{fixture_id}: {e}")
+        return []

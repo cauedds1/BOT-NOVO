@@ -255,6 +255,40 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
         analise_handicap_europeu = analisar_mercado_handicap_europeu(analysis_packet, odds)
         analise_primeiro_marcador = analisar_mercado_primeiro_a_marcar(analysis_packet, odds)
 
+        # 3b. Aplicar ajuste histórico de confiança por mercado (learning layer)
+        # Mapeia nome de mercado → resultado do analyzer
+        _mercado_nome_map = {
+            "Gols": analise_gols,
+            "Resultado": analise_resultado,
+            "Cantos": analise_cantos,
+            "BTTS": analise_btts,
+            "Cartões": analise_cartoes,
+            "Finalizações": analise_finalizacoes,
+            "Handicaps": analise_handicaps,
+            "Dupla Chance": analise_dupla_chance,
+            "Gols Ambos Tempos": analise_gabt,
+            "Placar Exato": analise_placar_exato,
+            "Handicap Europeu": analise_handicap_europeu,
+            "Primeiro a Marcar": analise_primeiro_marcador,
+        }
+        for _nome_mercado, _analise in _mercado_nome_map.items():
+            if not _analise:
+                continue
+            _adj = db.get_market_confidence_adjustment(
+                mercado=_nome_mercado,
+                liga_id=id_liga,
+                script=script,
+            )
+            if _adj == 0.0:
+                continue
+            palpites_list = _analise if isinstance(_analise, list) else _analise.get("palpites", [])
+            for _p in palpites_list:
+                if isinstance(_p, dict) and "confianca" in _p:
+                    _p["confianca"] = round(max(1.0, min(10.0, _p["confianca"] + _adj)), 2)
+                    if "confidence_breakdown" in _p and isinstance(_p["confidence_breakdown"], dict):
+                        _p["confidence_breakdown"]["modificador_historico"] = _adj
+                        _p["confidence_breakdown"]["confianca_final"] = _p["confianca"]
+
         # 4. Salvar no banco
         data_utc = jogo.get("fixture", {}).get("date", "")
         dt_brt = datetime.now(BRASILIA_TZ)
@@ -725,33 +759,50 @@ async def stats_gerais():
 @app.get("/api/performance")
 async def get_performance():
     """
-    Retorna a performance histórica do sistema por mercado e os últimos palpites avaliados.
+    Retorna a performance histórica do sistema.
 
     Response:
-        - mercados: lista de mercados com taxa de acerto, total de palpites e ROI
+        - mercados: performance agregada por mercado (taxa de acerto, n_amostras, ROI)
+        - por_liga: breakdown por mercado + liga_id para detalhamento geográfico
+        - evolucao: série temporal diária de taxa de acerto (últimos 30 dias)
         - ultimos_palpites: últimos 20 palpites com resultado conhecido
-        - resumo: totais globais (taxa geral, ROI total, total de palpites avaliados)
+        - resumo: totais globais (taxa geral, ROI total, n_amostras)
     """
     try:
         mercados_raw = db.buscar_performance_mercados()
+        por_liga_raw = db.buscar_performance_por_liga()
+        evolucao_raw = db.buscar_evolucao_acerto(dias=30)
         ultimos_raw = db.buscar_ultimos_palpites(limite=20)
 
-        total_palpites = sum(m.get("total_palpites", 0) for m in mercados_raw)
-        total_acertos = sum(m.get("total_acertos", 0) for m in mercados_raw)
-        roi_total = sum(float(m.get("roi_total", 0)) for m in mercados_raw)
+        total_palpites = sum(int(m.get("total_palpites", 0) or 0) for m in mercados_raw)
+        total_acertos = sum(int(m.get("total_acertos", 0) or 0) for m in mercados_raw)
+        roi_total = sum(float(m.get("roi_total", 0) or 0) for m in mercados_raw)
         taxa_geral = round(total_acertos / total_palpites * 100, 1) if total_palpites > 0 else 0.0
 
         mercados = [
             {
                 "mercado": m["mercado"],
-                "total_palpites": m["total_palpites"],
-                "total_acertos": m["total_acertos"],
-                "total_erros": m.get("total_erros", 0),
+                "total_palpites": int(m.get("total_palpites", 0) or 0),
+                "total_acertos": int(m.get("total_acertos", 0) or 0),
+                "total_erros": int(m.get("total_erros", 0) or 0),
                 "taxa_acerto": float(m.get("taxa_acerto") or 0),
                 "roi_total": float(m.get("roi_total") or 0),
                 "atualizado_em": str(m.get("atualizado_em", "")),
             }
             for m in mercados_raw
+        ]
+
+        por_liga = [
+            {
+                "mercado": r["mercado"],
+                "liga_id": int(r["liga_id"]),
+                "liga_nome": NOMES_LIGAS_PT.get(int(r["liga_id"]), [str(r["liga_id"])])[0],
+                "n_amostras": int(r["n_amostras"] or 0),
+                "total_acertos": int(r["total_acertos"] or 0),
+                "taxa_acerto": float(r["taxa_acerto"] or 0),
+                "roi_total": float(r["roi_total"] or 0),
+            }
+            for r in por_liga_raw
         ]
 
         ultimos_palpites = [
@@ -777,6 +828,8 @@ async def get_performance():
 
         return {
             "mercados": mercados,
+            "por_liga": por_liga,
+            "evolucao": evolucao_raw,
             "ultimos_palpites": ultimos_palpites,
             "resumo": {
                 "total_palpites_avaliados": total_palpites,
@@ -790,6 +843,8 @@ async def get_performance():
         print(f"❌ [WebAPI] Erro ao buscar performance: {e}")
         return {
             "mercados": [],
+            "por_liga": [],
+            "evolucao": [],
             "ultimos_palpites": [],
             "resumo": {
                 "total_palpites_avaliados": 0,

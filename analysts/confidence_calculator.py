@@ -432,6 +432,7 @@ def calculate_final_confidence(
     injury_severity_away: str = "none",
     injury_role_home: str = "mixed",
     injury_role_away: str = "mixed",
+    market_history_adjustment: float = 0.0,
 ) -> Tuple[float, Dict[str, float]]:
     """
     PURE ANALYST PROTOCOL - STEP 4: Calcula Confiança Final (sem dependência de odds).
@@ -439,14 +440,20 @@ def calculate_final_confidence(
     PHOENIX V4.0: Modificador de desfalques DIRECIONAL — lesões ofensivas aumentam
     confiança em Under, lesões defensivas aumentam confiança em Over/BTTS.
 
+    TASK #17 — Aprendizado: Aceita ajuste histórico por mercado (dampened via
+    get_market_confidence_adjustment): 0.0 se amostras insuficientes, ±valor se
+    o mercado tem histórico de acerto acima/abaixo do esperado.
+
     Args:
-        statistical_probability_pct: Probabilidade estatística base (0-100%)
-        bet_type:             Tipo da aposta
-        tactical_script:      Script tático (opcional)
-        injury_severity_home: Severidade de desfalques do mandante
-        injury_severity_away: Severidade de desfalques do visitante
-        injury_role_home:     Papel dos lesionados do mandante ('offensive'/'defensive'/'mixed')
-        injury_role_away:     Papel dos lesionados do visitante ('offensive'/'defensive'/'mixed')
+        statistical_probability_pct:  Probabilidade estatística base (0-100%)
+        bet_type:                     Tipo da aposta
+        tactical_script:              Script tático (opcional)
+        injury_severity_home:         Severidade de desfalques do mandante
+        injury_severity_away:         Severidade de desfalques do visitante
+        injury_role_home:             Papel dos lesionados do mandante
+        injury_role_away:             Papel dos lesionados do visitante
+        market_history_adjustment:    Ajuste histórico dampened do mercado (de
+                                      db.get_market_confidence_adjustment)
 
     Returns:
         tuple: (confianca_final, breakdown_dict)
@@ -464,8 +471,11 @@ def calculate_final_confidence(
         injury_role_home, injury_role_away,
     )
 
+    # STEP 3c: Historical market adjustment (learning layer)
+    mod_historico = float(market_history_adjustment)
+
     # STEP 4: Final
-    final_conf = base_conf + mod_script + mod_injury
+    final_conf = base_conf + mod_script + mod_injury + mod_historico
 
     # Cap entre 1.0 e 10.0
     final_conf = max(1.0, min(10.0, final_conf))
@@ -475,6 +485,7 @@ def calculate_final_confidence(
         "confianca_base": base_conf,
         "modificador_script": mod_script,
         "modificador_lesoes": mod_injury,
+        "modificador_historico": mod_historico,
         "confianca_final": final_conf
     }
 
