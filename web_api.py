@@ -572,7 +572,22 @@ async def get_analise(fixture_id: int):
             return _db_to_api_response(analise_stale, fixture_id)
         raise HTTPException(status_code=500, detail="Erro na análise. Tente novamente.")
 
-    analise_db = db.buscar_analise(fixture_id, max_idade_horas=24, permitir_stale=True)
+    # Tentar extrair kickoff do cache de jogos para aplicar TTL inteligente
+    _kickoff_ge = None
+    try:
+        _jogos_ge = await buscar_jogos_do_dia()
+        if _jogos_ge:
+            for _j in _jogos_ge:
+                if _j.get("fixture", {}).get("id") == fixture_id:
+                    _dt = datetime.fromisoformat(
+                        _j.get("fixture", {}).get("date", "").replace("Z", "+00:00")
+                    )
+                    _kickoff_ge = _dt.astimezone(ZoneInfo("America/Sao_Paulo"))
+                    break
+    except Exception:
+        pass
+
+    analise_db = db.buscar_analise(fixture_id, data_jogo=_kickoff_ge, permitir_stale=True)
     if not analise_db:
         if status_atual == "ready":
             _processing_status.pop(fixture_id, None)
@@ -637,7 +652,22 @@ async def status_analise(fixture_id: int):
     if status:
         return {"fixture_id": fixture_id, "status": status}
 
-    analise_db = db.buscar_analise(fixture_id, max_idade_horas=24)
+    # Tentar extrair kickoff para aplicar TTL inteligente
+    _kickoff_sa = None
+    try:
+        _jogos_sa = await buscar_jogos_do_dia()
+        if _jogos_sa:
+            for _j in _jogos_sa:
+                if _j.get("fixture", {}).get("id") == fixture_id:
+                    _dt = datetime.fromisoformat(
+                        _j.get("fixture", {}).get("date", "").replace("Z", "+00:00")
+                    )
+                    _kickoff_sa = _dt.astimezone(ZoneInfo("America/Sao_Paulo"))
+                    break
+    except Exception:
+        pass
+
+    analise_db = db.buscar_analise(fixture_id, data_jogo=_kickoff_sa)
     if analise_db:
         return {"fixture_id": fixture_id, "status": "ready"}
 

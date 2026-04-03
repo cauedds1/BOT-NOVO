@@ -10,7 +10,7 @@ Pipeline:
 """
 import asyncio
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
@@ -18,9 +18,9 @@ BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 # Status da API-Football que indicam jogo encerrado
 STATUS_ENCERRADO = {"FT", "AET", "PEN"}
 
-# Mercados que podem ser avaliados automaticamente pelo result_tracker.
-# Palpites de outros mercados (Finalizações, Cartões, Primeiro Marcador, Asian Handicap)
-# NÃO são persistidos em palpites_historico, pois não podem ser avaliados sem dados externos adicionais.
+# Mercados avaliados automaticamente pelo result_tracker.
+# Outros mercados (Finalizações, Cartões, Primeiro Marcador, Asian Handicap) ficam
+# com acertou=NULL em palpites_historico até que um avaliador específico seja adicionado.
 MERCADOS_AVALIÁVEIS = {
     "Gols", "Goals",
     "BTTS",
