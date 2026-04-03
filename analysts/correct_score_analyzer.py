@@ -63,18 +63,35 @@ def _calcular_matriz_placares(lambda_home: float, lambda_away: float) -> dict:
 
 def _validar_cobertura_poisson(matriz: dict, lambda_home: float, lambda_away: float) -> float:
     """
-    Valida que a grade 0-MAX_GOALS cobre >= POISSON_MASS_MIN da massa total.
-    Returns: fração de cobertura (0-1)
+    Valida a cobertura da grade Poisson 0-MAX_GOALS.
+
+    Checks:
+      1. Soma da matriz deve ser <= 100% (integridade da distribuição).
+      2. Cobertura deve ser >= POISSON_MASS_MIN (90%) — abaixo disso, log de aviso.
+
+    Returns:
+        fração de cobertura (0.0 – 1.0)
     """
-    total_mass = sum(matriz.values()) / 100.0
+    total_pct = sum(matriz.values())
+    total_mass = total_pct / 100.0
+
+    # Invariante: soma das probabilidades não pode exceder 1.0
+    if total_mass > 1.001:
+        print(
+            f"  ❌ Placar Exato: BUG — soma Poisson {total_mass:.4f} > 1.0 "
+            f"(λ_home={lambda_home:.2f}, λ_away={lambda_away:.2f}) — verifique _poisson_pmf"
+        )
+
+    # Política de cobertura mínima
     if total_mass < POISSON_MASS_MIN:
         print(
             f"  ⚠️  Placar Exato: Cobertura Poisson {total_mass:.1%} "
             f"< {POISSON_MASS_MIN:.0%} (λ_home={lambda_home:.2f}, λ_away={lambda_away:.2f}) "
-            f"— alta expectativa de gols; considere aumentar MAX_GOALS"
+            f"— alta expectativa de gols; {100.0 - total_pct:.1f}% de massa em placares >{MAX_GOALS} gols"
         )
     else:
-        print(f"  ✅ Placar Exato: Cobertura Poisson {total_mass:.1%} (OK)")
+        print(f"  ✅ Placar Exato: Cobertura Poisson {total_mass:.1%} (OK, soma={total_pct:.2f}%)")
+
     return total_mass
 
 

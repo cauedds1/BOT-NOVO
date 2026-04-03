@@ -81,7 +81,7 @@ O bot é construído com uma arquitetura modular e production-ready, permitindo 
 ### Task #7: Mercado Placar Exato (Correct Score) — COMPLETE
 - `analysts/correct_score_analyzer.py`: Novo analisador com Poisson bivariada (λ_home × λ_away), 25 placares (0-4 × 0-4), escala de confiança relativa ao baseline uniforme (4% por placar).
 - Confiança específica: `base_conf = 5.0 + (ratio - 1.0) * 2.0` onde `ratio = prob / 4.0`.
-- Threshold 5.5, máximo 5 palpites aprovados por jogo.
+- Threshold 5.5, máximo 3 palpites aprovados por jogo (top-3 por edge).
 - `api_client.py`: Parse de odds de Correct Score com 5 variantes de nome (normalização via `placar_exato` dict).
 - Integrado em todos os 3 paths do main.py incluindo DB save com chave `placar_exato`.
 - `dossier_formatter.py`: Seção dedicada 🎯 PLACAR EXATO com evidências de resultados recentes.

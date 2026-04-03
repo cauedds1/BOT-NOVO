@@ -91,12 +91,17 @@ class DatabaseManager:
             analise_resultado JSONB,
             analise_cartoes JSONB,
             analise_contexto JSONB,
+            analise_gabt JSONB,
+            analise_placar_exato JSONB,
             palpites_totais INTEGER DEFAULT 0,
             confianca_media DECIMAL(3,1) DEFAULT 0,
             data_analise TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
+        -- Adicionar colunas GABT e Placar Exato em tabelas existentes (migration segura)
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_gabt JSONB;
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_placar_exato JSONB;
 
         -- Índices para performance
         CREATE INDEX IF NOT EXISTS idx_analises_jogos_fixture_id ON analises_jogos(fixture_id);
@@ -190,8 +195,9 @@ class DatabaseManager:
                             (fixture_id, data_jogo, liga, time_casa, time_fora, 
                              stats_casa, stats_fora, classificacao,
                              analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_contexto,
+                             analise_gabt, analise_placar_exato,
                              palpites_totais, confianca_media, data_analise, atualizado_em)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (fixture_id) 
                             DO UPDATE SET
                                 stats_casa = EXCLUDED.stats_casa,
@@ -203,6 +209,8 @@ class DatabaseManager:
                                 analise_resultado = EXCLUDED.analise_resultado,
                                 analise_cartoes = EXCLUDED.analise_cartoes,
                                 analise_contexto = EXCLUDED.analise_contexto,
+                                analise_gabt = EXCLUDED.analise_gabt,
+                                analise_placar_exato = EXCLUDED.analise_placar_exato,
                                 palpites_totais = EXCLUDED.palpites_totais,
                                 confianca_media = EXCLUDED.confianca_media,
                                 atualizado_em = EXCLUDED.atualizado_em
@@ -223,6 +231,8 @@ class DatabaseManager:
                             Json(analises.get('resultado', {})),
                             Json(analises.get('cartoes', {})),
                             Json(analises.get('contexto', {})),
+                            Json(analises.get('gabt', {})),
+                            Json(analises.get('placar_exato', {})),
                             total_palpites,
                             confianca_media,
                             agora_brasilia(),
@@ -258,6 +268,8 @@ class DatabaseManager:
                 'analise_resultado': analises.get('resultado', {}),
                 'analise_cartoes': analises.get('cartoes', {}),
                 'analise_contexto': analises.get('contexto', {}),
+                'analise_gabt': analises.get('gabt', {}),
+                'analise_placar_exato': analises.get('placar_exato', {}),
                 'palpites_totais': total_palpites,
                 'confianca_media': confianca_media,
                 'data_analise': agora_brasilia().isoformat(),
