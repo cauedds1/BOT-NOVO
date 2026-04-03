@@ -201,6 +201,20 @@ class DatabaseManager:
 
         COMMENT ON TABLE palpites_historico IS 'Palpites individuais gerados para cada jogo analisado com resultado real';
         COMMENT ON TABLE resultado_jogos IS 'Resultado real (placar final) dos jogos analisados';
+
+        -- Tabela de performance por mercado (atualizada após cada avaliação de resultado)
+        CREATE TABLE IF NOT EXISTS performance_mercados (
+            id SERIAL PRIMARY KEY,
+            mercado VARCHAR(100) UNIQUE NOT NULL,
+            total_palpites INTEGER NOT NULL DEFAULT 0,
+            total_acertos INTEGER NOT NULL DEFAULT 0,
+            total_erros INTEGER NOT NULL DEFAULT 0,
+            taxa_acerto DECIMAL(5,2) DEFAULT 0,
+            roi_total DECIMAL(10,4) DEFAULT 0,
+            atualizado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_performance_mercados_mercado ON performance_mercados(mercado);
+        COMMENT ON TABLE performance_mercados IS 'Acurácia e ROI por mercado, atualizado após cada avaliação noturna';
         """
         
         try:
@@ -218,7 +232,7 @@ class DatabaseManager:
                 cursor.close()
                 
                 print("✅ Database schema inicializado com sucesso!")
-                print("   📋 Tabelas criadas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos")
+                print("   📋 Tabelas criadas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados")
                 return True
                 
         except Exception as e:
@@ -938,3 +952,197 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Erro ao atualizar palpite #{palpite_id}: {e}")
             return False
+
+    def get_market_confidence_adjustment(self, mercado: str) -> float:
+        """
+        Retorna um ajuste de confiança (+/-) baseado na performance histórica do mercado.
+
+        Lógica:
+          - Taxa de acerto >= 65%: bônus +0.5
+          - Taxa de acerto entre 50%-65%: neutro 0.0
+          - Taxa de acerto entre 40%-50%: penalidade -0.3
+          - Taxa de acerto < 40%: penalidade -0.7
+          - Menos de 20 palpites avaliados: retorna 0.0 (sem dados suficientes)
+
+        Args:
+            mercado: Nome do mercado (ex: "Gols", "Cantos", "BTTS")
+
+        Returns:
+            float: Ajuste de confiança entre -1.0 e +0.5
+        """
+        if not self.enabled:
+            return 0.0
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return 0.0
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT total_palpites, total_acertos, taxa_acerto
+                    FROM performance_mercados
+                    WHERE mercado = %s
+                    """,
+                    (mercado,),
+                )
+                row = cursor.fetchone()
+                cursor.close()
+
+                if not row or row["total_palpites"] < 20:
+                    return 0.0
+
+                taxa = float(row["taxa_acerto"] or 0)
+
+                if taxa >= 65:
+                    return 0.5
+                elif taxa >= 50:
+                    return 0.0
+                elif taxa >= 40:
+                    return -0.3
+                else:
+                    return -0.7
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar performance do mercado '{mercado}': {e}")
+            return 0.0
+
+    def upsert_performance_mercado(
+        self,
+        mercado: str,
+        acertou: bool,
+        roi_unitario: float,
+    ) -> bool:
+        """
+        Atualiza (ou cria) o registro de performance de um mercado após avaliar um palpite.
+
+        Args:
+            mercado: Nome do mercado
+            acertou: True se o palpite acertou
+            roi_unitario: Lucro/prejuízo unitário do palpite
+
+        Returns:
+            True se atualizado com sucesso
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return False
+
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO performance_mercados
+                        (mercado, total_palpites, total_acertos, total_erros, taxa_acerto, roi_total, atualizado_em)
+                    VALUES (%s, 1, %s, %s, %s, %s, %s)
+                    ON CONFLICT (mercado) DO UPDATE SET
+                        total_palpites = performance_mercados.total_palpites + 1,
+                        total_acertos  = performance_mercados.total_acertos  + %s,
+                        total_erros    = performance_mercados.total_erros    + %s,
+                        taxa_acerto    = ROUND(
+                            (performance_mercados.total_acertos + %s)::DECIMAL
+                            / (performance_mercados.total_palpites + 1) * 100,
+                            2
+                        ),
+                        roi_total      = performance_mercados.roi_total + %s,
+                        atualizado_em  = %s
+                    """,
+                    (
+                        mercado,
+                        1 if acertou else 0,
+                        0 if acertou else 1,
+                        100.0 if acertou else 0.0,
+                        roi_unitario,
+                        agora_brasilia(),
+                        1 if acertou else 0,
+                        0 if acertou else 1,
+                        1 if acertou else 0,
+                        roi_unitario,
+                        agora_brasilia(),
+                    ),
+                )
+                conn.commit()
+                cursor.close()
+                return True
+
+        except Exception as e:
+            print(f"❌ Erro ao upsert performance do mercado '{mercado}': {e}")
+            return False
+
+    def buscar_performance_mercados(self) -> List[Dict]:
+        """
+        Retorna a performance de todos os mercados ordenada por taxa de acerto.
+
+        Returns:
+            Lista de dicts com mercado, total_palpites, total_acertos, taxa_acerto, roi_total
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT mercado, total_palpites, total_acertos, total_erros,
+                           taxa_acerto, roi_total, atualizado_em
+                    FROM performance_mercados
+                    WHERE total_palpites > 0
+                    ORDER BY taxa_acerto DESC, total_palpites DESC
+                    """
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [dict(r) for r in rows]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar performance de mercados: {e}")
+            return []
+
+    def buscar_ultimos_palpites(self, limite: int = 20) -> List[Dict]:
+        """
+        Retorna os últimos N palpites avaliados (acertou IS NOT NULL) para o histórico.
+
+        Args:
+            limite: Quantidade máxima de registros
+
+        Returns:
+            Lista de dicts com palpite + resultado
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT ph.id, ph.fixture_id, ph.mercado, ph.linha, ph.time_aposta,
+                           ph.confianca, ph.odd, ph.periodo, ph.acertou, ph.roi_unitario,
+                           ph.criado_em,
+                           aj.time_casa, aj.time_fora, aj.liga, aj.data_jogo
+                    FROM palpites_historico ph
+                    LEFT JOIN analises_jogos aj ON aj.fixture_id = ph.fixture_id
+                    WHERE ph.acertou IS NOT NULL
+                    ORDER BY ph.criado_em DESC
+                    LIMIT %s
+                    """,
+                    (limite,),
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [dict(r) for r in rows]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar últimos palpites: {e}")
+            return []

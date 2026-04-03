@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 export default function Header() {
   const location = useLocation()
   const isHome = location.pathname === '/'
+  const isPerformance = location.pathname === '/performance'
 
   return (
     <header
@@ -54,6 +55,19 @@ export default function Header() {
             }}
           >
             Jogos Hoje
+          </Link>
+          <Link
+            to="/performance"
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: isPerformance ? '#818cf8' : '#94a3b8',
+              textDecoration: 'none',
+              borderBottom: isPerformance ? '2px solid #818cf8' : '2px solid transparent',
+              paddingBottom: 2,
+            }}
+          >
+            Performance
           </Link>
           <div
             style={{

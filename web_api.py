@@ -722,6 +722,84 @@ async def stats_gerais():
     }
 
 
+@app.get("/api/performance")
+async def get_performance():
+    """
+    Retorna a performance histórica do sistema por mercado e os últimos palpites avaliados.
+
+    Response:
+        - mercados: lista de mercados com taxa de acerto, total de palpites e ROI
+        - ultimos_palpites: últimos 20 palpites com resultado conhecido
+        - resumo: totais globais (taxa geral, ROI total, total de palpites avaliados)
+    """
+    try:
+        mercados_raw = db.buscar_performance_mercados()
+        ultimos_raw = db.buscar_ultimos_palpites(limite=20)
+
+        total_palpites = sum(m.get("total_palpites", 0) for m in mercados_raw)
+        total_acertos = sum(m.get("total_acertos", 0) for m in mercados_raw)
+        roi_total = sum(float(m.get("roi_total", 0)) for m in mercados_raw)
+        taxa_geral = round(total_acertos / total_palpites * 100, 1) if total_palpites > 0 else 0.0
+
+        mercados = [
+            {
+                "mercado": m["mercado"],
+                "total_palpites": m["total_palpites"],
+                "total_acertos": m["total_acertos"],
+                "total_erros": m.get("total_erros", 0),
+                "taxa_acerto": float(m.get("taxa_acerto") or 0),
+                "roi_total": float(m.get("roi_total") or 0),
+                "atualizado_em": str(m.get("atualizado_em", "")),
+            }
+            for m in mercados_raw
+        ]
+
+        ultimos_palpites = [
+            {
+                "id": p["id"],
+                "fixture_id": p["fixture_id"],
+                "time_casa": p.get("time_casa", ""),
+                "time_fora": p.get("time_fora", ""),
+                "liga": p.get("liga", ""),
+                "data_jogo": str(p.get("data_jogo", "")),
+                "mercado": p["mercado"],
+                "linha": p["linha"],
+                "time_aposta": p.get("time_aposta", "Total"),
+                "confianca": p["confianca"],
+                "odd": float(p["odd"]) if p.get("odd") is not None else None,
+                "periodo": p.get("periodo", "FT"),
+                "acertou": p["acertou"],
+                "roi_unitario": float(p.get("roi_unitario") or 0),
+                "criado_em": str(p.get("criado_em", "")),
+            }
+            for p in ultimos_raw
+        ]
+
+        return {
+            "mercados": mercados,
+            "ultimos_palpites": ultimos_palpites,
+            "resumo": {
+                "total_palpites_avaliados": total_palpites,
+                "total_acertos": total_acertos,
+                "taxa_acerto_geral": taxa_geral,
+                "roi_total": round(roi_total, 4),
+            },
+        }
+
+    except Exception as e:
+        print(f"❌ [WebAPI] Erro ao buscar performance: {e}")
+        return {
+            "mercados": [],
+            "ultimos_palpites": [],
+            "resumo": {
+                "total_palpites_avaliados": 0,
+                "total_acertos": 0,
+                "taxa_acerto_geral": 0.0,
+                "roi_total": 0.0,
+            },
+        }
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(BRASILIA_TZ).isoformat()}

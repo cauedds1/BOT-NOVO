@@ -380,6 +380,7 @@ async def rastrear_resultados(db) -> dict:
                 roi = round(odd - 1, 4) if acertou else -1.0
 
                 db.atualizar_palpite_resultado(p["id"], acertou, roi)
+                db.upsert_performance_mercado(p.get("mercado", "Outros"), acertou, roi)
                 stats["palpites_avaliados"] += 1
                 if acertou:
                     stats["palpites_acertados"] += 1
