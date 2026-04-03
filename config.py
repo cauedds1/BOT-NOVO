@@ -77,20 +77,21 @@ QUALITY_SCORES = {
     33: 95,   # Manchester City
     40: 92,   # Liverpool
     42: 90,   # Arsenal
-    34: 88,   # Newcastle
+    34: 88,   # Newcastle United
     50: 87,   # Manchester United
-    49: 86,   # Tottenham
+    49: 86,   # Tottenham Hotspur
     35: 85,   # Chelsea
     66: 83,   # Aston Villa
-    48: 82,   # West Ham
-    51: 81,   # Brighton
-    52: 74,   # Crystal Palace
-    45: 76,   # Everton
+    48: 82,   # West Ham United
+    51: 81,   # Brighton & Hove Albion
     36: 77,   # Fulham
     55: 77,   # Brentford
+    45: 76,   # Everton
     39: 76,   # Wolverhampton Wanderers
+    52: 74,   # Crystal Palace
     65: 75,   # Nottingham Forest
     46: 75,   # Leicester City
+    41: 73,   # Southampton
     44: 72,   # Burnley
     57: 71,   # Ipswich Town
     
@@ -106,13 +107,17 @@ QUALITY_SCORES = {
     724: 78,  # Villarreal
     531: 77,  # Athletic Bilbao
     543: 76,  # Real Betis
+    547: 76,  # Girona
     538: 74,  # Celta Vigo
     546: 72,  # Getafe
-    547: 76,  # Girona
     728: 71,  # Rayo Vallecano
+    727: 70,  # Osasuna
     540: 70,  # Espanyol
-    533: 69,  # Deportivo Alaves
-    798: 68,  # Mallorca
+    798: 69,  # Mallorca
+    533: 68,  # Deportivo Alaves
+    769: 67,  # Las Palmas
+    723: 66,  # Leganés
+    720: 65,  # Valladolid
     
     # =============================================
     # SERIE A - Itália
@@ -125,42 +130,63 @@ QUALITY_SCORES = {
     497: 86,  # AS Roma
     488: 84,  # Lazio
     502: 79,  # Fiorentina
-    503: 75,  # Torino
     500: 77,  # Bologna
-    491: 69,  # Genoa
+    503: 75,  # Torino
+    586: 74,  # Monza
     494: 68,  # Udinese
+    484: 68,  # Hellas Verona
+    491: 69,  # Genoa
     490: 67,  # Cagliari
     511: 67,  # Empoli
-    484: 68,  # Hellas Verona
+    481: 65,  # Lecce
+    483: 63,  # Frosinone
+    514: 62,  # Salernitana
+    510: 62,  # Venezia
     
     # =============================================
     # BUNDESLIGA - Alemanha
     # =============================================
     157: 93,  # Bayern Munich
     165: 89,  # Borussia Dortmund
-    173: 86,  # RB Leipzig
     168: 85,  # Bayer Leverkusen
+    173: 86,  # RB Leipzig
     169: 80,  # Eintracht Frankfurt
     172: 79,  # VfB Stuttgart
     163: 77,  # Borussia Mönchengladbach
     161: 76,  # Wolfsburg
     162: 75,  # Werder Bremen
     160: 74,  # SC Freiburg
-    164: 70,  # Mainz 05
     182: 72,  # Union Berlin
+    164: 70,  # Mainz 05
+    167: 69,  # Hoffenheim (TSG 1899)
     170: 68,  # FC Augsburg
+    174: 66,  # FC Köln
+    176: 65,  # VfL Bochum
+    179: 63,  # Darmstadt 98
+    180: 63,  # 1. FC Heidenheim
+    181: 62,  # FC St. Pauli
     
     # =============================================
     # LIGUE 1 - França
     # =============================================
     85: 91,   # Paris Saint-Germain
-    81: 82,   # Marseille
-    80: 80,   # Monaco
-    83: 79,   # Lyon
+    81: 82,   # Olympique Marseille
+    80: 80,   # AS Monaco
+    83: 79,   # Olympique Lyonnais
     84: 76,   # Stade Rennais
     91: 77,   # RC Lens
     93: 75,   # OGC Nice
     94: 72,   # Stade de Reims
+    77: 72,   # Stade Brestois 29
+    89: 71,   # FC Nantes
+    90: 70,   # Montpellier HSC
+    95: 69,   # RC Strasbourg
+    96: 68,   # Toulouse FC
+    78: 67,   # Angers SCO
+    88: 66,   # FC Lorient
+    79: 65,   # Clermont Foot
+    87: 64,   # Metz
+    76: 63,   # Le Havre AC
     
     # =============================================
     # EREDIVISIE - Holanda
