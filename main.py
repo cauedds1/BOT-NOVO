@@ -651,6 +651,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 analises_brutas.append(analise_db['analise_gabt'])
             if analise_db.get('analise_placar_exato'):
                 analises_brutas.append(analise_db['analise_placar_exato'])
+            if analise_db.get('analise_handicap_europeu'):
+                analises_brutas.append(analise_db['analise_handicap_europeu'])
 
             analises_encontradas = [a for a in analises_brutas if a]
             stats_casa = analise_db['stats_casa']
@@ -1043,9 +1045,10 @@ async def coletar_todos_palpites_disponiveis():
         analise_handicaps = analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script)
         analise_gabt_local = analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
         analise_placar_exato_local = analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
+        analise_he_local = analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
 
         # Coletar palpites
-        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local, analise_placar_exato_local]:
+        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local, analise_placar_exato_local, analise_he_local]:
             if analise and 'palpites' in analise:
                 mercado_nome = analise.get('mercado', '')
                 for palpite in analise['palpites']:

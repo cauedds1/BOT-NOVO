@@ -228,8 +228,27 @@ def analisar_mercado_handicap_europeu(analysis_packet: dict, odds: dict) -> dict
         prob_emp = probs['prob_empate']
         prob_fora = probs['prob_fora']
 
-        linhas_avaliadas.append(linha)
+        # Invariante: P(casa) + P(empate) + P(fora) deve ser ≈ 100%
+        prob_sum = prob_casa + prob_emp + prob_fora
         label = LINE_LABELS[linha]
+        if prob_sum > 100.5:
+            print(
+                f"  ❌ HE {label}: BUG — soma Poisson {prob_sum:.2f}% > 100% "
+                f"(λ_home={lambda_home:.2f}, λ_away={lambda_away:.2f}) — verifique _calcular_probs_he"
+            )
+        elif prob_sum < 95.0:
+            print(
+                f"  ⚠️  HE {label}: Cobertura baixa {prob_sum:.2f}% "
+                f"(λ_home={lambda_home:.2f}, λ_away={lambda_away:.2f}) "
+                f"— parte da massa está em placares > {MAX_GOALS} gols"
+            )
+        else:
+            print(
+                f"  ✅ HE {label}: Cobertura {prob_sum:.2f}% (OK) "
+                f"P(casa)={prob_casa:.1f}% P(emp)={prob_emp:.1f}% P(fora)={prob_fora:.1f}%"
+            )
+
+        linhas_avaliadas.append(linha)
 
         print(
             f"  📐 HE {label}: P(casa)={prob_casa:.1f}% P(emp)={prob_emp:.1f}% P(fora)={prob_fora:.1f}%"

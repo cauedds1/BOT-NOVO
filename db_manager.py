@@ -273,6 +273,7 @@ class DatabaseManager:
                 'analise_contexto': analises.get('contexto', {}),
                 'analise_gabt': analises.get('gabt', {}),
                 'analise_placar_exato': analises.get('placar_exato', {}),
+                'analise_handicap_europeu': analises.get('handicap_europeu', {}),
                 'palpites_totais': total_palpites,
                 'confianca_media': confianca_media,
                 'data_analise': agora_brasilia().isoformat(),
