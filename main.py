@@ -26,6 +26,7 @@ from analysts.shots_analyzer import analisar_mercado_finalizacoes
 from analysts.handicaps_analyzer import analisar_mercado_handicaps
 from analysts.double_chance_analyzer import analisar_mercado_dupla_chance
 from analysts.gabt_analyzer import analisar_mercado_gabt
+from analysts.correct_score_analyzer import analisar_mercado_placar_exato
 # PHOENIX V3.0: filtrar_mercados_por_contexto e get_quality_scores foram removidas na refatoração
 # PURE ANALYST PROTOCOL: value_detector removido - análise independente de odds
 from analysts.justification_generator import generate_persuasive_justification
@@ -448,6 +449,9 @@ async def gerar_analise_completa_todos_mercados(jogo):
     
     analise_gabt = analisar_mercado_gabt(analysis_packet, odds)
     print("--- ✅ GABT ANALYZER DONE ---")
+
+    analise_placar_exato = analisar_mercado_placar_exato(analysis_packet, odds)
+    print("--- ✅ CORRECT SCORE ANALYZER DONE ---")
     
     # 4️⃣ EXTRAIR INFORMAÇÕES DO MASTER PACKET
     reasoning = analysis_packet['analysis_summary']['reasoning']
@@ -484,6 +488,7 @@ async def gerar_analise_completa_todos_mercados(jogo):
         ('Handicaps', '⚖️', analise_handicaps),
         ('Dupla Chance', '🔀', analise_dupla_chance),
         ('Gols Ambos Tempos', '⏱️', analise_gabt),
+        ('Placar Exato', '🎯', analise_placar_exato),
     ]
     
     for mercado_nome, mercado_emoji, analise in mercados_analise:
@@ -639,6 +644,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 analises_brutas.append(analise_db['analise_handicaps'])
             if analise_db.get('analise_gabt'):
                 analises_brutas.append(analise_db['analise_gabt'])
+            if analise_db.get('analise_placar_exato'):
+                analises_brutas.append(analise_db['analise_placar_exato'])
 
             analises_encontradas = [a for a in analises_brutas if a]
             stats_casa = analise_db['stats_casa']
@@ -717,9 +724,10 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
             analisar_mercado_finalizacoes(stats_casa, stats_fora, odds, analysis_packet, script),
             analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script),
             analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+            analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
         ]
 
-        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}")
+        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}")
 
         # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
         # Apenas retorna análises válidas (não None)
@@ -763,6 +771,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                             analises_dict['finalizacoes'] = a
                         elif 'handicap' in mercado_lower:
                             analises_dict['handicaps'] = a
+                        elif 'placar' in mercado_lower or 'correct' in mercado_lower or 'score' in mercado_lower:
+                            analises_dict['placar_exato'] = a
 
                 stats_dict = {
                     'stats_casa': stats_casa,
@@ -1024,9 +1034,10 @@ async def coletar_todos_palpites_disponiveis():
         analise_finalizacoes = analisar_mercado_finalizacoes(stats_casa, stats_fora, odds, analysis_packet, script)
         analise_handicaps = analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script)
         analise_gabt_local = analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
+        analise_placar_exato_local = analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None
 
         # Coletar palpites
-        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local]:
+        for analise in [analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_finalizacoes, analise_handicaps, analise_gabt_local, analise_placar_exato_local]:
             if analise and 'palpites' in analise:
                 mercado_nome = analise.get('mercado', '')
                 for palpite in analise['palpites']:

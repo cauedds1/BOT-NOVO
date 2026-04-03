@@ -70,6 +70,23 @@ O bot é construído com uma arquitetura modular e production-ready, permitindo 
   - `API_FOOTBALL_KEY` - Chave da API-Football
   - `DATABASE_URL` - URL de conexão PostgreSQL (opcional, mas recomendado)
 
+## Recent Changes (2026-04-03)
+### Task #6: Mercado GABT (Gols em Ambos os Tempos) — COMPLETE
+- `analysts/gabt_analyzer.py`: Novo analisador com modelo Poisson para P(≥1 gol 1T) × P(≥1 gol 2T).
+- Integrado em todos os 3 paths: `gerar_analise_completa_todos_mercados`, `gerar_palpite_completo`, `coletar_todos_palpites_disponiveis`.
+- `api_client.py`: Parse de odds GABT com 5 variantes de nome.
+- `dossier_formatter.py`: Seção dedicada ⏱️ GOLS EM AMBOS OS TEMPOS.
+- `justification_generator.py`: Roteamento + `_justificar_gabt_evidence_based()`.
+
+### Task #7: Mercado Placar Exato (Correct Score) — COMPLETE
+- `analysts/correct_score_analyzer.py`: Novo analisador com Poisson bivariada (λ_home × λ_away), 25 placares (0-4 × 0-4), escala de confiança relativa ao baseline uniforme (4% por placar).
+- Confiança específica: `base_conf = 5.0 + (ratio - 1.0) * 2.0` onde `ratio = prob / 4.0`.
+- Threshold 5.5, máximo 5 palpites aprovados por jogo.
+- `api_client.py`: Parse de odds de Correct Score com 5 variantes de nome (normalização via `placar_exato` dict).
+- Integrado em todos os 3 paths do main.py incluindo DB save com chave `placar_exato`.
+- `dossier_formatter.py`: Seção dedicada 🎯 PLACAR EXATO com evidências de resultados recentes.
+- `justification_generator.py`: `_justificar_placar_exato_evidence_based()` com branches Casa Vence/Fora Vence/Empate.
+
 ## Recent Changes (2025-10-31)
 ### Mega Auditoria Completa (LATEST - 31/10/2025 22:30)
 Realizada auditoria completa de todo o sistema antes da implementação do V4.0. Relatório detalhado em `MEGA_AUDIT_REPORT.md`.

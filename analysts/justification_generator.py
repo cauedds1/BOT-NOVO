@@ -44,6 +44,8 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_dupla_chance_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Gols Ambos Tempos":
         return _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Placar Exato":
+        return _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -573,6 +575,48 @@ def _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home
             f"{away_team_name}: {media_total_away:.1f} fora), "
             f"o modelo aponta que um dos tempos pode ficar sem gols, "
             f"favorecendo {tipo}."
+        )
+
+
+def _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Gera justificativa para Placar Exato baseada em dados reais de gols e padrões de resultado."""
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    if not gols_home and not gols_away:
+        return f"O modelo Poisson bivariado aponta este como o placar mais provável para o confronto: {tipo}."
+
+    media_total_home = (
+        sum(g['total_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
+    )
+    media_total_away = (
+        sum(g['total_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
+    )
+    media_combinada = (media_total_home + media_total_away) / 2
+
+    if 'Casa Vence' in tipo:
+        return (
+            f"{home_team_name} tem média de {media_total_home:.1f} gols por jogo em casa, "
+            f"enquanto {away_team_name} produz {media_total_away:.1f} fora. "
+            f"O modelo Poisson aponta {tipo} como o placar mais provável na categoria de vitória do mandante "
+            f"(média combinada: {media_combinada:.1f} gols/jogo)."
+        )
+    elif 'Fora Vence' in tipo:
+        return (
+            f"{away_team_name} produz {media_total_away:.1f} gols por jogo fora de casa. "
+            f"O diferencial ofensivo do visitante sustenta {tipo} como placar mais provável "
+            f"na categoria de vitória do visitante (média combinada: {media_combinada:.1f} gols/jogo)."
+        )
+    elif 'Empate' in tipo:
+        return (
+            f"Com médias equilibradas ({home_team_name}: {media_total_home:.1f} gols/jogo em casa | "
+            f"{away_team_name}: {media_total_away:.1f} fora), "
+            f"o modelo Poisson identifica {tipo} como o placar de empate mais provável."
+        )
+    else:
+        return (
+            f"O modelo Poisson bivariado, com λ_casa={media_total_home:.1f} e λ_fora={media_total_away:.1f}, "
+            f"aponta {tipo} como o resultado estatisticamente mais provável."
         )
 
 

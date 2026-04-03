@@ -1356,6 +1356,11 @@ def normalizar_odds(odds_formatadas):
                     linha_num = linha.replace("Away ", "").replace("away ", "").strip()
                     odds_normalizadas[f"handicap_fora_{linha_num}"] = valor
 
+        elif mercado_key == "correct_score":
+            # Mercado Placar Exato — repassa o dict completo com chave normalizada
+            # Formato: {"placar_exato": {"1:0": 6.5, "0:1": 8.0, ...}}
+            odds_normalizadas["placar_exato"] = odds_dict
+
     return odds_normalizadas
 
 async def buscar_odds_do_jogo(id_jogo: int):
@@ -1437,6 +1442,23 @@ async def buscar_odds_do_jogo(id_jogo: int):
 
                 elif "Handicap" in bet_name or "Spread" in bet_name:
                     odds_formatadas["handicap"] = {v['value']: float(v['odd']) for v in values_raw}
+
+                elif bet_name in (
+                    "Correct Score",
+                    "Exact Score",
+                    "Result/Score",
+                    "Score",
+                    "Placar Exato",
+                ):
+                    # Correct Score: values like "1:0", "0:1", "2:1", etc.
+                    for v in values_raw:
+                        raw_val = str(v.get('value', '')).strip()
+                        try:
+                            odd_float = float(v['odd'])
+                        except (ValueError, TypeError):
+                            continue
+                        if raw_val:
+                            odds_formatadas.setdefault("correct_score", {})[raw_val] = odd_float
 
     except httpx.TimeoutException:
         print(f"  ⏱️ TIMEOUT buscando odds do jogo {id_jogo}")
