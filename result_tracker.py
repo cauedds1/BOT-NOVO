@@ -94,24 +94,49 @@ async def _buscar_estatisticas_cantos(fixture_id: int) -> Optional[dict]:
         return None
 
 
+def _extrair_threshold(linha_lower: str) -> Optional[float]:
+    """Extrai o valor numérico da linha de uma aposta (ex: 'over 2.5' → 2.5)."""
+    tokens = linha_lower.split()
+    for t in tokens:
+        try:
+            return float(t)
+        except ValueError:
+            pass
+    return None
+
+
 def _avaliar_palpite(
     linha: str,
     mercado: str,
     periodo: str,
+    time_aposta: str,
     gols_casa: int,
     gols_fora: int,
+    gols_ht_casa: Optional[int],
+    gols_ht_fora: Optional[int],
     cantos_data: Optional[dict],
     status_final: str,
 ) -> Optional[bool]:
     """
     Avalia se um palpite acertou com base no resultado real do jogo.
 
+    Mercados suportados automaticamente:
+      Gols (Over/Under FT e HT total), BTTS, Resultado (1X2 + Dupla Chance),
+      Cantos (Over/Under total), Placar Exato, Handicap Europeu,
+      GABT (Gols Ambos os Tempos).
+
+    Mercados não avaliáveis automaticamente (retornam None):
+      Finalizações, Cartões, Primeiro Marcador, handicaps Asian/Player.
+
     Args:
-        linha: Descrição do palpite (ex: "Over 2.5", "Casa Vence (1)", "BTTS - Sim")
-        mercado: Mercado do palpite (ex: "Gols", "Cantos", "BTTS", "Resultado")
+        linha: Tipo do palpite (ex: "Over 2.5", "Casa Vence (1)", "BTTS - Sim")
+        mercado: Mercado (ex: "Gols", "Cantos", "BTTS", "Resultado")
         periodo: "FT" ou "HT"
-        gols_casa: Gols marcados pela casa (FT)
-        gols_fora: Gols marcados pelo visitante (FT)
+        time_aposta: "Total", "Casa", "Fora" (para mercados de time específico)
+        gols_casa: Gols marcados pela casa no FT
+        gols_fora: Gols marcados pelo visitante no FT
+        gols_ht_casa: Gols HT da casa (pode ser None se não disponível)
+        gols_ht_fora: Gols HT visitante (pode ser None)
         cantos_data: Dict com home_corners/away_corners ou None
         status_final: Status do jogo (FT, AET, PEN)
 
@@ -119,23 +144,26 @@ def _avaliar_palpite(
         True se acertou, False se errou, None se não foi possível avaliar.
     """
     linha_lower = linha.lower().strip()
-    total_gols = gols_casa + gols_fora
+    total_gols_ft = gols_casa + gols_fora
+    total_gols_ht = (gols_ht_casa or 0) + (gols_ht_fora or 0) if (gols_ht_casa is not None and gols_ht_fora is not None) else None
 
     # ── Gols ──────────────────────────────────────────────────────────────
-    if mercado in ("Gols", "Goals") and periodo == "FT":
-        if "over" in linha_lower:
-            try:
-                threshold = float([t for t in linha_lower.split() if "." in t][0])
-                return total_gols > threshold
-            except (IndexError, ValueError):
-                return None
+    if mercado in ("Gols", "Goals"):
+        if periodo == "FT":
+            total = total_gols_ft
+        elif periodo == "HT":
+            if total_gols_ht is None:
+                return None  # HT score não disponível
+            total = total_gols_ht
+        else:
+            total = total_gols_ft
 
+        if "over" in linha_lower:
+            threshold = _extrair_threshold(linha_lower)
+            return total > threshold if threshold is not None else None
         if "under" in linha_lower:
-            try:
-                threshold = float([t for t in linha_lower.split() if "." in t][0])
-                return total_gols < threshold
-            except (IndexError, ValueError):
-                return None
+            threshold = _extrair_threshold(linha_lower)
+            return total < threshold if threshold is not None else None
 
     # ── BTTS ──────────────────────────────────────────────────────────────
     if mercado == "BTTS":
@@ -144,6 +172,19 @@ def _avaliar_palpite(
             return ambos_marcaram
         if "não" in linha_lower or "no" in linha_lower:
             return not ambos_marcaram
+
+    # ── GABT (Gols em Ambos os Tempos) ─────────────────────────────────────
+    if mercado in ("GABT", "Gols Ambos os Tempos"):
+        if gols_ht_casa is None or gols_ht_fora is None:
+            return None  # HT score não disponível
+        gols_2t_casa = gols_casa - gols_ht_casa
+        gols_2t_fora = gols_fora - gols_ht_fora
+        gols_ht_total = gols_ht_casa + gols_ht_fora
+        gols_2t_total = gols_2t_casa + gols_2t_fora
+        if "sim" in linha_lower or "yes" in linha_lower:
+            return gols_ht_total > 0 and gols_2t_total > 0
+        if "não" in linha_lower or "no" in linha_lower:
+            return gols_ht_total == 0 or gols_2t_total == 0
 
     # ── Resultado Final (1X2) ─────────────────────────────────────────────
     if mercado in ("Resultado", "Result"):
@@ -157,7 +198,6 @@ def _avaliar_palpite(
             return fora_venceu
         if any(x in linha_lower for x in ("empate", "draw", " x ", "(x)")):
             return empate
-
         # Dupla chance
         if any(x in linha_lower for x in ("1x", "dupla 1x", "double 1x")):
             return casa_venceu or empate
@@ -166,23 +206,74 @@ def _avaliar_palpite(
         if any(x in linha_lower for x in ("12", "dupla 12", "double 12")):
             return casa_venceu or fora_venceu
 
+    # ── Dupla Chance ───────────────────────────────────────────────────────
+    if mercado in ("Dupla Chance", "Double Chance"):
+        casa_venceu = gols_casa > gols_fora
+        fora_venceu = gols_fora > gols_casa
+        empate = gols_casa == gols_fora
+        if any(x in linha_lower for x in ("1x", "casa ou empate")):
+            return casa_venceu or empate
+        if any(x in linha_lower for x in ("x2", "empate ou fora")):
+            return empate or fora_venceu
+        if any(x in linha_lower for x in ("12", "casa ou fora")):
+            return casa_venceu or fora_venceu
+
+    # ── Handicap Europeu ──────────────────────────────────────────────────
+    if mercado in ("Handicap Europeu", "European Handicap"):
+        # Formato típico: "Casa -1" ou "Fora +1" — número é o handicap
+        casa_venceu_hcap = False
+        fora_venceu_hcap = False
+        empate_hcap = False
+        try:
+            import re
+            match = re.search(r'([+-]?\d+)', linha_lower)
+            if match:
+                hcap = int(match.group(1))
+                adj_casa = gols_casa + hcap if "casa" in linha_lower or "home" in linha_lower else gols_casa
+                adj_fora = gols_fora + hcap if "fora" in linha_lower or "away" in linha_lower else gols_fora
+                if "casa" in linha_lower or "home" in linha_lower:
+                    casa_adj = gols_casa + hcap
+                    return casa_adj > gols_fora
+                if "fora" in linha_lower or "away" in linha_lower:
+                    fora_adj = gols_fora + hcap
+                    return fora_adj > gols_casa
+                if "empate" in linha_lower or "draw" in linha_lower:
+                    return (gols_casa + hcap) == gols_fora
+        except Exception:
+            pass
+
+    # ── Placar Exato ───────────────────────────────────────────────────────
+    if mercado in ("Placar Exato", "Correct Score"):
+        try:
+            import re
+            match = re.search(r'(\d+)[:\-x](\d+)', linha_lower)
+            if match:
+                pred_casa = int(match.group(1))
+                pred_fora = int(match.group(2))
+                return gols_casa == pred_casa and gols_fora == pred_fora
+        except Exception:
+            pass
+
     # ── Cantos ─────────────────────────────────────────────────────────────
     if mercado in ("Cantos", "Corners") and cantos_data is not None:
-        total_cantos = cantos_data.get("home_corners", 0) + cantos_data.get("away_corners", 0)
-        if "over" in linha_lower:
-            try:
-                threshold = float([t for t in linha_lower.split() if "." in t][0])
-                return total_cantos > threshold
-            except (IndexError, ValueError):
-                return None
-        if "under" in linha_lower:
-            try:
-                threshold = float([t for t in linha_lower.split() if "." in t][0])
-                return total_cantos < threshold
-            except (IndexError, ValueError):
-                return None
+        if time_aposta == "Casa":
+            total_cantos = cantos_data.get("home_corners", 0)
+        elif time_aposta == "Fora":
+            total_cantos = cantos_data.get("away_corners", 0)
+        else:
+            total_cantos = cantos_data.get("home_corners", 0) + cantos_data.get("away_corners", 0)
 
-    return None  # Mercado não avaliável automaticamente
+        if "over" in linha_lower:
+            threshold = _extrair_threshold(linha_lower)
+            return total_cantos > threshold if threshold is not None else None
+        if "under" in linha_lower:
+            threshold = _extrair_threshold(linha_lower)
+            return total_cantos < threshold if threshold is not None else None
+
+    # ── Mercados não avaliáveis automaticamente ────────────────────────────
+    # Finalizações, Cartões, Primeiro Marcador, Asian Handicap: precisam de
+    # estatísticas detalhadas que exigem endpoints adicionais ou dados de eventos.
+    return None
 
 
 async def rastrear_resultados(db) -> dict:
@@ -231,13 +322,24 @@ async def rastrear_resultados(db) -> dict:
                 print(f"  ⏳ Fixture #{fixture_id} ainda não encerrou (status: {status_short})")
                 continue
 
-            # Extrair placar final
+            # Extrair placar final (FT)
             score = dados.get("score", {})
             fulltime = score.get("fulltime", {})
-            gols_casa = fulltime.get("home") or 0
-            gols_fora = fulltime.get("away") or 0
+            gols_casa = int(fulltime.get("home") or 0)
+            gols_fora = int(fulltime.get("away") or 0)
 
-            db.salvar_resultado_jogo(fixture_id, int(gols_casa), int(gols_fora), status_short)
+            # Extrair placar do intervalo (HT) se disponível
+            halftime = score.get("halftime", {})
+            gols_ht_casa: Optional[int] = None
+            gols_ht_fora: Optional[int] = None
+            if halftime.get("home") is not None and halftime.get("away") is not None:
+                try:
+                    gols_ht_casa = int(halftime["home"])
+                    gols_ht_fora = int(halftime["away"])
+                except (TypeError, ValueError):
+                    pass
+
+            db.salvar_resultado_jogo(fixture_id, gols_casa, gols_fora, status_short)
             stats["resultados_salvos"] += 1
             print(f"  ✅ Fixture #{fixture_id} | {gols_casa}×{gols_fora} ({status_short})")
 
@@ -251,8 +353,11 @@ async def rastrear_resultados(db) -> dict:
                     linha=p.get("linha", ""),
                     mercado=p.get("mercado", ""),
                     periodo=p.get("periodo", "FT"),
-                    gols_casa=int(gols_casa),
-                    gols_fora=int(gols_fora),
+                    time_aposta=p.get("time_aposta", "Total"),
+                    gols_casa=gols_casa,
+                    gols_fora=gols_fora,
+                    gols_ht_casa=gols_ht_casa,
+                    gols_ht_fora=gols_ht_fora,
                     cantos_data=cantos_data,
                     status_final=status_short,
                 )

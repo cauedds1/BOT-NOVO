@@ -171,6 +171,7 @@ class DatabaseManager:
             fixture_id INTEGER NOT NULL,
             mercado VARCHAR(100) NOT NULL,
             linha VARCHAR(100) NOT NULL,
+            time_aposta VARCHAR(50) DEFAULT 'Total',
             confianca INTEGER NOT NULL DEFAULT 0,
             odd DECIMAL(8,2),
             resultado_esperado VARCHAR(200),
@@ -178,8 +179,9 @@ class DatabaseManager:
             acertou BOOLEAN,
             roi_unitario DECIMAL(8,4),
             criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            CONSTRAINT palpites_historico_unique UNIQUE (fixture_id, mercado, linha, periodo)
+            CONSTRAINT palpites_historico_unique UNIQUE (fixture_id, mercado, linha, periodo, time_aposta)
         );
+        ALTER TABLE palpites_historico ADD COLUMN IF NOT EXISTS time_aposta VARCHAR(50) DEFAULT 'Total';
         CREATE INDEX IF NOT EXISTS idx_palpites_historico_fixture_id ON palpites_historico(fixture_id);
         CREATE INDEX IF NOT EXISTS idx_palpites_historico_mercado ON palpites_historico(mercado);
         CREATE INDEX IF NOT EXISTS idx_palpites_historico_acertou ON palpites_historico(acertou);
@@ -399,6 +401,7 @@ class DatabaseManager:
                     confianca = int(p.get('confianca', 0))
                     odd = p.get('odd')
                     periodo = p.get('periodo', 'FT') or 'FT'
+                    time_aposta = p.get('time') or 'Total'
 
                     try:
                         odd_val = float(odd) if odd is not None else None
@@ -408,11 +411,13 @@ class DatabaseManager:
                     cursor.execute(
                         """
                         INSERT INTO palpites_historico
-                            (fixture_id, mercado, linha, confianca, odd, resultado_esperado, periodo)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (fixture_id, mercado, linha, periodo) DO NOTHING
+                            (fixture_id, mercado, linha, time_aposta, confianca,
+                             odd, resultado_esperado, periodo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (fixture_id, mercado, linha, periodo, time_aposta) DO NOTHING
                         """,
-                        (fixture_id, mercado_nome, tipo, confianca, odd_val, tipo, periodo),
+                        (fixture_id, mercado_nome, tipo, time_aposta, confianca,
+                         odd_val, tipo, periodo),
                     )
                     inseridos += 1
 
@@ -868,7 +873,7 @@ class DatabaseManager:
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
                 cursor.execute(
                     """
-                    SELECT id, fixture_id, mercado, linha, confianca, odd,
+                    SELECT id, fixture_id, mercado, linha, time_aposta, confianca, odd,
                            resultado_esperado, periodo
                     FROM palpites_historico
                     WHERE fixture_id = %s AND acertou IS NULL

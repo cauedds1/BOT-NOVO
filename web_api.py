@@ -588,7 +588,7 @@ async def analisar_jogo(fixture_id: int, background_tasks: BackgroundTasks):
     Retorna imediatamente com status 'processing'.
     O cliente deve fazer polling em GET /api/analise/{fixture_id}.
     """
-    # Verifica se já existe análise recente
+    # Verifica se já existe análise recente com TTL inteligente (sem stale — kickoff <2h força análise fresca)
     analise_db = db.buscar_analise(fixture_id, max_idade_horas=6)
     if analise_db:
         return {"fixture_id": fixture_id, "status": "ready", "message": "Análise já disponível em cache."}

@@ -641,7 +641,7 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
             _data_kickoff = _dt_utc.astimezone(_ZI("America/Sao_Paulo"))
         except Exception:
             pass
-        analise_db = db_manager.buscar_analise(id_jogo, data_jogo=_data_kickoff, permitir_stale=True)
+        analise_db = db_manager.buscar_analise(id_jogo, data_jogo=_data_kickoff)
         if analise_db:
             usar_cache_otimizado = True
             print(f"💾 CACHE OTIMIZADO: Usando análise salva do Fixture #{id_jogo}")
@@ -1017,7 +1017,7 @@ async def coletar_todos_palpites_disponiveis():
             _data_kickoff_loop = _dt_utc2.astimezone(_ZI2("America/Sao_Paulo"))
         except Exception:
             pass
-        analise_db = db_manager.buscar_analise(fixture_id, data_jogo=_data_kickoff_loop, permitir_stale=True)
+        analise_db = db_manager.buscar_analise(fixture_id, data_jogo=_data_kickoff_loop)
 
         if analise_db:
             # Usar análise do cache
