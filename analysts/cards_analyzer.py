@@ -144,10 +144,6 @@ def analisar_mercado_cartoes(analysis_packet, odds):
                 line=linha
             )
             
-            prob_pct = apply_script_modifier_to_probability_cards(
-                prob_pct, f"Over {linha} Cartões", script_name
-            )
-            
             bet_type = f"Over {linha} Cartões"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
@@ -174,10 +170,6 @@ def analisar_mercado_cartoes(analysis_packet, odds):
                 line=linha
             )
             prob_under = 100.0 - prob_over
-            
-            prob_under = apply_script_modifier_to_probability_cards(
-                prob_under, f"Under {linha} Cartões", script_name
-            )
             
             bet_type = f"Under {linha} Cartões"
             conf_final, breakdown = calculate_final_confidence(

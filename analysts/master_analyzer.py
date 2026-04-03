@@ -450,6 +450,25 @@ def _select_match_script(analysis_data):
             )
     
     # PRIORIDADE 4: Cenários baseados em MOMENTO e análise cruzada
+    power_diff_raw = power_home - power_away
+
+    # PRIORIDADE 4.1: GIANT vs MINNOW — diferença técnica abissal (>= 25 pontos)
+    if power_diff_raw >= 25 and scenario['home_will_dominate']:
+        return (
+            'SCRIPT_GIANT_VS_MINNOW',
+            f"👑 GIGANTE vs MINNOW (Casa): Diferença técnica abissal de {int(power_diff_raw)} pontos. "
+            f"Casa é MUITO superior. Espere domínio total, posse esmagadora e pressão constante. "
+            f"BTTS Não e Vitória da Casa são as apostas mais lógicas."
+        )
+
+    if power_diff_raw <= -25 and scenario['away_will_dominate']:
+        return (
+            'SCRIPT_GIANT_VS_MINNOW',
+            f"👑 GIGANTE vs MINNOW (Fora): Visitante é MUITO superior, diferença de {int(abs(power_diff_raw))} pontos. "
+            f"Espere domínio do visitante mesmo jogando fora. "
+            f"BTTS Não e Vitória Fora são as apostas mais lógicas."
+        )
+
     if scenario['home_will_dominate']:
         return (
             'SCRIPT_DOMINIO_CASA',

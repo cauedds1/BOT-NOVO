@@ -41,8 +41,8 @@ def calculate_dynamic_qsc(team_stats, team_id, classificacao=None, team_name=Non
             if team_info['team']['name'] == team_name:
                 rank = team_info['rank']
                 total_teams = len(classificacao)
-                # 1º lugar = 100, Último = 50
-                position_qs = 100 - ((rank - 1) / (total_teams - 1)) * 50 if total_teams > 1 else 75
+                # 1º lugar = 100, Último = 0
+                position_qs = 100 - ((rank - 1) / (total_teams - 1)) * 100 if total_teams > 1 else 75
                 break
     
     # 3. GOAL DIFFERENCE QS - 25% peso

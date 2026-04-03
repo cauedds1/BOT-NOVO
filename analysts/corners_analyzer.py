@@ -174,10 +174,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            prob_pct = apply_script_modifier_to_probability_corners(
-                prob_pct, f"Over {linha} Cantos", script_name
-            )
-            
             bet_type = f"Over {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
@@ -207,10 +203,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             prob_under = 100.0 - prob_over
-            
-            prob_under = apply_script_modifier_to_probability_corners(
-                prob_under, f"Under {linha} Cantos", script_name
-            )
             
             bet_type = f"Under {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
@@ -244,10 +236,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            prob_pct = apply_script_modifier_to_probability_corners(
-                prob_pct, f"Over {linha} Cantos HT", script_name
-            )
-            
             bet_type = f"Over {linha} HT"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
@@ -276,10 +264,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             prob_under = 100.0 - prob_over
-            
-            prob_under = apply_script_modifier_to_probability_corners(
-                prob_under, f"Under {linha} Cantos HT", script_name
-            )
             
             bet_type = f"Under {linha} HT"
             conf_final, breakdown = calculate_final_confidence(
@@ -313,10 +297,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            prob_pct = apply_script_modifier_to_probability_corners(
-                prob_pct, f"Casa Over {linha} Cantos", script_name
-            )
-            
             bet_type = f"Casa Over {linha}"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
@@ -345,10 +325,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             prob_under = 100.0 - prob_over
-            
-            prob_under = apply_script_modifier_to_probability_corners(
-                prob_under, f"Casa Under {linha} Cantos", script_name
-            )
             
             bet_type = f"Casa Under {linha}"
             conf_final, breakdown = calculate_final_confidence(
@@ -382,10 +358,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            prob_pct = apply_script_modifier_to_probability_corners(
-                prob_pct, f"Fora Over {linha} Cantos", script_name
-            )
-            
             bet_type = f"Fora Over {linha}"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
@@ -414,10 +386,6 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             prob_under = 100.0 - prob_over
-            
-            prob_under = apply_script_modifier_to_probability_corners(
-                prob_under, f"Fora Under {linha} Cantos", script_name
-            )
             
             bet_type = f"Fora Under {linha}"
             conf_final, breakdown = calculate_final_confidence(

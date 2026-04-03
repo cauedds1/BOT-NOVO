@@ -93,12 +93,12 @@ QUALITY_SCORES = {
     531: 77,  # Athletic Bilbao
     
     # Serie A - Itália
-    489: 91,  # Inter
-    487: 90,  # AC Milan
-    505: 89,  # Napoli
+    505: 91,  # Inter
+    489: 90,  # AC Milan
+    492: 89,  # Napoli
     496: 88,  # Juventus
-    487: 86,  # AS Roma
-    497: 84,  # Lazio
+    497: 86,  # AS Roma
+    487: 84,  # Lazio
     
     # Bundesliga - Alemanha
     157: 93,  # Bayern Munich

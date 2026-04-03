@@ -129,7 +129,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Over 1.5 FT
     if 'gols_ft_over_1.5' in odds:
-        prob = apply_script_modifier_to_probability(over_1_5_prob, "Over 1.5", script)
+        prob = over_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Over 1.5",
@@ -149,7 +149,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Under 1.5 FT
     if 'gols_ft_under_1.5' in odds:
-        prob = apply_script_modifier_to_probability(under_1_5_prob, "Under 1.5", script)
+        prob = under_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Under 1.5",
@@ -169,7 +169,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Over 2.5 FT
     if 'gols_ft_over_2.5' in odds:
-        prob = apply_script_modifier_to_probability(over_2_5_prob, "Over 2.5", script)
+        prob = over_2_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Over 2.5",
@@ -189,7 +189,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Under 2.5 FT
     if 'gols_ft_under_2.5' in odds:
-        prob = apply_script_modifier_to_probability(under_2_5_prob, "Under 2.5", script)
+        prob = under_2_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Under 2.5",
@@ -209,7 +209,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Over 3.5 FT
     if 'gols_ft_over_3.5' in odds:
-        prob = apply_script_modifier_to_probability(over_3_5_prob, "Over 3.5", script)
+        prob = over_3_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Over 3.5",
@@ -229,7 +229,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Under 3.5 FT
     if 'gols_ft_under_3.5' in odds:
-        prob = apply_script_modifier_to_probability(under_3_5_prob, "Under 3.5", script)
+        prob = under_3_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Under 3.5",
@@ -251,7 +251,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Over 0.5 HT
     if 'gols_ht_over_0.5' in odds:
-        prob = apply_script_modifier_to_probability(over_0_5_ht_prob, "Over 0.5 HT", script)
+        prob = over_0_5_ht_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Over 0.5 HT",
@@ -271,7 +271,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Under 0.5 HT
     if 'gols_ht_under_0.5' in odds:
-        prob = apply_script_modifier_to_probability(under_0_5_ht_prob, "Under 0.5 HT", script)
+        prob = under_0_5_ht_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Under 0.5 HT",
@@ -291,7 +291,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Over 1.5 HT
     if 'gols_ht_over_1.5' in odds:
-        prob = apply_script_modifier_to_probability(over_1_5_ht_prob, "Over 1.5 HT", script)
+        prob = over_1_5_ht_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Over 1.5 HT",
@@ -311,7 +311,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Under 1.5 HT
     if 'gols_ht_under_1.5' in odds:
-        prob = apply_script_modifier_to_probability(under_1_5_ht_prob, "Under 1.5 HT", script)
+        prob = under_1_5_ht_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Under 1.5 HT",
@@ -334,7 +334,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     # BTTS Sim
     if 'btts_sim' in odds or 'btts_yes' in odds:
         odd_key = 'btts_sim' if 'btts_sim' in odds else 'btts_yes'
-        prob = apply_script_modifier_to_probability(btts_sim_prob, "BTTS Sim", script)
+        prob = btts_sim_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="BTTS Sim",
@@ -355,7 +355,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     # BTTS Não
     if 'btts_nao' in odds or 'btts_no' in odds:
         odd_key = 'btts_nao' if 'btts_nao' in odds else 'btts_no'
-        prob = apply_script_modifier_to_probability(btts_nao_prob, "BTTS Não", script)
+        prob = btts_nao_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="BTTS Não",
@@ -377,7 +377,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Home Over 0.5
     if 'gols_casa_over_0.5' in odds:
-        prob = apply_script_modifier_to_probability(home_over_0_5_prob, "Casa Over 0.5", script)
+        prob = home_over_0_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Casa Over 0.5",
@@ -397,7 +397,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Home Under 0.5
     if 'gols_casa_under_0.5' in odds:
-        prob = apply_script_modifier_to_probability(home_under_0_5_prob, "Casa Under 0.5", script)
+        prob = home_under_0_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Casa Under 0.5",
@@ -417,7 +417,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Home Over 1.5
     if 'gols_casa_over_1.5' in odds:
-        prob = apply_script_modifier_to_probability(home_over_1_5_prob, "Casa Over 1.5", script)
+        prob = home_over_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Casa Over 1.5",
@@ -437,7 +437,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Home Under 1.5
     if 'gols_casa_under_1.5' in odds:
-        prob = apply_script_modifier_to_probability(home_under_1_5_prob, "Casa Under 1.5", script)
+        prob = home_under_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Casa Under 1.5",
@@ -459,7 +459,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Away Over 0.5
     if 'gols_fora_over_0.5' in odds:
-        prob = apply_script_modifier_to_probability(away_over_0_5_prob, "Fora Over 0.5", script)
+        prob = away_over_0_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Fora Over 0.5",
@@ -479,7 +479,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Away Under 0.5
     if 'gols_fora_under_0.5' in odds:
-        prob = apply_script_modifier_to_probability(away_under_0_5_prob, "Fora Under 0.5", script)
+        prob = away_under_0_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Fora Under 0.5",
@@ -499,7 +499,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Away Over 1.5
     if 'gols_fora_over_1.5' in odds:
-        prob = apply_script_modifier_to_probability(away_over_1_5_prob, "Fora Over 1.5", script)
+        prob = away_over_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Fora Over 1.5",
@@ -519,7 +519,7 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Away Under 1.5
     if 'gols_fora_under_1.5' in odds:
-        prob = apply_script_modifier_to_probability(away_under_1_5_prob, "Fora Under 1.5", script)
+        prob = away_under_1_5_prob
         confianca, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob,
             bet_type="Fora Under 1.5",
