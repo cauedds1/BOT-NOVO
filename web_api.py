@@ -588,16 +588,7 @@ async def analisar_jogo(fixture_id: int, background_tasks: BackgroundTasks):
     Retorna imediatamente com status 'processing'.
     O cliente deve fazer polling em GET /api/analise/{fixture_id}.
     """
-    # Verifica se já existe análise recente com TTL inteligente (sem stale — kickoff <2h força análise fresca)
-    analise_db = db.buscar_analise(fixture_id, max_idade_horas=6)
-    if analise_db:
-        return {"fixture_id": fixture_id, "status": "ready", "message": "Análise já disponível em cache."}
-
-    # Verifica se já está sendo processada
-    if _processing_status.get(fixture_id) == "processing":
-        return {"fixture_id": fixture_id, "status": "processing", "message": "Análise em andamento."}
-
-    # Buscar dados do jogo para o pipeline
+    # Buscar dados do jogo para extrair kickoff e aplicar TTL inteligente
     jogos_raw = await buscar_jogos_do_dia()
     jogo_encontrado = None
     if jogos_raw:
@@ -608,6 +599,26 @@ async def analisar_jogo(fixture_id: int, background_tasks: BackgroundTasks):
 
     if not jogo_encontrado:
         raise HTTPException(status_code=404, detail=f"Jogo #{fixture_id} não encontrado nos jogos do dia.")
+
+    # Extrair data/hora do kickoff para TTL inteligente (<2h = não usar cache fixo)
+    _data_kickoff_post = None
+    try:
+        from zoneinfo import ZoneInfo as _ZI_post
+        _dt_utc_post = datetime.fromisoformat(
+            jogo_encontrado.get("fixture", {}).get("date", "").replace("Z", "+00:00")
+        )
+        _data_kickoff_post = _dt_utc_post.astimezone(_ZI_post("America/Sao_Paulo"))
+    except Exception:
+        pass
+
+    # Verifica se já existe análise recente com TTL inteligente baseado no kickoff
+    analise_db = db.buscar_analise(fixture_id, data_jogo=_data_kickoff_post)
+    if analise_db:
+        return {"fixture_id": fixture_id, "status": "ready", "message": "Análise já disponível em cache."}
+
+    # Verifica se já está sendo processada
+    if _processing_status.get(fixture_id) == "processing":
+        return {"fixture_id": fixture_id, "status": "processing", "message": "Análise em andamento."}
 
     background_tasks.add_task(_executar_analise_completa, fixture_id, jogo_encontrado)
     _processing_status[fixture_id] = "processing"

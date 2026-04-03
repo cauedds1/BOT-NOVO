@@ -708,6 +708,11 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 print(f"⚠️  SEM STATS FORA: Jogo {id_jogo} - {jogo['teams']['away']['name']}")
             if not odds:
                 print(f"⚠️  SEM ODDS: Jogo {id_jogo}")
+            # Tentar servir análise stale antes de retornar None
+            analise_stale = db_manager.buscar_analise(id_jogo, permitir_stale=True)
+            if analise_stale:
+                print(f"⏳ STALE FALLBACK: Servindo análise stale do Fixture #{id_jogo}")
+                return analise_stale
             return None
 
         classificacao = await buscar_classificacao_liga(id_liga)

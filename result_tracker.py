@@ -18,6 +18,20 @@ BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 # Status da API-Football que indicam jogo encerrado
 STATUS_ENCERRADO = {"FT", "AET", "PEN"}
 
+# Mercados que podem ser avaliados automaticamente pelo result_tracker.
+# Palpites de outros mercados (Finalizações, Cartões, Primeiro Marcador, Asian Handicap)
+# NÃO são persistidos em palpites_historico, pois não podem ser avaliados sem dados externos adicionais.
+MERCADOS_AVALIÁVEIS = {
+    "Gols", "Goals",
+    "BTTS",
+    "GABT", "Gols Ambos os Tempos",
+    "Resultado", "Result",
+    "Dupla Chance", "Double Chance",
+    "Handicap Europeu", "European Handicap",
+    "Placar Exato", "Correct Score",
+    "Cantos", "Corners",
+}
+
 # Atraso entre chamadas à API (rate limit: free plan = 10 req/min)
 _DELAY_ENTRE_REQUESTS = 7.0
 
@@ -221,22 +235,15 @@ def _avaliar_palpite(
     # ── Handicap Europeu ──────────────────────────────────────────────────
     if mercado in ("Handicap Europeu", "European Handicap"):
         # Formato típico: "Casa -1" ou "Fora +1" — número é o handicap
-        casa_venceu_hcap = False
-        fora_venceu_hcap = False
-        empate_hcap = False
         try:
             import re
             match = re.search(r'([+-]?\d+)', linha_lower)
             if match:
                 hcap = int(match.group(1))
-                adj_casa = gols_casa + hcap if "casa" in linha_lower or "home" in linha_lower else gols_casa
-                adj_fora = gols_fora + hcap if "fora" in linha_lower or "away" in linha_lower else gols_fora
                 if "casa" in linha_lower or "home" in linha_lower:
-                    casa_adj = gols_casa + hcap
-                    return casa_adj > gols_fora
+                    return (gols_casa + hcap) > gols_fora
                 if "fora" in linha_lower or "away" in linha_lower:
-                    fora_adj = gols_fora + hcap
-                    return fora_adj > gols_casa
+                    return (gols_fora + hcap) > gols_casa
                 if "empate" in linha_lower or "draw" in linha_lower:
                     return (gols_casa + hcap) == gols_fora
         except Exception:
