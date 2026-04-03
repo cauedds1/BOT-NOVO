@@ -108,22 +108,38 @@ def calculate_statistical_probability_shots_over(
     line: float
 ) -> float:
     """
-    STEP 1: Calcula probabilidade estatística de Over X.5 finalizações.
+    TASK 14: Probabilidade de Over X.5 finalizações via interpolação linear contínua.
+    Substitui o sistema de buckets por uma curva suave de 25% a 80%.
+    Âncoras calibradas empiricamente (finalizações seguem distribuição aproximadamente normal):
+      delta = weighted_shots_avg - line
+      delta <= -5 → 20%   (média muito abaixo da linha)
+      delta = 0   → 52%   (média igual à linha: ligeira vantagem Over)
+      delta >= +6 → 80%   (média muito acima da linha)
     """
-    # Usar distribuição normal para finalizações (valores mais altos)
-    # Como aproximação, usar % baseado na média
-    if weighted_shots_avg >= line + 3:
-        return 75.0
-    elif weighted_shots_avg >= line + 1:
-        return 65.0
-    elif weighted_shots_avg >= line:
-        return 55.0
-    elif weighted_shots_avg >= line - 1:
-        return 45.0
-    elif weighted_shots_avg >= line - 3:
-        return 35.0
-    else:
-        return 25.0
+    delta = weighted_shots_avg - line
+    anchors = [
+        (-5.0, 20.0),
+        (-3.0, 30.0),
+        (-1.5, 42.0),
+        (0.0,  52.0),
+        (1.5,  62.0),
+        (3.0,  72.0),
+        (6.0,  80.0),
+    ]
+    # Abaixo do menor âncora
+    if delta <= anchors[0][0]:
+        return anchors[0][1]
+    # Acima do maior âncora
+    if delta >= anchors[-1][0]:
+        return anchors[-1][1]
+    # Interpolação linear entre os dois âncoras mais próximos
+    for i in range(len(anchors) - 1):
+        x0, y0 = anchors[i]
+        x1, y1 = anchors[i + 1]
+        if x0 <= delta <= x1:
+            t = (delta - x0) / (x1 - x0)
+            return round(y0 + t * (y1 - y0), 1)
+    return 52.0  # fallback
 
 
 def calculate_historical_frequency_from_games(

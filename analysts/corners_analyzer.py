@@ -97,8 +97,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
             fator_cantos *= insight['fator_multiplicador']
             contexto_insights.append(insight['descricao'])
         elif insight['tipo'] == 'festival_gols':
-            fator_cantos *= 1.2
-            contexto_insights.append("⚡ Jogo ofensivo tende a gerar MAIS cantos!")
+            pass  # TASK 14: Removido para evitar double-counting com apply_tactical_script_modifier
 
     # STEP 3: CALCULAR MÉDIAS ESPERADAS
     media_exp_ft = (cantos_casa_feitos + cantos_fora_sofridos + 

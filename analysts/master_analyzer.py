@@ -684,23 +684,37 @@ def _select_match_script(analysis_data):
     # PRIORIDADE 4: Cenários baseados em MOMENTO e análise cruzada
     qsc_diff = qsc_home - qsc_away  # Usar QSC (Quality Score Composto) como medida de gap de qualidade
 
-    # PRIORIDADE 4.1: GIANT vs MINNOW — diferença de QSC abissal (>= 25 pontos)
-    # QSC mede reputação + posição na tabela + saldo de gols + forma recente
-    # Uma diferença de 25+ pontos é um fosso de qualidade real e persistente
-    if qsc_diff >= 25 and scenario['home_will_dominate']:
+    # PRIORIDADE 4.1: GIANT vs MINNOW — diferença de QSC (TASK 14: threshold contínuo)
+    # >= 35 pts → fosso abissal (GIANT_VS_MINNOW com probabilities extremas)
+    # 25-35 pts → domínio forte (HOST_DOMINATION com narrativa de QSC)
+    if qsc_diff >= 35 and scenario['home_will_dominate']:
         return (
             'SCRIPT_GIANT_VS_MINNOW',
-            f"👑 GIGANTE vs MINNOW (Casa): Gap de qualidade real de {int(qsc_diff)} pontos de QSC. "
+            f"👑 GIGANTE vs MINNOW (Casa): Fosso abissal de {int(qsc_diff)} pontos de QSC. "
             f"Casa é estruturalmente MUITO superior. Espere domínio total, posse esmagadora e pressão constante. "
             f"BTTS Não e Vitória da Casa são as apostas mais lógicas."
         )
 
-    if qsc_diff <= -25 and scenario['away_will_dominate']:
+    if qsc_diff <= -35 and scenario['away_will_dominate']:
         return (
             'SCRIPT_GIANT_VS_MINNOW',
-            f"👑 GIGANTE vs MINNOW (Fora): Visitante é estruturalmente MUITO superior, gap de QSC de {int(abs(qsc_diff))} pontos. "
+            f"👑 GIGANTE vs MINNOW (Fora): Visitante é estruturalmente MUITO superior, fosso de {int(abs(qsc_diff))} pts de QSC. "
             f"Espere domínio do visitante mesmo jogando fora. "
             f"BTTS Não e Vitória Fora são as apostas mais lógicas."
+        )
+
+    if 25 <= qsc_diff < 35 and scenario['home_will_dominate']:
+        return (
+            'SCRIPT_HOST_DOMINATION',
+            f"🏠 DOMÍNIO FORTE CASA: Gap de QSC de {int(qsc_diff)} pontos. "
+            f"Casa é claramente superior mas margem não é abissal. Vitória da Casa favorita, baixo BTTS."
+        )
+
+    if -35 < qsc_diff <= -25 and scenario['away_will_dominate']:
+        return (
+            'SCRIPT_HOST_DOMINATION',
+            f"✈️ DOMÍNIO FORTE VISITANTE: Gap de QSC de {int(abs(qsc_diff))} pontos em favor do fora. "
+            f"Visitante claramente superior. Vitória Fora favorita, baixo BTTS."
         )
 
     if scenario['home_will_dominate']:
@@ -1407,7 +1421,24 @@ async def generate_match_analysis(jogo):
     print("📅 TASK 2: Analisando Strength of Schedule (SoS)...")
     sos_home = await _analyze_strength_of_schedule(home_team_id, league_id)
     sos_away = await _analyze_strength_of_schedule(away_team_id, league_id)
-    
+
+    # TASK 14: Ajuste de Momento ponderado pela força do calendário (SoS)
+    # Vitórias contra times fortes valem mais; vitórias contra times fracos valem menos
+    _sos_score_h = sos_home.get('sos_score', 50.0) if sos_home else 50.0
+    _sos_score_a = sos_away.get('sos_score', 50.0) if sos_away else 50.0
+    if _sos_score_h >= 65 and moment_home >= 65:
+        moment_home = min(100, moment_home + 5)
+        print(f"  ⚖️ SoS BOOST CASA: SoS alto ({_sos_score_h:.0f}) + momento forte → {moment_home}")
+    elif _sos_score_h <= 35 and moment_home >= 65:
+        moment_home = max(0, moment_home - 5)
+        print(f"  ⚖️ SoS PENALTY CASA: SoS baixo ({_sos_score_h:.0f}) → momento ajustado: {moment_home}")
+    if _sos_score_a >= 65 and moment_away >= 65:
+        moment_away = min(100, moment_away + 5)
+        print(f"  ⚖️ SoS BOOST FORA: SoS alto ({_sos_score_a:.0f}) + momento forte → {moment_away}")
+    elif _sos_score_a <= 35 and moment_away >= 65:
+        moment_away = max(0, moment_away - 5)
+        print(f"  ⚖️ SoS PENALTY FORA: SoS baixo ({_sos_score_a:.0f}) → momento ajustado: {moment_away}")
+
     print("⚖️ TASK 2: Calculando Weighted Metrics (Métricas Ponderadas)...")
     weighted_home = await _calculate_weighted_metrics(home_team_id, league_id, sos_home, home_stats)
     weighted_away = await _calculate_weighted_metrics(away_team_id, league_id, sos_away, away_stats)
@@ -1521,15 +1552,28 @@ async def generate_match_analysis(jogo):
         clean_sheet_rate_away_def = math.exp(-lambda_effective_home)  # Poisson fallback
         print(f"    ⚠️ CS Away (Poisson fallback): {clean_sheet_rate_away_def:.3f}")
 
-    # Ratio HT ajustado pelo perfil tático dos dois times
+    # TASK 14: HT ratio dinâmico — estilo tático + contexto de mata-mata/rebaixamento
     _style_home = profile_home.get('offensive_style', 'neutro')
     _style_away = profile_away.get('offensive_style', 'neutro')
     if _style_home == 'ofensivo' and _style_away == 'ofensivo':
         ht_ratio = 0.47   # times agressivos desde o início
     elif _style_home == 'defensivo' and _style_away == 'defensivo':
         ht_ratio = 0.38   # times lentos/cautelosos no 1º tempo
+    elif _style_home == 'ofensivo' or _style_away == 'ofensivo':
+        ht_ratio = 0.45   # um time ofensivo pressiona desde o início
     else:
         ht_ratio = 0.43   # padrão histórico global
+    # Mata-mata: time que precisa reverter placar pressiona desde o início → mais gols no HT
+    _ko_reversal_types = {'GIANT_NEEDS_MIRACLE', 'UNDERDOG_MIRACLE_ATTEMPT', 'BALANCED_TIE_DECIDER'}
+    if (knockout_scenario and knockout_scenario.get('is_knockout') and
+            knockout_scenario.get('scenario_type') in _ko_reversal_types):
+        ht_ratio = min(ht_ratio + 0.04, 0.52)
+        print(f"  ⚡ KNOCKOUT REVERSAL: HT ratio ajustado → {ht_ratio:.2f}")
+    # Rebaixamento iminente: times desesperados jogam para frente desde o início
+    _league_round_lower = jogo.get('league', {}).get('round', '').lower()
+    if 'relegation' in _league_round_lower or 'rebaixamento' in _league_round_lower:
+        ht_ratio = min(ht_ratio + 0.02, 0.52)
+        print(f"  😰 REBAIXAMENTO: HT ratio ajustado → {ht_ratio:.2f}")
 
     print(f"  ⚽ FASE 2 Lambdas: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f} | Total={lambda_total_effective:.2f} | HT ratio={ht_ratio}")
 

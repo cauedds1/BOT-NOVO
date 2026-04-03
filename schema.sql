@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS analises_jogos (
     analise_resultado JSONB,
     analise_cartoes JSONB,
     analise_contexto JSONB,
+    analise_gabt JSONB,
+    analise_placar_exato JSONB,
+    analise_handicap_europeu JSONB,
+    analise_primeiro_marcador JSONB,
     palpites_totais INTEGER DEFAULT 0,
     confianca_media DECIMAL(3,1) DEFAULT 0,
     data_analise TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -45,6 +49,12 @@ CREATE TABLE IF NOT EXISTS daily_analyses (
 CREATE INDEX IF NOT EXISTS idx_daily_analyses_user_type ON daily_analyses(user_id, analysis_type);
 CREATE INDEX IF NOT EXISTS idx_daily_analyses_created_at ON daily_analyses(created_at);
 CREATE INDEX IF NOT EXISTS idx_daily_analyses_fixture_id ON daily_analyses(fixture_id);
+
+-- Migrações para bancos existentes (idempotentes)
+ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_gabt JSONB;
+ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_placar_exato JSONB;
+ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_handicap_europeu JSONB;
+ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_primeiro_marcador JSONB;
 
 -- Comentários para documentação
 COMMENT ON TABLE analises_jogos IS 'Cache de análises completas de jogos processados';
