@@ -915,10 +915,22 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         # 🔧 FIX: Garantir que nunca seja None (API pode retornar None explicitamente)
         form_string = data.get('form') or ''
         goals_raw = data.get('goals') or {}
-        
+
+        # FASE 2: Extrair taxa de clean sheet empírica da API
+        clean_sheet_data = data.get('clean_sheet') or {}
+        fixtures_played = data.get('fixtures', {}).get('played') or {}
+        cs_home_count = int(clean_sheet_data.get('home', 0) or 0)
+        cs_away_count = int(clean_sheet_data.get('away', 0) or 0)
+        fp_home = int(fixtures_played.get('home', 0) or 0)
+        fp_away = int(fixtures_played.get('away', 0) or 0)
+        # Taxa de clean sheet = clean_sheets / jogos disputados no contexto (0.0 se sem dados)
+        clean_sheet_rate_home = (cs_home_count / fp_home) if fp_home > 0 else None
+        clean_sheet_rate_away = (cs_away_count / fp_away) if fp_away > 0 else None
+
         print(f"  📋 Campos essenciais capturados:")
         print(f"     Form: '{form_string}' (len: {len(form_string)})")
         print(f"     Goals structure: {bool(goals_raw)}")
+        print(f"     Clean sheets: casa={cs_home_count}/{fp_home}={clean_sheet_rate_home} | fora={cs_away_count}/{fp_away}={clean_sheet_rate_away}")
         
         analise = {
             "casa": {
@@ -930,7 +942,8 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
                 "finalizacoes_no_gol": finalizacoes_no_gol_casa,
                 "cartoes_amarelos": cartoes_amarelos_casa,
                 "cartoes_vermelhos": cartoes_vermelhos_casa,
-                "vitorias": vitorias_casa
+                "vitorias": vitorias_casa,
+                "clean_sheet_rate": clean_sheet_rate_home  # taxa empírica de CS em casa (None se sem dados)
             },
             "fora": {
                 "gols_marcados": gols_fora_marcados,
@@ -941,7 +954,8 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
                 "finalizacoes_no_gol": finalizacoes_no_gol_fora,
                 "cartoes_amarelos": cartoes_amarelos_fora,
                 "cartoes_vermelhos": cartoes_vermelhos_fora,
-                "vitorias": vitorias_fora
+                "vitorias": vitorias_fora,
+                "clean_sheet_rate": clean_sheet_rate_away  # taxa empírica de CS fora (None se sem dados)
             },
             # CAMPOS ESSENCIAIS PARA QSC DINÂMICO
             "form": form_string,

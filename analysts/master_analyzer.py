@@ -1225,11 +1225,26 @@ async def generate_match_analysis(jogo):
     lambda_effective_away = (lambda_away_raw + gols_sofridos_home_def) / 2
     lambda_total_effective = lambda_effective_home + lambda_effective_away
 
-    # Taxa de clean sheet defensiva via Poisson: P(CS) = e^(-lambda_efetivo_adversário)
-    # clean_sheet_rate_home_def = prob do mandante guardar clean sheet (adversário marca 0)
-    clean_sheet_rate_home_def = math.exp(-lambda_effective_away)
-    # clean_sheet_rate_away_def = prob do visitante guardar clean sheet (adversário marca 0)
-    clean_sheet_rate_away_def = math.exp(-lambda_effective_home)
+    # Taxa de clean sheet defensiva:
+    # Preferir dados empíricos da API quando disponíveis, caso contrário usar aproximação Poisson.
+    # clean_sheet_rate_home_def = prob do mandante guardar CS em casa (baseada em jogos reais)
+    # clean_sheet_rate_away_def = prob do visitante guardar CS fora (baseada em jogos reais)
+    _cs_home_empirical = _home_casa.get('clean_sheet_rate', None)   # None se API não retornou
+    _cs_away_empirical = _away_fora.get('clean_sheet_rate', None)   # None se API não retornou
+
+    if _cs_home_empirical is not None:
+        clean_sheet_rate_home_def = float(_cs_home_empirical)
+        print(f"    ✅ CS Home (empírico): {clean_sheet_rate_home_def:.3f}")
+    else:
+        clean_sheet_rate_home_def = math.exp(-lambda_effective_away)  # Poisson fallback
+        print(f"    ⚠️ CS Home (Poisson fallback): {clean_sheet_rate_home_def:.3f}")
+
+    if _cs_away_empirical is not None:
+        clean_sheet_rate_away_def = float(_cs_away_empirical)
+        print(f"    ✅ CS Away (empírico): {clean_sheet_rate_away_def:.3f}")
+    else:
+        clean_sheet_rate_away_def = math.exp(-lambda_effective_home)  # Poisson fallback
+        print(f"    ⚠️ CS Away (Poisson fallback): {clean_sheet_rate_away_def:.3f}")
 
     # Ratio HT ajustado pelo perfil tático dos dois times
     _style_home = profile_home.get('offensive_style', 'neutro')
