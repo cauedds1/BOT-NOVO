@@ -504,11 +504,15 @@ def _format_placar_exato_section(
         tipo = palpite.get('tipo', '')
         confianca = palpite.get('confianca', 0)
         probabilidade = palpite.get('probabilidade', 0)
+        prob_implicita = palpite.get('prob_implicita', 0.0)
+        edge = palpite.get('edge', 0.0)
         odd = palpite.get('odd', 0)
 
         msg += f"   Análise: {tipo}\n"
         msg += f"   Confiança: {confianca:.1f} / 10\n"
-        msg += f"   Probabilidade Calculada: {probabilidade:.1f}%\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.2f}% | Prob. Implícita: {prob_implicita:.2f}%\n"
+        if edge > 0:
+            msg += f"   Edge de Valor: +{edge:.2f}%\n"
         if odd and odd > 0:
             msg += f"   Odd Disponível: @{odd:.2f}\n"
         else:
@@ -516,7 +520,10 @@ def _format_placar_exato_section(
 
         from analysts.justification_generator import generate_evidence_based_justification
         justificativa = generate_evidence_based_justification(
-            'Placar Exato', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name
+            'Placar Exato', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name,
+            extra={'lambda_home': palpite.get('confidence_breakdown', {}).get('lambda_home'),
+                   'lambda_away': palpite.get('confidence_breakdown', {}).get('lambda_away'),
+                   'edge': edge, 'probabilidade': probabilidade}
         )
         msg += f"   Justificativa: {justificativa}\n\n"
 

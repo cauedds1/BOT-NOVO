@@ -7,7 +7,7 @@ PHOENIX V3.0: Evidence-Based Analysis Protocol
 """
 
 
-def generate_evidence_based_justification(mercado, tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
+def generate_evidence_based_justification(mercado, tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
     """
     EVIDENCE-BASED: Gera justificativa específica baseada nos dados reais dos últimos jogos.
     
@@ -23,6 +23,7 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         evidencias_away: Dict com evidências dos últimos jogos do time fora
         home_team_name: Nome do time casa
         away_team_name: Nome do time fora
+        extra: Dict opcional com dados adicionais (lambda_home, lambda_away, edge, probabilidade)
     
     Returns:
         str: Justificativa baseada em evidências
@@ -45,7 +46,7 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
     elif mercado == "Gols Ambos Tempos":
         return _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Placar Exato":
-        return _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
+        return _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -578,13 +579,17 @@ def _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home
         )
 
 
-def _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
-    """Gera justificativa para Placar Exato baseada em dados reais de gols e padrões de resultado."""
+def _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para Placar Exato com λ do modelo Poisson e edge de valor."""
     gols_home = evidencias_home.get('gols', [])
     gols_away = evidencias_away.get('gols', [])
 
-    if not gols_home and not gols_away:
-        return f"O modelo Poisson bivariado aponta este como o placar mais provável para o confronto: {tipo}."
+    extra = extra or {}
+    # Preferir λ passado explicitamente; fallback para média de gols históricos
+    lambda_home = extra.get('lambda_home')
+    lambda_away = extra.get('lambda_away')
+    edge = extra.get('edge')
+    prob_pct = extra.get('probabilidade')
 
     media_total_home = (
         sum(g['total_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
@@ -592,31 +597,41 @@ def _justificar_placar_exato_evidence_based(tipo, evidencias_home, evidencias_aw
     media_total_away = (
         sum(g['total_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
     )
-    media_combinada = (media_total_home + media_total_away) / 2
+
+    # Usar λ do modelo se disponível, senão usar histórico
+    lh_str = f"{lambda_home:.2f}" if lambda_home is not None else f"{media_total_home:.1f}"
+    la_str = f"{lambda_away:.2f}" if lambda_away is not None else f"{media_total_away:.1f}"
+
+    edge_str = f" (edge de valor: +{edge:.2f}%)" if edge is not None and edge > 0 else ""
+    prob_str = f" — probabilidade Poisson: {prob_pct:.2f}%" if prob_pct is not None else ""
+
+    if not gols_home and not gols_away:
+        return (
+            f"O modelo Poisson bivariado (λ_casa={lh_str}, λ_fora={la_str}) "
+            f"aponta {tipo} como o placar com valor real identificado{edge_str}{prob_str}."
+        )
 
     if 'Casa Vence' in tipo:
         return (
-            f"{home_team_name} tem média de {media_total_home:.1f} gols por jogo em casa, "
-            f"enquanto {away_team_name} produz {media_total_away:.1f} fora. "
-            f"O modelo Poisson aponta {tipo} como o placar mais provável na categoria de vitória do mandante "
-            f"(média combinada: {media_combinada:.1f} gols/jogo)."
+            f"{home_team_name} tem λ_casa={lh_str} gols esperados/jogo, "
+            f"{away_team_name} λ_fora={la_str}. "
+            f"O modelo Poisson bivariado aponta {tipo} como placar com valor real{edge_str}{prob_str}."
         )
     elif 'Fora Vence' in tipo:
         return (
-            f"{away_team_name} produz {media_total_away:.1f} gols por jogo fora de casa. "
-            f"O diferencial ofensivo do visitante sustenta {tipo} como placar mais provável "
-            f"na categoria de vitória do visitante (média combinada: {media_combinada:.1f} gols/jogo)."
+            f"{away_team_name} tem λ_fora={la_str} gols esperados/jogo, "
+            f"{home_team_name} λ_casa={lh_str}. "
+            f"O diferencial ofensivo do visitante sustenta {tipo} como placar com valor real{edge_str}{prob_str}."
         )
     elif 'Empate' in tipo:
         return (
-            f"Com médias equilibradas ({home_team_name}: {media_total_home:.1f} gols/jogo em casa | "
-            f"{away_team_name}: {media_total_away:.1f} fora), "
-            f"o modelo Poisson identifica {tipo} como o placar de empate mais provável."
+            f"Com λ equilibrados (casa={lh_str}, fora={la_str}), "
+            f"o modelo Poisson identifica {tipo} como placar de empate com valor real{edge_str}{prob_str}."
         )
     else:
         return (
-            f"O modelo Poisson bivariado, com λ_casa={media_total_home:.1f} e λ_fora={media_total_away:.1f}, "
-            f"aponta {tipo} como o resultado estatisticamente mais provável."
+            f"O modelo Poisson bivariado (λ_casa={lh_str}, λ_fora={la_str}) "
+            f"aponta {tipo} como o resultado estatisticamente mais provável{edge_str}{prob_str}."
         )
 
 

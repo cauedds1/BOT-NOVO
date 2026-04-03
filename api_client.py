@@ -1357,9 +1357,15 @@ def normalizar_odds(odds_formatadas):
                     odds_normalizadas[f"handicap_fora_{linha_num}"] = valor
 
         elif mercado_key == "correct_score":
-            # Mercado Placar Exato — repassa o dict completo com chave normalizada
-            # Formato: {"placar_exato": {"1:0": 6.5, "0:1": 8.0, ...}}
+            # Mercado Placar Exato — armazena dict completo E chaves individuais normalizadas
+            # Dict: {"placar_exato": {"1:0": 6.5, ...}}
+            # Individuais: {"placar_1_0": 6.5, ...}  (para acesso direto)
+            import re as _re
             odds_normalizadas["placar_exato"] = odds_dict
+            for raw_str, odd_val in odds_dict.items():
+                nums = _re.findall(r'\d+', str(raw_str))
+                if len(nums) >= 2:
+                    odds_normalizadas[f"placar_{nums[0]}_{nums[1]}"] = odd_val
 
     return odds_normalizadas
 
