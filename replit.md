@@ -1,22 +1,47 @@
-# Bot de Análise de Apostas Esportivas - Telegram
+# AnalyTips - Bot de Apostas Esportivas + Interface Web
 
 ## Overview
-Este projeto é um bot sofisticado e modular para o Telegram, focado na análise estatística de partidas de futebol. Ele se integra à API-Football (API-Sports) para coletar dados em tempo real e históricos de jogos, gerando análises detalhadas e palpites para apostas esportivas. O objetivo é fornecer aos usuários insights aprofundados para decisões de apostas mais informadas, utilizando métricas avançadas e ajustadas por contexto.
+Este projeto é uma plataforma completa de análise de apostas esportivas, composta por um **bot sofisticado para Telegram** e uma **interface web** (FastAPI + React/Vite). O sistema se integra à API-Football (API-Sports) para coletar dados em tempo real, gerando análises estatísticas detalhadas e palpites para 12 mercados diferentes.
 
 ## User Preferences
 Eu, como usuário, prefiro um estilo de comunicação direto e objetivo. Gosto de ver o impacto das mudanças e melhorias de forma clara e concisa. Priorizo o desenvolvimento iterativo e a resolução de problemas críticos que afetam a funcionalidade principal. Não desejo que o agente faça alterações nos arquivos `.env` ou em qualquer configuração de variáveis de ambiente diretamente, a menos que explicitamente instruído.
 
 ## System Architecture
-O bot é construído com uma arquitetura modular e production-ready, permitindo fácil expansão e manutenção.
-- **Ponto de Entrada:** `main.py`
-- **Comunicação API:** `api_client.py` gerencia a interação com a API-Football.
-- **Configuração:** `config.py` centraliza as configurações do projeto.
+O sistema é construído com uma arquitetura modular e production-ready.
+
+### Backend (Telegram Bot)
+- **Ponto de Entrada:** `main.py` — executa o bot Telegram
+- **Workflow:** "Start application" → `python main.py`
+
+### Backend (Web API)
+- **Arquivo:** `web_api.py` — servidor FastAPI que expõe REST endpoints
+- **Workflow:** "Web Server" → `PORT=5000 python web_api.py` (webview na porta 5000)
+- **Endpoints:**
+  - `GET /api/jogos/hoje` — lista jogos do dia agrupados por liga
+  - `GET /api/analise/{id}` — retorna análise salva no banco
+  - `POST /api/analisar/{id}` — dispara análise em background
+  - `GET /api/status/{id}` — consulta status do processamento
+  - `GET /api/ligas` — ligas suportadas
+  - `GET /api/stats` — estatísticas gerais
+  - `GET /api/health` — health check
+
+### Frontend (Interface Web)
+- **Diretório:** `frontend/` — app React + Vite + Tailwind CSS
+- **Build:** `cd frontend && npm run build` → gera `frontend/dist/`
+- **Servido por:** FastAPI serve os arquivos estáticos de `frontend/dist/`
+- **Páginas:**
+  - Home (`/`) — lista jogos do dia por liga; botão "Analisar" dispara análise
+  - Detalhe (`/jogo/:id`) — exibe análise completa com cards por mercado
+- **Desenvolvimento local:** `cd frontend && npm run dev` (proxy `/api` → porta 8000)
+
+### Módulos Compartilhados
+- **Comunicação API:** `api_client.py` — interação com API-Football
+- **Configuração:** `config.py` — centraliza constantes e thresholds
 - **Gerenciamento de Dados:**
-    - `cache_manager.py` implementa um sistema de cache em memória e arquivo para otimizar o uso da API e o desempenho.
-    - `db_manager.py` gerencia a persistência de dados utilizando PostgreSQL, com uma tabela `analises_jogos` para cache de análises complexas.
-- **Módulos de Análise (Pure Analyst Protocol):** O diretório `analysts/` contém módulos especializados para diferentes mercados de apostas, orquestrados por um `master_analyzer.py`. Todos os analisadores usam um sistema unificado de confiança (`confidence_calculator.py`) baseado exclusivamente em probabilidades estatísticas, independente de odds de mercado. Inclui análises para gols, resultado final, escanteios, ambos marcam, cartões, finalizações, handicaps e análise contextual (`context_analyzer.py`).
-- **UI/UX:** O bot interage com o usuário através de comandos do Telegram, apresentando análises de forma clara e concisa. As mensagens são formatadas para serem consistentes e evitar redundância.
-- **Testes:** Diretório `tests/` contém testes unitários para validação de funcionalidades críticas.
+  - `cache_manager.py` — cache em memória e arquivo JSON
+  - `db_manager.py` — persistência PostgreSQL (`analises_jogos`)
+- **Módulos de Análise (Pure Analyst Protocol):** `analysts/` contém 12 analisadores especializados orquestrados por `master_analyzer.py`
+- **Testes:** `tests/` contém testes unitários
 
 ## Decisões Técnicas
 ### Core Features
@@ -71,6 +96,33 @@ O bot é construído com uma arquitetura modular e production-ready, permitindo 
   - `DATABASE_URL` - URL de conexão PostgreSQL (opcional, mas recomendado)
 
 ## Recent Changes (2026-04-03)
+### Tasks #11 + #12: Interface Web (FastAPI + React/Vite) — COMPLETE
+**Backend (web_api.py):**
+- FastAPI com CORS habilitado; serve tanto a API REST quanto o frontend buildado
+- Pipeline de análise reutiliza 100% do código existente (master_analyzer + 12 analisadores)
+- BackgroundTasks para análises assíncronas com polling de status
+- Cache de status em memória (`_processing_status`) para tracking por fixture_id
+- Inicialização do HTTP client segura sem a chave da API (não crasha se `API_FOOTBALL_KEY` não estiver configurada)
+- Endpoint `/api/jogos/hoje` retorna jogos agrupados por liga com flag `tem_analise`
+- Conversão de dados do DB para JSON estruturado por mercado
+
+**Frontend (frontend/):**
+- React 18 + Vite 8 + Tailwind CSS (@tailwindcss/vite plugin)
+- React Router Dom para navegação SPA
+- Dark theme profissional (paleta: navy/indigo)
+- Página Home: Lista jogos por liga (collapsible), botão "Analisar" dispara POST + polling
+- Página Detalhe: Cards por mercado com barras de confiança, confidence scores, odds e justificativas
+- Estado vazio elegante quando sem jogos
+- Team logos com fallback gracioso para avatar de inicial
+- Polling automático a cada 3s enquanto análise está em background
+
+**Configuração:**
+- Workflow "Web Server": `PORT=5000 python web_api.py` (webview, porta 5000)
+- `requirements.txt` atualizado com fastapi + uvicorn[standard]
+- Node.js 20 instalado como runtime
+- `.gitignore` criado para Python + Node.js
+- Build do frontend: `cd frontend && npm run build` → `frontend/dist/` servido pelo FastAPI
+
 ### Task #6: Mercado GABT (Gols em Ambos os Tempos) — COMPLETE
 - `analysts/gabt_analyzer.py`: Novo analisador com modelo Poisson para P(≥1 gol 1T) × P(≥1 gol 2T).
 - Integrado em todos os 3 paths: `gerar_analise_completa_todos_mercados`, `gerar_palpite_completo`, `coletar_todos_palpites_disponiveis`.
