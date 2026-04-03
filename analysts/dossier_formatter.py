@@ -521,9 +521,12 @@ def _format_placar_exato_section(
         from analysts.justification_generator import generate_evidence_based_justification
         justificativa = generate_evidence_based_justification(
             'Placar Exato', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name,
-            extra={'lambda_home': palpite.get('confidence_breakdown', {}).get('lambda_home'),
-                   'lambda_away': palpite.get('confidence_breakdown', {}).get('lambda_away'),
-                   'edge': edge, 'probabilidade': probabilidade}
+            extra={
+                'lambda_home': palpite.get('lambda_home'),
+                'lambda_away': palpite.get('lambda_away'),
+                'edge': edge,
+                'probabilidade': probabilidade,
+            }
         )
         msg += f"   Justificativa: {justificativa}\n\n"
 
