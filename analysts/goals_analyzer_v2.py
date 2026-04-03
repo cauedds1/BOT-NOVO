@@ -10,7 +10,10 @@ BLUEPRINT IMPLEMENTATION:
 
 from config import (MIN_CONFIANCA_GOLS_OVER_UNDER,
                     MIN_CONFIANCA_GOLS_OVER_1_5, MIN_CONFIANCA_GOLS_OVER_3_5)
-from analysts.confidence_calculator import calculate_final_confidence
+from analysts.confidence_calculator import (
+    calculate_final_confidence,
+    calculate_statistical_probability_goals_over
+)
 import math
 
 
@@ -38,34 +41,76 @@ def analisar_mercado_gols(analysis_packet, odds):
     script = analysis_packet['analysis_summary']['selected_script']
     reasoning = analysis_packet['analysis_summary']['reasoning']
     
-    # Extrair probabilidades base do master analyzer
-    over_2_5_prob = probabilities['goals_over_under_2_5']['over_2_5_prob']
-    under_2_5_prob = probabilities['goals_over_under_2_5']['under_2_5_prob']
-    btts_sim_prob = probabilities.get('btts', {}).get('btts_yes_prob', 50.0)
-    btts_nao_prob = probabilities.get('btts', {}).get('btts_no_prob', 50.0)
-    
-    # Calcular probabilidades para outras linhas
-    over_1_5_prob = min(over_2_5_prob + 15, 95)
+    # Extrair lambdas individuais calculados pelo master analyzer (FASE 2)
+    lambda_data = probabilities.get('lambda_goals', {})
+    lambda_home = lambda_data.get('lambda_home', 0.0)
+    lambda_away = lambda_data.get('lambda_away', 0.0)
+    lambda_total = lambda_data.get('lambda_total', 0.0)
+    ht_ratio = lambda_data.get('ht_ratio', 0.43)
+    clean_sheet_home_def = lambda_data.get('clean_sheet_rate_home_def', None)
+    clean_sheet_away_def = lambda_data.get('clean_sheet_rate_away_def', None)
+
+    # Fallback: se não há lambdas reais, usar over_2_5 do script como âncora
+    _over_2_5_script = probabilities['goals_over_under_2_5']['over_2_5_prob']
+    _has_real_lambdas = lambda_total > 0
+
+    if _has_real_lambdas:
+        # FASE 2: Calcular todas as linhas via Poisson com lambda real — sem offsets fixos
+        lambda_ht = lambda_total * ht_ratio
+
+        # FT total lines
+        over_1_5_prob = calculate_statistical_probability_goals_over(lambda_total, 1.5)
+        over_2_5_prob = calculate_statistical_probability_goals_over(lambda_total, 2.5)
+        over_3_5_prob = calculate_statistical_probability_goals_over(lambda_total, 3.5)
+        over_4_5_prob = calculate_statistical_probability_goals_over(lambda_total, 4.5)
+
+        # HT lines (lambda do 1º tempo)
+        over_0_5_ht_prob = calculate_statistical_probability_goals_over(lambda_ht, 0.5)
+        over_1_5_ht_prob = calculate_statistical_probability_goals_over(lambda_ht, 1.5)
+
+        # Team goals por lambda individual
+        home_over_0_5_prob = calculate_statistical_probability_goals_over(lambda_home, 0.5)
+        home_over_1_5_prob = calculate_statistical_probability_goals_over(lambda_home, 1.5)
+        away_over_0_5_prob = calculate_statistical_probability_goals_over(lambda_away, 0.5)
+        away_over_1_5_prob = calculate_statistical_probability_goals_over(lambda_away, 1.5)
+
+        # BTTS via clean sheet rates: P(BTTS) = P(home marca) × P(away marca)
+        # P(home marca) = 1 - P(away defense keeps CS) = 1 - clean_sheet_away_def
+        # P(away marca) = 1 - P(home defense keeps CS) = 1 - clean_sheet_home_def
+        if clean_sheet_home_def is not None and clean_sheet_away_def is not None:
+            p_home_scores = 1 - clean_sheet_away_def
+            p_away_scores = 1 - clean_sheet_home_def
+        else:
+            p_home_scores = 1 - math.exp(-lambda_home)
+            p_away_scores = 1 - math.exp(-lambda_away)
+        btts_sim_prob = round(p_home_scores * p_away_scores * 100, 1)
+
+        print(f"  🧮 POISSON: λ_total={lambda_total:.2f} | λ_ht={lambda_ht:.2f} | λ_casa={lambda_home:.2f} | λ_fora={lambda_away:.2f}")
+    else:
+        # Fallback para comportamento anterior quando lambdas não disponíveis
+        over_2_5_prob = _over_2_5_script
+        over_1_5_prob = min(over_2_5_prob + 15, 95)
+        over_3_5_prob = max(over_2_5_prob - 30, 10)
+        over_4_5_prob = max(over_2_5_prob - 45, 5)
+        over_0_5_ht_prob = min(over_1_5_prob * 0.75, 85)
+        over_1_5_ht_prob = max(over_2_5_prob * 0.40, 25)
+        home_over_0_5_prob = min(over_1_5_prob * 0.80, 85)
+        home_over_1_5_prob = max(over_2_5_prob * 0.55, 30)
+        away_over_0_5_prob = min(over_1_5_prob * 0.70, 80)
+        away_over_1_5_prob = max(over_2_5_prob * 0.45, 25)
+        btts_sim_prob = probabilities.get('btts', {}).get('btts_yes_prob', 50.0)
+
+    # Calcular complementos (Under)
     under_1_5_prob = 100 - over_1_5_prob
-    over_3_5_prob = max(over_2_5_prob - 20, 15) if script == 'SCRIPT_OPEN_HIGH_SCORING_GAME' else max(over_2_5_prob - 30, 10)
+    under_2_5_prob = 100 - over_2_5_prob
     under_3_5_prob = 100 - over_3_5_prob
-    
-    # HT probabilities (aproximadamente 50% dos gols no HT)
-    over_0_5_ht_prob = min(over_1_5_prob * 0.75, 85)
     under_0_5_ht_prob = 100 - over_0_5_ht_prob
-    over_1_5_ht_prob = max(over_2_5_prob * 0.40, 25)
     under_1_5_ht_prob = 100 - over_1_5_ht_prob
-    
-    # Team goals (estimativa baseada em distribuição)
-    home_over_0_5_prob = min(over_1_5_prob * 0.80, 85)
     home_under_0_5_prob = 100 - home_over_0_5_prob
-    home_over_1_5_prob = max(over_2_5_prob * 0.55, 30)
     home_under_1_5_prob = 100 - home_over_1_5_prob
-    
-    away_over_0_5_prob = min(over_1_5_prob * 0.70, 80)
     away_under_0_5_prob = 100 - away_over_0_5_prob
-    away_over_1_5_prob = max(over_2_5_prob * 0.45, 25)
     away_under_1_5_prob = 100 - away_over_1_5_prob
+    btts_nao_prob = 100 - btts_sim_prob
     
     all_predictions = []
     
@@ -193,7 +238,47 @@ def analisar_mercado_gols(analysis_packet, odds):
                 "probabilidade": prob,
                 "confidence_breakdown": breakdown
             })
-    
+
+    # Over 4.5 FT
+    if 'gols_ft_over_4.5' in odds:
+        prob = over_4_5_prob
+        confianca, breakdown = calculate_final_confidence(
+            statistical_probability_pct=prob,
+            bet_type="Over 4.5",
+            tactical_script=script
+        )
+        if confianca >= 5.0:
+            all_predictions.append({
+                "mercado": "Gols",
+                "tipo": "Over 4.5",
+                "confianca": confianca,
+                "odd": odds['gols_ft_over_4.5'],
+                "periodo": "FT",
+                "time": "Total",
+                "probabilidade": prob,
+                "confidence_breakdown": breakdown
+            })
+
+    # Under 4.5 FT
+    if 'gols_ft_under_4.5' in odds:
+        prob = 100 - over_4_5_prob
+        confianca, breakdown = calculate_final_confidence(
+            statistical_probability_pct=prob,
+            bet_type="Under 4.5",
+            tactical_script=script
+        )
+        if confianca >= 5.0:
+            all_predictions.append({
+                "mercado": "Gols",
+                "tipo": "Under 4.5",
+                "confianca": confianca,
+                "odd": odds['gols_ft_under_4.5'],
+                "periodo": "FT",
+                "time": "Total",
+                "probabilidade": prob,
+                "confidence_breakdown": breakdown
+            })
+
     # ========== 2. FIRST HALF GOALS ==========
     
     # Over 0.5 HT

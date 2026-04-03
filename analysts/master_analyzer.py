@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api_client import (
@@ -1196,7 +1197,52 @@ async def generate_match_analysis(jogo):
     goals_home = float(goals_home) if goals_home else 0.0
     goals_away = away_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0) if away_stats else 0
     goals_away = float(goals_away) if goals_away else 0.0
-    
+
+    # FASE 2: Lambda individual por time para cálculo Poisson preciso
+    # lambda_home = gols que o mandante marca jogando EM CASA (por jogo)
+    # lambda_away = gols que o visitante marca jogando FORA (por jogo)
+    _home_casa = home_stats.get('casa', {}) if isinstance(home_stats, dict) else {}
+    _away_fora = away_stats.get('fora', {}) if isinstance(away_stats, dict) else {}
+
+    lambda_home_raw = float(_home_casa.get('gols_marcados', 0) or 0)
+    lambda_away_raw = float(_away_fora.get('gols_marcados', 0) or 0)
+    gols_sofridos_home_def = float(_home_casa.get('gols_sofridos', 1.0) or 1.0)
+    gols_sofridos_away_def = float(_away_fora.get('gols_sofridos', 1.0) or 1.0)
+
+    # Garantir valores mínimos realistas (evitar lambda=0 que daria 0% de probabilidade)
+    if lambda_home_raw <= 0:
+        lambda_home_raw = 1.2
+    if lambda_away_raw <= 0:
+        lambda_away_raw = 0.9
+    if gols_sofridos_home_def <= 0:
+        gols_sofridos_home_def = 1.0
+    if gols_sofridos_away_def <= 0:
+        gols_sofridos_away_def = 1.0
+
+    # Lambda efetivo = média ponderada ataque próprio + concedido pelo adversário
+    # Isto combina o poder ofensivo com a vulnerabilidade defensiva do oponente
+    lambda_effective_home = (lambda_home_raw + gols_sofridos_away_def) / 2
+    lambda_effective_away = (lambda_away_raw + gols_sofridos_home_def) / 2
+    lambda_total_effective = lambda_effective_home + lambda_effective_away
+
+    # Taxa de clean sheet defensiva via Poisson: P(CS) = e^(-lambda_efetivo_adversário)
+    # clean_sheet_rate_home_def = prob do mandante guardar clean sheet (adversário marca 0)
+    clean_sheet_rate_home_def = math.exp(-lambda_effective_away)
+    # clean_sheet_rate_away_def = prob do visitante guardar clean sheet (adversário marca 0)
+    clean_sheet_rate_away_def = math.exp(-lambda_effective_home)
+
+    # Ratio HT ajustado pelo perfil tático dos dois times
+    _style_home = profile_home.get('offensive_style', 'neutro')
+    _style_away = profile_away.get('offensive_style', 'neutro')
+    if _style_home == 'ofensivo' and _style_away == 'ofensivo':
+        ht_ratio = 0.47   # times agressivos desde o início
+    elif _style_home == 'defensivo' and _style_away == 'defensivo':
+        ht_ratio = 0.38   # times lentos/cautelosos no 1º tempo
+    else:
+        ht_ratio = 0.43   # padrão histórico global
+
+    print(f"  ⚽ FASE 2 Lambdas: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f} | Total={lambda_total_effective:.2f} | HT ratio={ht_ratio}")
+
     analysis_data = {
         'power_score_home': power_home,
         'power_score_away': power_away,
@@ -1251,7 +1297,17 @@ async def generate_match_analysis(jogo):
             'weighted_metrics_home': weighted_home,
             'weighted_metrics_away': weighted_away
         },
-        'calculated_probabilities': probabilities,
+        'calculated_probabilities': {
+            **probabilities,
+            'lambda_goals': {
+                'lambda_home': lambda_effective_home,
+                'lambda_away': lambda_effective_away,
+                'lambda_total': lambda_total_effective,
+                'ht_ratio': ht_ratio,
+                'clean_sheet_rate_home_def': clean_sheet_rate_home_def,
+                'clean_sheet_rate_away_def': clean_sheet_rate_away_def
+            }
+        },
         'evidence': {
             'home': evidencias_home,
             'away': evidencias_away,

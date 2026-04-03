@@ -27,6 +27,16 @@ O bot é construído com uma arquitetura modular e production-ready, permitindo 
 - **Tratamento de Tactical Tips:** Dicas táticas sem odds são processadas e priorizadas corretamente, sem serem descartadas por falta de odd.
 - **Calibração de Cache TTLs:** Os tempos de vida (TTL) do cache são diferenciados por tipo de dado, otimizando a atualização de dados sensíveis ao tempo (odds) e economizando créditos da API para dados mais estáveis.
 
+### Fase 2: Motor de Probabilidades Poisson - 2026-04-03
+**Refatoração do motor de probabilidades para usar distribuição de Poisson real.**
+
+- **Lambda por Time:** `master_analyzer.py` extrai `lambda_home` (gols marcados pelo mandante EM CASA) e `lambda_away` (gols marcados pelo visitante FORA), combina com a fragilidade defensiva do oponente para obter `lambda_efetivo` por time.
+- **Todas as Linhas via Poisson:** `goals_analyzer_v2.py` substituiu todos os offsets fixos (`over_2_5 + 15`, `over_2_5 - 30`, etc.) por cálculos independentes de Poisson para Over 1.5, 2.5, 3.5 e 4.5 usando `lambda_total`.
+- **Modelo HT:** Lambda do 1º tempo = `lambda_total × ht_ratio`, onde `ht_ratio` é ajustado pelo perfil tático: times ofensivos → 0.47, defensivos → 0.38, neutro → 0.43 (baseline histórico global).
+- **Gols por Time:** "Casa Over 0.5/1.5" usa `lambda_home` (não percentual do total), "Fora Over 0.5/1.5" usa `lambda_away`.
+- **BTTS Poisson:** `btts_analyzer.py` refatorado: `P(BTTS) = P(home marca) × P(away marca)`, onde cada prob = `1 - e^(-lambda_efetivo)` via Poisson. Elimina divisão arbitrária por constante 2.5. `lambda_efetivo` combina ataque próprio + defesa adversária.
+- **Novo mercado:** Over/Under 4.5 adicionado ao `goals_analyzer_v2.py`.
+
 ### Pure Analyst Protocol - 2025-10-31
 **Paradigma Shift:** O bot foi completamente refatorado para focar em análise estatística pura, eliminando toda dependência de market odds (valor de apostas).
 
