@@ -6,7 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from api_client import (
     buscar_estatisticas_gerais_time,
     buscar_estatisticas_jogo,
-    buscar_h2h
+    buscar_h2h,
+    buscar_lesoes_jogo
 )
 
 
@@ -65,6 +66,35 @@ def _calculate_moment_score(team_stats):
         moment = max(moment - 10, 0)  # Ataque fraco
     
     return moment
+
+
+def _calculate_injury_impact(injuries):
+    """
+    TASK 4 - PHOENIX V4.0: Calcula penalidade no Momento baseada em ausências.
+
+    Classifica o impacto de jogadores ausentes (lesionados e suspensos) no
+    Momento Score do time. Quanto mais ausências, maior a penalidade.
+
+    Args:
+        injuries: Lista de dicts com jogadores ausentes [{name, type, reason, team_id}]
+
+    Returns:
+        int: Pontos de penalidade a subtrair do Momento Score (0, 5, 10 ou 15)
+    """
+    if not injuries:
+        return 0
+    count = len(injuries)
+    suspended = sum(1 for p in injuries if p.get('type', '').lower() == 'suspended')
+    if count >= 4:
+        penalty = 15
+    elif count >= 2:
+        penalty = 10
+    else:
+        penalty = 5
+    # Suspensões confirmadas aumentam o impacto em +3 (jogador não joga garantidamente)
+    if suspended >= 2:
+        penalty = min(penalty + 3, 18)
+    return penalty
 
 
 def _calculate_power_score(team_stats):
@@ -1234,7 +1264,26 @@ async def generate_match_analysis(jogo):
     moment_home = _calculate_moment_score(home_stats) if home_stats else 50
     moment_away = _calculate_moment_score(away_stats) if away_stats else 50
     print(f"  🔥 Momento Casa: {moment_home} | Momento Fora: {moment_away}")
-    
+
+    # ─── TASK 4: LESÕES E DESFALQUES ───────────────────────────────────────────
+    print("🏥 TASK 4: Buscando lesões e desfalques...")
+    injuries_raw = await buscar_lesoes_jogo(fixture_id)
+    home_injuries = [p for p in injuries_raw if p.get('team_id') == home_team_id]
+    away_injuries = [p for p in injuries_raw if p.get('team_id') == away_team_id]
+
+    injury_penalty_home = _calculate_injury_impact(home_injuries)
+    injury_penalty_away = _calculate_injury_impact(away_injuries)
+
+    if injury_penalty_home > 0:
+        moment_home = max(0, moment_home - injury_penalty_home)
+        print(f"  🏥 Casa: {len(home_injuries)} ausência(s) → Momento ajustado -{injury_penalty_home} → {moment_home}")
+    if injury_penalty_away > 0:
+        moment_away = max(0, moment_away - injury_penalty_away)
+        print(f"  🏥 Fora: {len(away_injuries)} ausência(s) → Momento ajustado -{injury_penalty_away} → {moment_away}")
+    if not home_injuries and not away_injuries:
+        print(f"  ✅ Sem desfalques confirmados ou endpoint indisponível")
+    # ───────────────────────────────────────────────────────────────────────────
+
     print("📅 TASK 2: Analisando Strength of Schedule (SoS)...")
     sos_home = await _analyze_strength_of_schedule(home_team_id, league_id)
     sos_away = await _analyze_strength_of_schedule(away_team_id, league_id)
@@ -1303,6 +1352,33 @@ async def generate_match_analysis(jogo):
     lambda_effective_home = (lambda_home_raw + gols_sofridos_away_def) / 2
     lambda_effective_away = (lambda_away_raw + gols_sofridos_home_def) / 2
     lambda_total_effective = lambda_effective_home + lambda_effective_away
+
+    # ─── TASK 4: xG APROXIMADO (blend 50/50 com lambda por médias de gols) ────
+    # Cálculo: xG = shots_on_target × (goals / total_shots)
+    # Onde conversion_rate = gols_marcados / finalizacoes_totais mede eficiência de finalização
+    # O blend suaviza distorções: times eficientes com poucos chutes OU ineficientes com muitos.
+    _sot_home = float(_home_casa.get('finalizacoes_no_gol', 0) or 0)   # Shots on target (casa)
+    _sot_away = float(_away_fora.get('finalizacoes_no_gol', 0) or 0)   # Shots on target (fora)
+    _shots_home = float(_home_casa.get('finalizacoes', 0) or 0)         # Total shots (casa)
+    _shots_away = float(_away_fora.get('finalizacoes', 0) or 0)         # Total shots (fora)
+
+    if _sot_home > 0 and _shots_home > 0 and _sot_away > 0 and _shots_away > 0:
+        _conv_rate_home = lambda_home_raw / _shots_home   # gols por finalização total (casa)
+        _conv_rate_away = lambda_away_raw / _shots_away   # gols por finalização total (fora)
+        xg_home = _sot_home * _conv_rate_home
+        xg_away = _sot_away * _conv_rate_away
+        # Garantir que xG não seja absurdo
+        xg_home = max(0.3, min(xg_home, 5.0))
+        xg_away = max(0.2, min(xg_away, 5.0))
+        # Blend 50/50: lambda por gols históricos + lambda estimado por xG
+        lambda_effective_home = 0.5 * lambda_effective_home + 0.5 * xg_home
+        lambda_effective_away = 0.5 * lambda_effective_away + 0.5 * xg_away
+        lambda_total_effective = lambda_effective_home + lambda_effective_away
+        print(f"  🎯 xG BLEND: Casa xG={xg_home:.2f}, Fora xG={xg_away:.2f}")
+        print(f"  ⚽ Lambdas pós-xG: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f} | Total={lambda_total_effective:.2f}")
+    else:
+        print(f"  ℹ️ xG: Dados de finalizações insuficientes → usando lambda por médias de gols")
+    # ─────────────────────────────────────────────────────────────────────────
 
     # Taxa de clean sheet defensiva:
     # Preferir dados empíricos da API quando disponíveis, caso contrário usar aproximação Poisson.
@@ -1380,6 +1456,10 @@ async def generate_match_analysis(jogo):
     else:
         print(f"  ⚠️ H2H: Dados insuficientes (menos de 3 jogos válidos)")
     
+    # Sumário de desfalques para exibição (Task 4)
+    _injuries_summary_home = [f"{p['name']} ({p['type']})" for p in home_injuries] if home_injuries else []
+    _injuries_summary_away = [f"{p['name']} ({p['type']})" for p in away_injuries] if away_injuries else []
+
     analysis_packet = {
         'fixture_id': fixture_id,
         'analysis_summary': {
@@ -1397,7 +1477,11 @@ async def generate_match_analysis(jogo):
             'sos_home': sos_home,
             'sos_away': sos_away,
             'weighted_metrics_home': weighted_home,
-            'weighted_metrics_away': weighted_away
+            'weighted_metrics_away': weighted_away,
+            'injuries_home': _injuries_summary_home,
+            'injuries_away': _injuries_summary_away,
+            'injury_penalty_home': injury_penalty_home,
+            'injury_penalty_away': injury_penalty_away
         },
         'calculated_probabilities': {
             **probabilities,

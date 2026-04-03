@@ -71,7 +71,9 @@ TEMPORADA_RETA_FINAL = 0.75  # 75% da temporada = reta final
 # Scores de qualidade técnica dos times (1-100)
 # Usado para análise de diferença técnica e contexto de partidas
 QUALITY_SCORES = {
-    # Premier League - Inglaterra
+    # =============================================
+    # PREMIER LEAGUE - Inglaterra
+    # =============================================
     33: 95,   # Manchester City
     40: 92,   # Liverpool
     42: 90,   # Arsenal
@@ -81,8 +83,20 @@ QUALITY_SCORES = {
     35: 85,   # Chelsea
     66: 83,   # Aston Villa
     48: 82,   # West Ham
+    51: 81,   # Brighton
+    52: 74,   # Crystal Palace
+    45: 76,   # Everton
+    36: 77,   # Fulham
+    55: 77,   # Brentford
+    39: 76,   # Wolverhampton Wanderers
+    65: 75,   # Nottingham Forest
+    46: 75,   # Leicester City
+    44: 72,   # Burnley
+    57: 71,   # Ipswich Town
     
-    # La Liga - Espanha
+    # =============================================
+    # LA LIGA - Espanha
+    # =============================================
     529: 94,  # Barcelona
     541: 93,  # Real Madrid
     530: 87,  # Atletico Madrid
@@ -91,38 +105,104 @@ QUALITY_SCORES = {
     548: 80,  # Real Sociedad
     724: 78,  # Villarreal
     531: 77,  # Athletic Bilbao
+    543: 76,  # Real Betis
+    538: 74,  # Celta Vigo
+    546: 72,  # Getafe
+    547: 76,  # Girona
+    728: 71,  # Rayo Vallecano
+    540: 70,  # Espanyol
+    533: 69,  # Deportivo Alaves
+    798: 68,  # Mallorca
     
-    # Serie A - Itália
-    505: 91,  # Inter
+    # =============================================
+    # SERIE A - Itália
+    # =============================================
+    505: 91,  # Inter Milan
     487: 90,  # AC Milan
     492: 89,  # Napoli
     496: 88,  # Juventus
+    499: 87,  # Atalanta
     497: 86,  # AS Roma
     488: 84,  # Lazio
+    502: 79,  # Fiorentina
+    503: 75,  # Torino
+    500: 77,  # Bologna
+    491: 69,  # Genoa
+    494: 68,  # Udinese
+    490: 67,  # Cagliari
+    511: 67,  # Empoli
+    484: 68,  # Hellas Verona
     
-    # Bundesliga - Alemanha
+    # =============================================
+    # BUNDESLIGA - Alemanha
+    # =============================================
     157: 93,  # Bayern Munich
     165: 89,  # Borussia Dortmund
     173: 86,  # RB Leipzig
-    168: 83,  # Bayer Leverkusen
+    168: 85,  # Bayer Leverkusen
+    169: 80,  # Eintracht Frankfurt
+    172: 79,  # VfB Stuttgart
+    163: 77,  # Borussia Mönchengladbach
+    161: 76,  # Wolfsburg
+    162: 75,  # Werder Bremen
+    160: 74,  # SC Freiburg
+    164: 70,  # Mainz 05
+    182: 72,  # Union Berlin
+    170: 68,  # FC Augsburg
     
-    # Ligue 1 - França
-    85: 91,   # PSG
+    # =============================================
+    # LIGUE 1 - França
+    # =============================================
+    85: 91,   # Paris Saint-Germain
     81: 82,   # Marseille
     80: 80,   # Monaco
-    83: 78,   # Lyon
+    83: 79,   # Lyon
+    84: 76,   # Stade Rennais
+    91: 77,   # RC Lens
+    93: 75,   # OGC Nice
+    94: 72,   # Stade de Reims
     
-    # Brasileirão
+    # =============================================
+    # EREDIVISIE - Holanda
+    # =============================================
+    194: 87,  # Ajax
+    193: 84,  # Feyenoord
+    196: 83,  # PSV Eindhoven
+    197: 76,  # AZ Alkmaar
+    198: 73,  # FC Utrecht
+    
+    # =============================================
+    # PRIMEIRA LIGA - Portugal
+    # =============================================
+    211: 88,  # Benfica
+    212: 87,  # Porto
+    228: 86,  # Sporting CP
+    217: 77,  # Sporting Braga
+    222: 71,  # Vitória SC
+    
+    # =============================================
+    # BRASILEIRÃO SÉRIE A
+    # =============================================
     127: 85,  # Flamengo
-    131: 82,  # Palmeiras
+    131: 83,  # Palmeiras
     126: 80,  # São Paulo
     128: 78,  # Corinthians
-    118: 77,  # Atlético-MG
+    118: 77,  # Atlético-MG (Galo)
     124: 76,  # Internacional
     130: 75,  # Grêmio
     120: 74,  # Fluminense
+    119: 76,  # Botafogo
+    121: 72,  # Vasco da Gama
+    129: 73,  # Santos
+    123: 74,  # Cruzeiro
+    116: 71,  # Red Bull Bragantino
+    132: 70,  # Atlético Paranaense
+    117: 69,  # Fortaleza
+    113: 68,  # Bahia
+    114: 67,  # Goiás
+    115: 67,  # Juventude
     
-    # Times médios recebem score padrão: 70
+    # Times médios não listados recebem QS dinâmico via posição na tabela
 }
 
 # --- LAYER 1: LEAGUE WEIGHTING FACTOR (PHOENIX V2.0) ---

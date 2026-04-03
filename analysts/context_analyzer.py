@@ -3,6 +3,54 @@
 from config import QUALITY_SCORES, LEAGUE_WEIGHTING_FACTOR, MERCADOS_VETADOS_POR_SCRIPT
 
 
+def _calculate_dynamic_base_qs(classificacao, team_name, team_stats):
+    """
+    TASK 4 - PHOENIX V4.0: Calcula Base QS dinamicamente para times não catalogados.
+
+    Para times sem entrada em QUALITY_SCORES, usa posição na tabela para estimar
+    reputação dentro do intervalo [50, 80].
+
+    Fórmula: base_qs = 80 - ((rank-1) / (total-1)) * 30
+      - 1º lugar → 80
+      - Último lugar → 50
+
+    Se não há tabela disponível, usa saldo de gols como proxy.
+
+    Args:
+        classificacao: Tabela de classificação da liga
+        team_name: Nome do time
+        team_stats: Estatísticas gerais do time (para fallback por saldo de gols)
+
+    Returns:
+        int: Base QS estimado no intervalo [50, 80]
+    """
+    if classificacao and team_name:
+        for team_info in classificacao:
+            if team_info.get('team', {}).get('name') == team_name:
+                rank = team_info.get('rank', 0)
+                total_teams = len(classificacao)
+                if rank > 0 and total_teams > 1:
+                    dynamic_base = 80 - ((rank - 1) / (total_teams - 1)) * 30
+                    result = int(round(dynamic_base))
+                    print(f"    🔄 Base QS DINÂMICO ({team_name}): posição {rank}/{total_teams} → {result}")
+                    return result
+
+    # Fallback: saldo de gols quando não há tabela
+    goals = team_stats.get('goals', {}) if team_stats else {}
+    goals_for = goals.get('for', {}).get('total', {}).get('total', 0) or 0
+    goals_against = goals.get('against', {}).get('total', {}).get('total', 0) or 0
+    goal_diff = goals_for - goals_against
+
+    if goal_diff > 15:
+        return 74
+    elif goal_diff > 5:
+        return 70
+    elif goal_diff > -5:
+        return 65
+    else:
+        return 58
+
+
 def calculate_dynamic_qsc(team_stats, team_id, classificacao=None, team_name=None, league_id=None, rodada_atual=0):
     """
     LAYER 1 - PHOENIX V2.0: Calcula Quality Score Composto e Dinâmico (QSC).
@@ -16,6 +64,10 @@ def calculate_dynamic_qsc(team_stats, team_id, classificacao=None, team_name=Non
     NOVIDADES PHOENIX V2.0:
     - League Weighting Factor: Multiplica QSC final pelo peso da liga
     - Season Start Adjustment: Primeiras 5 rodadas usam blend 50/50 entre table-based e reputation
+
+    NOVIDADES PHOENIX V4.0:
+    - Dynamic Base QS: Times não catalogados recebem Base QS calculado pela posição na tabela
+      em vez de um valor fixo de 70, tornando o sistema adaptável a qualquer liga/time.
     
     Args:
         team_stats: Estatísticas gerais do time
@@ -28,11 +80,14 @@ def calculate_dynamic_qsc(team_stats, team_id, classificacao=None, team_name=Non
     Returns:
         int: QSC Dynamic (0-100)
     """
-    DEFAULT_BASE_QS = 70
     DEFAULT_LEAGUE_WEIGHT = 0.70
     
     # 1. BASE QS (REPUTATION) - 25% peso
-    base_qs = QUALITY_SCORES.get(team_id, DEFAULT_BASE_QS)
+    # PHOENIX V4.0: Times não catalogados → base_qs dinâmico por posição na tabela
+    if team_id in QUALITY_SCORES:
+        base_qs = QUALITY_SCORES[team_id]
+    else:
+        base_qs = _calculate_dynamic_base_qs(classificacao, team_name, team_stats)
     
     # 2. POSITION QS (TABLE) - 30% peso
     position_qs = 50  # Neutro

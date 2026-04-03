@@ -1068,6 +1068,59 @@ async def buscar_jogo_de_ida_knockout(home_team_id: int, away_team_id: int, leag
         print(f"  ❌ ERRO buscando jogo de ida: {e}")
         return None
 
+async def buscar_lesoes_jogo(fixture_id: int):
+    """
+    Busca jogadores lesionados e suspensos para um fixture específico.
+
+    Usa o endpoint /injuries da API-Football (disponível apenas em planos pagos).
+    Em caso de erro ou endpoint indisponível, retorna lista vazia sem crashar.
+
+    Args:
+        fixture_id: ID do jogo na API-Football
+
+    Returns:
+        list: Lista de dicts com {name, type, reason, team_id}
+    """
+    cache_key = f"lesoes_{fixture_id}"
+    if cached_data := cache_manager.get(cache_key):
+        return cached_data
+
+    params = {"fixture": str(fixture_id)}
+    result = []
+    try:
+        await asyncio.sleep(1.6)
+        response = await api_request_with_retry("GET", API_URL + "injuries", params=params)
+
+        if response.status_code == 403:
+            print(f"  ⚠️ LESÕES: Endpoint /injuries requer plano pago (403 Forbidden)")
+            cache_manager.set(cache_key, result, expiration_minutes=120)
+            return result
+
+        response.raise_for_status()
+        data = response.json().get('response', [])
+
+        for entry in data:
+            team_id = entry.get('team', {}).get('id')
+            player_name = entry.get('player', {}).get('name', '')
+            injury_type = entry.get('type', '')  # "injured" ou "suspended"
+            reason = entry.get('reason', '')
+            if team_id and player_name:
+                result.append({
+                    'name': player_name,
+                    'type': injury_type,
+                    'reason': reason,
+                    'team_id': team_id
+                })
+
+        print(f"  🏥 LESÕES: {len(result)} ausências encontradas para fixture {fixture_id}")
+        cache_manager.set(cache_key, result, expiration_minutes=120)
+
+    except Exception as e:
+        print(f"  ⚠️ LESÕES: Não foi possível buscar ausências para fixture {fixture_id}: {e}")
+
+    return result
+
+
 async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
     """
     Busca histórico de confrontos diretos (H2H) entre dois times.
