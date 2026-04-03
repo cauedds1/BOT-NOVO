@@ -200,70 +200,119 @@ def apply_tactical_script_modifier(
     tactical_script: Optional[str] = None
 ) -> float:
     """
-    STEP 3a: Aplica modificador baseado em coerência com Roteiro Tático.
-    
+    STEP 3a: Único ponto de aplicação do modificador tático — cobre TODOS os mercados.
+
+    Consolida gols, cantos e cartões para eliminar double-counting: os analisadores
+    individuais passam probabilidades puras, sem pré-modificação por script.
+
     Args:
         base_confidence: Confiança base (já calculada)
-        bet_type: Tipo da aposta (ex: "Over 2.5", "BTTS Sim")
+        bet_type: Tipo da aposta (ex: "Over 2.5", "Over 9.5 Cantos", "Over 4.5 Cartões")
         tactical_script: Script tático do jogo
-    
+
     Returns:
-        float: Modificador (-2.0 a +1.5)
+        float: Modificador de confiança (negativo = penalidade, positivo = bônus)
     """
     if not tactical_script:
         return 0.0
-    
-    # PHOENIX V3.0: SKEPTICAL CONTEXTUALIZATION
-    # O contexto tático deve ter POWERFUL IMPACT na confiança
-    # Coherence Bonus aumentado para garantir que o script DOMINA sobre stats brutas
-    
-    coherence_map = {
-        "Over 2.5": {
-            "coherent": ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE", 
-                        "SCRIPT_TIME_EM_CHAMAS_CASA", "SCRIPT_TIME_EM_CHAMAS_FORA"],
-            "bonus": 1.5  # Aumentado de 1.0 para garantir impacto forte
-        },
-        "Under 2.5": {
-            "coherent": ["SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_RELEGATION_BATTLE", "SCRIPT_JOGO_DE_COMPADRES",
-                        "SCRIPT_TIGHT_LOW_SCORING", "SCRIPT_BALANCED_TACTICAL_BATTLE"],
-            "bonus": 1.5  # Aumentado de 1.0
-        },
-        "Over 1.5": {
-            "coherent": ["SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_TIME_EM_CHAMAS_CASA", "SCRIPT_TIME_EM_CHAMAS_FORA"],
-            "bonus": 1.2  # Aumentado de 0.8
-        },
-        "BTTS Sim": {
-            "coherent": ["SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_OPEN_HIGH_SCORING_GAME"],
-            "bonus": 1.5  # Aumentado de 1.0
-        },
-        "BTTS Não": {
-            "coherent": ["SCRIPT_GIANT_VS_MINNOW", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE"],
-            "bonus": 1.5  # Aumentado de 1.0
-        }
+
+    bet_lower = bet_type.lower()
+    script = tactical_script
+
+    OFFENSIVE_SCRIPTS = {
+        "SCRIPT_OPEN_HIGH_SCORING_GAME", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE",
+        "SCRIPT_TIME_EM_CHAMAS_CASA", "SCRIPT_TIME_EM_CHAMAS_FORA", "SCRIPT_GIANT_VS_MINNOW"
     }
-    
-    # Encontrar mapeamento
-    bet_key = None
-    for key in coherence_map.keys():
-        if key.lower() in bet_type.lower():
-            bet_key = key
-            break
-    
-    if not bet_key:
+    DEFENSIVE_SCRIPTS = {
+        "SCRIPT_CAGEY_TACTICAL_AFFAIR", "SCRIPT_RELEGATION_BATTLE", "SCRIPT_JOGO_DE_COMPADRES",
+        "SCRIPT_TIGHT_LOW_SCORING", "SCRIPT_BALANCED_TACTICAL_BATTLE"
+    }
+    HIGH_INTENSITY_SCRIPTS = {
+        "SCRIPT_RELEGATION_BATTLE", "SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_MATA_MATA_VOLTA",
+        "SCRIPT_TIME_EM_CHAMAS_CASA", "SCRIPT_TIME_EM_CHAMAS_FORA"
+    }
+    LOW_INTENSITY_SCRIPTS = {
+        "SCRIPT_JOGO_DE_COMPADRES", "SCRIPT_GIANT_VS_MINNOW", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE"
+    }
+
+    # ========== MERCADOS DE CANTOS ==========
+    if "canto" in bet_lower:
+        if "over" in bet_lower:
+            if script in OFFENSIVE_SCRIPTS:
+                if ("casa" in bet_lower and script in {"SCRIPT_DOMINIO_CASA", "SCRIPT_TIME_EM_CHAMAS_CASA"}):
+                    return 1.5
+                if ("fora" in bet_lower and script in {"SCRIPT_DOMINIO_VISITANTE", "SCRIPT_TIME_EM_CHAMAS_FORA"}):
+                    return 1.5
+                return 1.2
+            if script in DEFENSIVE_SCRIPTS:
+                return -1.5
+        elif "under" in bet_lower:
+            if script in DEFENSIVE_SCRIPTS:
+                if ("casa" in bet_lower and script in {"SCRIPT_DOMINIO_CASA", "SCRIPT_TIME_EM_CHAMAS_CASA"}):
+                    return -1.5
+                if ("fora" in bet_lower and script in {"SCRIPT_DOMINIO_VISITANTE", "SCRIPT_TIME_EM_CHAMAS_FORA"}):
+                    return -1.5
+                return 1.2
+            if script in OFFENSIVE_SCRIPTS:
+                return -1.5
         return 0.0
-    
-    # Verificar coerência PERFEITA
-    if tactical_script in coherence_map[bet_key]["coherent"]:
-        return coherence_map[bet_key]["bonus"]
-    
-    # PHOENIX V3.0: PENALIDADE SEVERA para incoerência
-    # "Each Game is a Game" - contexto sobrepõe probabilidade
-    # Aumentado de -1.5 para -2.5 para garantir impacto FORTE
-    if "over" in bet_type.lower() and ("CAGEY" in tactical_script or "LOW_SCORING" in tactical_script or "JOGO_DE_COMPADRES" in tactical_script):
-        return -2.5  # SEVERE penalty - stat pode dizer Over mas contexto diz Under
-    if "under" in bet_type.lower() and ("OPEN_HIGH_SCORING" in tactical_script or "TIME_EM_CHAMAS" in tactical_script):
-        return -2.5  # SEVERE penalty - stat pode dizer Under mas contexto diz Over
-    
+
+    # ========== MERCADOS DE CARTÕES ==========
+    if "cartõ" in bet_lower or "cartao" in bet_lower or "card" in bet_lower:
+        if "over" in bet_lower:
+            if script in HIGH_INTENSITY_SCRIPTS:
+                return 1.0
+            if script in LOW_INTENSITY_SCRIPTS:
+                return -1.0
+        elif "under" in bet_lower:
+            if script in LOW_INTENSITY_SCRIPTS:
+                return 1.0
+            if script in HIGH_INTENSITY_SCRIPTS:
+                return -1.0
+        return 0.0
+
+    # ========== MERCADOS DE GOLS ==========
+
+    # BTTS
+    if "btts" in bet_lower:
+        if "sim" in bet_lower or "yes" in bet_lower:
+            if script in {"SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_OPEN_HIGH_SCORING_GAME"}:
+                return 1.5
+            if script in {"SCRIPT_GIANT_VS_MINNOW", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE"}:
+                return -2.5
+        else:
+            if script in {"SCRIPT_GIANT_VS_MINNOW", "SCRIPT_DOMINIO_CASA", "SCRIPT_DOMINIO_VISITANTE"}:
+                return 1.5
+            if script in {"SCRIPT_BALANCED_RIVALRY_CLASH", "SCRIPT_OPEN_HIGH_SCORING_GAME"}:
+                return -2.5
+        return 0.0
+
+    # Over goals (todos os sub-mercados: FT, HT, casa, fora)
+    if "over" in bet_lower:
+        if script in OFFENSIVE_SCRIPTS:
+            if "2.5" in bet_lower:
+                return 1.5
+            if "1.5" in bet_lower:
+                return 1.2
+            return 1.0
+        if script in DEFENSIVE_SCRIPTS:
+            if "CAGEY" in script or "LOW_SCORING" in script or "JOGO_DE_COMPADRES" in script:
+                return -2.5
+            return -1.5
+        return 0.0
+
+    # Under goals (todos os sub-mercados)
+    if "under" in bet_lower:
+        if script in DEFENSIVE_SCRIPTS:
+            if "2.5" in bet_lower:
+                return 1.5
+            return 1.2
+        if script in OFFENSIVE_SCRIPTS:
+            if "OPEN_HIGH_SCORING" in script or "TIME_EM_CHAMAS" in script:
+                return -2.5
+            return -1.5
+        return 0.0
+
     return 0.0
 
 
