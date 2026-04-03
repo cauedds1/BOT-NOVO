@@ -72,16 +72,8 @@ def format_evidence_based_dossier(
                 away_team_name
             )
     else:
-        # Fallback: se só há DC, usar como principal
-        if palpites_dc:
-            palpite_principal = palpites_dc[0]
-            msg += _format_analise_principal_evidence_based(
-                palpite_principal,
-                evidencias_home,
-                evidencias_away,
-                home_team_name,
-                away_team_name
-            )
+        # Sem palpites de outros mercados — a seção dedicada de DC abaixo já cobre tudo
+        pass
 
     # === SECTION 4: DUPLA CHANCE (seção dedicada - sempre visível quando há picks) ===
     if palpites_dc:
