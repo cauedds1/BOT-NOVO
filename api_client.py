@@ -670,8 +670,11 @@ async def buscar_jogos_do_dia():
 
     print(f"⚡ CACHE MISS: Buscando jogos da API ({len(LIGAS_DE_INTERESSE)} ligas)")
     todos_os_jogos = []
+    plano_bloqueado = False
 
     for data_busca in datas_buscar:
+        if plano_bloqueado:
+            break
         print(f"\n📅 Buscando data: {data_busca} (Season: {season})")
         
         for idx, liga_id in enumerate(LIGAS_DE_INTERESSE, 1):
@@ -687,6 +690,13 @@ async def buscar_jogos_do_dia():
                 response.raise_for_status()
 
                 if data := response.json():
+                    # ⚡ Bail-out rápido: plano gratuito não tem acesso
+                    erros = data.get('errors', {})
+                    if erros.get('plan') or erros.get('season'):
+                        print(f"⛔ [PLANO BLOQUEADO] Erro de plano detectado na primeira liga: {erros}")
+                        print(f"   → Pulando todas as {len(LIGAS_DE_INTERESSE)} ligas — modo DEMO será ativado")
+                        plano_bloqueado = True
+                        break
                     if data['results'] > 0:
                         jogos_novos = len(data['response'])
                         todos_os_jogos.extend(data['response'])
@@ -699,7 +709,7 @@ async def buscar_jogos_do_dia():
                 continue
 
     # 🔄 FALLBACK: Se não encontrou jogos hoje E não estamos após 20:30, tentar AMANHÃ
-    if len(todos_os_jogos) == 0 and horario_decimal < 20.5:
+    if len(todos_os_jogos) == 0 and horario_decimal < 20.5 and not plano_bloqueado:
         print(f"\n🔄 FALLBACK: Nenhum jogo encontrado para HOJE, buscando AMANHÃ ({amanha_brt})...")
         
         for idx, liga_id in enumerate(LIGAS_DE_INTERESSE, 1):
@@ -721,7 +731,8 @@ async def buscar_jogos_do_dia():
             print(f"✅ FALLBACK bem-sucedido: {len(todos_os_jogos)} jogos encontrados para AMANHÃ")
 
     print(f"\n✅ Busca completa: {len(todos_os_jogos)} jogos encontrados")
-    cache_manager.set(cache_key, todos_os_jogos)  # Usa padrão de 240 min (4h)
+    if not plano_bloqueado:
+        cache_manager.set(cache_key, todos_os_jogos)  # Usa padrão de 240 min (4h)
     return todos_os_jogos
 
 async def buscar_classificacao_liga(id_liga: int):

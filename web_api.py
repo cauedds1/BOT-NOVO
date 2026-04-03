@@ -339,6 +339,118 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
 # ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────
 
+def _logo_time(team_id: int) -> str:
+    return f"https://media.api-sports.io/football/teams/{team_id}.png"
+
+def _logo_liga(league_id: int) -> str:
+    return f"https://media.api-sports.io/football/leagues/{league_id}.png"
+
+def _demo_jogo(fid, liga_id, liga_nome, liga_pais, liga_bandeira,
+               home_id, home_nome, away_id, away_nome, horario) -> dict:
+    peso = LEAGUE_WEIGHTING_FACTOR.get(liga_id, 0.60)
+    score = _calcular_score_destaque(liga_id, home_id, away_id)
+    return {
+        "fixture_id": fid,
+        "status": "NS",
+        "horario_brt": horario,
+        "data_iso": f"2026-04-03T{horario}:00-03:00",
+        "liga": {
+            "id": liga_id,
+            "nome": liga_nome,
+            "pais": liga_pais,
+            "logo": _logo_liga(liga_id),
+            "bandeira": liga_bandeira,
+        },
+        "time_casa": {"id": home_id, "nome": home_nome, "logo": _logo_time(home_id)},
+        "time_fora": {"id": away_id, "nome": away_nome, "logo": _logo_time(away_id)},
+        "tem_analise": False,
+        "score_destaque": score,
+        "liga_peso": peso,
+    }
+
+def _get_demo_jogos() -> list:
+    """Dados de demonstração com times e ligas reais para testar a interface."""
+    flag = lambda c: f"https://media.api-sports.io/flags/{c}.svg"
+    jogos = [
+        # ── UEFA Champions League ────────────────────────────────
+        _demo_jogo(90001, 2, "🏆 UEFA Champions League", "Internacional", "",
+                   541, "Real Madrid", 42, "Arsenal", "16:00"),
+        _demo_jogo(90002, 2, "🏆 UEFA Champions League", "Internacional", "",
+                   157, "Bayern Munich", 505, "Inter Milan", "16:00"),
+        _demo_jogo(90003, 2, "🏆 UEFA Champions League", "Internacional", "",
+                   529, "Barcelona", 165, "Borussia Dortmund", "19:00"),
+        _demo_jogo(90004, 2, "🏆 UEFA Champions League", "Internacional", "",
+                   85,  "Paris Saint-Germain", 496, "Juventus", "19:00"),
+
+        # ── Premier League ───────────────────────────────────────
+        _demo_jogo(90010, 39, "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Inglaterra", flag("gb"),
+                   33, "Manchester City", 40, "Liverpool", "13:30"),
+        _demo_jogo(90011, 39, "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Inglaterra", flag("gb"),
+                   42, "Arsenal", 35, "Chelsea", "16:00"),
+        _demo_jogo(90012, 39, "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Inglaterra", flag("gb"),
+                   50, "Manchester United", 49, "Tottenham Hotspur", "16:00"),
+        _demo_jogo(90013, 39, "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", "Inglaterra", flag("gb"),
+                   66, "Aston Villa", 51, "Brighton & Hove Albion", "16:00"),
+
+        # ── La Liga ──────────────────────────────────────────────
+        _demo_jogo(90020, 140, "🇪🇸 La Liga", "Espanha", flag("es"),
+                   530, "Atletico Madrid", 536, "Sevilla", "17:00"),
+        _demo_jogo(90021, 140, "🇪🇸 La Liga", "Espanha", flag("es"),
+                   531, "Athletic Bilbao", 548, "Real Sociedad", "20:00"),
+
+        # ── Serie A ──────────────────────────────────────────────
+        _demo_jogo(90030, 135, "🇮🇹 Serie A", "Itália", flag("it"),
+                   505, "Inter Milan", 496, "Juventus", "17:00"),
+        _demo_jogo(90031, 135, "🇮🇹 Serie A", "Itália", flag("it"),
+                   487, "AC Milan", 492, "Napoli", "20:45"),
+        _demo_jogo(90032, 135, "🇮🇹 Serie A", "Itália", flag("it"),
+                   497, "AS Roma", 499, "Atalanta", "14:30"),
+
+        # ── Bundesliga ───────────────────────────────────────────
+        _demo_jogo(90040, 78, "🇩🇪 Bundesliga", "Alemanha", flag("de"),
+                   157, "Bayern Munich", 165, "Borussia Dortmund", "16:30"),
+        _demo_jogo(90041, 78, "🇩🇪 Bundesliga", "Alemanha", flag("de"),
+                   168, "Bayer Leverkusen", 173, "RB Leipzig", "14:30"),
+
+        # ── Ligue 1 ──────────────────────────────────────────────
+        _demo_jogo(90050, 61, "🇫🇷 Ligue 1", "França", flag("fr"),
+                   85, "Paris Saint-Germain", 81, "Olympique Marseille", "17:00"),
+        _demo_jogo(90051, 61, "🇫🇷 Ligue 1", "França", flag("fr"),
+                   80, "AS Monaco", 83, "Olympique Lyonnais", "14:00"),
+
+        # ── Brasileirão ──────────────────────────────────────────
+        _demo_jogo(90060, 71, "🇧🇷 Brasileirão Série A", "Brasil", flag("br"),
+                   127, "Flamengo", 131, "Palmeiras", "19:00"),
+        _demo_jogo(90061, 71, "🇧🇷 Brasileirão Série A", "Brasil", flag("br"),
+                   126, "São Paulo", 128, "Corinthians", "21:30"),
+        _demo_jogo(90062, 71, "🇧🇷 Brasileirão Série A", "Brasil", flag("br"),
+                   118, "Atlético-MG", 124, "Internacional", "19:00"),
+        _demo_jogo(90063, 71, "🇧🇷 Brasileirão Série A", "Brasil", flag("br"),
+                   130, "Grêmio", 120, "Fluminense", "21:30"),
+
+        # ── Primeira Liga ────────────────────────────────────────
+        _demo_jogo(90070, 94, "🇵🇹 Primeira Liga", "Portugal", flag("pt"),
+                   211, "Benfica", 212, "Porto", "18:00"),
+        _demo_jogo(90071, 94, "🇵🇹 Primeira Liga", "Portugal", flag("pt"),
+                   228, "Sporting CP", 217, "Sporting Braga", "20:30"),
+
+        # ── Eredivisie ───────────────────────────────────────────
+        _demo_jogo(90080, 88, "🇳🇱 Eredivisie", "Holanda", flag("nl"),
+                   194, "Ajax", 196, "PSV Eindhoven", "16:45"),
+        _demo_jogo(90081, 88, "🇳🇱 Eredivisie", "Holanda", flag("nl"),
+                   193, "Feyenoord", 197, "AZ Alkmaar", "14:30"),
+
+        # ── Copa Libertadores ────────────────────────────────────
+        _demo_jogo(90090, 13, "🏆 Copa Libertadores", "Internacional", "",
+                   127, "Flamengo", 131, "Palmeiras", "21:30"),
+
+        # ── Liga Profesional Argentina ───────────────────────────
+        _demo_jogo(90100, 128, "🇦🇷 Liga Profesional", "Argentina", flag("ar"),
+                   1005, "Boca Juniors", 1006, "River Plate", "21:00"),
+    ]
+    return sorted(jogos, key=lambda x: x["horario_brt"])
+
+
 @app.get("/api/jogos/hoje")
 async def jogos_hoje():
     """
@@ -349,19 +461,23 @@ async def jogos_hoje():
     from api_client import ORDEM_PAISES
 
     jogos_raw = await buscar_jogos_do_dia()
-    if not jogos_raw:
-        return {"total": 0, "principais": [], "por_pais": []}
+    resultado_raw: list
+    is_demo = False
 
-    resultado = []
-    for jogo in jogos_raw:
-        fid = jogo.get("fixture", {}).get("id")
-        tem_analise = False
-        if fid:
-            cached = db.buscar_analise(fid, max_idade_horas=24)
-            tem_analise = cached is not None
-        resultado.append(_formatar_jogo(jogo, tem_analise=tem_analise))
-
-    resultado.sort(key=lambda x: x.get("data_iso", ""))
+    if jogos_raw:
+        resultado_raw_list = []
+        for jogo in jogos_raw:
+            fid = jogo.get("fixture", {}).get("id")
+            tem_analise = False
+            if fid:
+                cached = db.buscar_analise(fid, max_idade_horas=24)
+                tem_analise = cached is not None
+            resultado_raw_list.append(_formatar_jogo(jogo, tem_analise=tem_analise))
+        resultado = sorted(resultado_raw_list, key=lambda x: x.get("data_iso", ""))
+    else:
+        resultado = _get_demo_jogos()
+        is_demo = True
+        print("⚠️ [DEMO] API retornou 0 jogos — usando dados de demonstração")
 
     # ── Principais: top 8 por score_destaque ────────────────────────────
     principais = sorted(resultado, key=lambda x: x.get("score_destaque", 0), reverse=True)[:8]
@@ -412,6 +528,7 @@ async def jogos_hoje():
         "total": len(resultado),
         "principais": principais,
         "por_pais": por_pais,
+        "is_demo": is_demo,
     }
 
 

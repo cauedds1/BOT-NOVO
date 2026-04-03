@@ -408,9 +408,28 @@ export default function Home() {
   const porPais = data?.por_pais || []
   const total = data?.total || 0
   const totalPaises = porPais.length
+  const isDemo = data?.is_demo || false
 
   return (
     <div style={{ paddingTop: 24 }}>
+      {isDemo && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.35)',
+          borderRadius: 10, padding: '10px 16px', marginBottom: 20,
+        }}>
+          <span style={{ fontSize: 18 }}>🧪</span>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#fbbf24', margin: 0 }}>
+              Modo Demonstração
+            </p>
+            <p style={{ fontSize: 12, color: '#92400e', margin: 0, marginTop: 2 }}>
+              A API não retornou jogos reais (plano gratuito bloqueado para a temporada atual).
+              Os dados abaixo são ficticios para demonstrar a interface.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between" style={{ marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
