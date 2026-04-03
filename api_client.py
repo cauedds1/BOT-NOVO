@@ -1101,9 +1101,14 @@ async def buscar_lesoes_jogo(fixture_id: int):
 
         for entry in data:
             team_id = entry.get('team', {}).get('id')
-            player_name = entry.get('player', {}).get('name', '')
-            injury_type = entry.get('type', '')  # "injured" ou "suspended"
-            reason = entry.get('reason', '')
+            player_obj = entry.get('player', {})
+            player_name = player_obj.get('name', '')
+            # API-Football v3: 'type' is at the root level.
+            # Accepted values: "Missing Fixture", "Questionable", "Suspended"
+            # Fallback to player.type for forward-compatibility with API changes.
+            injury_type = (entry.get('type') or
+                           player_obj.get('type') or '')
+            reason = entry.get('reason', '') or ''
             if team_id and player_name:
                 result.append({
                     'name': player_name,

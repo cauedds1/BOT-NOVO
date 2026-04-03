@@ -68,14 +68,61 @@ def _calculate_moment_score(team_stats):
     return moment
 
 
+# Razões que indicam lesão grave → ausência quase certa de titular
+_SERIOUS_INJURY_KEYWORDS = frozenset({
+    'acl', 'knee', 'hamstring', 'ligament', 'muscle', 'fracture',
+    'broken', 'torn', 'surgery', 'rupture', 'thigh', 'ankle', 'calf',
+    'groin', 'shoulder', 'tendon', 'meniscus', 'foot', 'quadricep'
+})
+
+
+def _injury_weight(injury):
+    """
+    TASK 4 - PHOENIX V4.0: Peso de impacto de uma ausência individual.
+
+    Classifica cada ausência com base no TIPO (garantido vs questionável) e
+    na RAZÃO (lesão grave vs leve), funcionando como proxy de importância do
+    jogador quando ratings não estão disponíveis no endpoint /injuries.
+
+    Pesos:
+      2.0 — Suspenso OU "Missing Fixture" (ausência confirmada, geralmente titular)
+      1.0 — Lesão grave (ACL, hamstring, cirurgia, fratura, etc.) — provável titular
+      0.5 — "Questionable" / lesão leve / razão desconhecida (pode jogar)
+
+    Args:
+        injury: Dict com {name, type, reason, team_id}
+
+    Returns:
+        float: Peso do impacto desta ausência (0.5, 1.0 ou 2.0)
+    """
+    injury_type = (injury.get('type') or '').lower()
+    reason = (injury.get('reason') or '').lower()
+
+    # Confirmados ausentes = maior peso (suspensão ou confirmação explícita)
+    if 'suspend' in injury_type or 'missing' in injury_type:
+        return 2.0
+
+    # Lesão grave com palavra-chave reconhecida = titular provavelmente fora
+    if any(kw in reason for kw in _SERIOUS_INJURY_KEYWORDS):
+        return 1.0
+
+    # Questionável ou razão desconhecida = baixo impacto (pode recuperar)
+    return 0.5
+
+
 def _calculate_injury_impact(injuries):
     """
-    TASK 4 - PHOENIX V4.0: Calcula penalidade no Momento baseada em ausências.
+    TASK 4 - PHOENIX V4.0: Calcula penalidade no Momento baseada em ausências ponderadas.
 
-    Classifica o impacto de jogadores ausentes (lesionados e suspensos) no
-    Momento Score do time. Quanto mais ausências, maior a penalidade.
+    Usa _injury_weight() para distinguir ausências críticas (suspensos, lesões graves)
+    de ausências menores (questionáveis, lesões leves), evitando penalizar o Momento
+    de forma igual para jogadores chave e atletas de backup.
 
-    Suspensos têm peso 1.5× vs lesionados (ausência garantida vs questionável).
+    Escala de penalidade por peso efetivo total:
+      < 1.0  → -0 pts  (impacto negligível)
+      ≥ 1.0  → -5 pts
+      ≥ 2.5  → -10 pts
+      ≥ 5.0  → -15 pts
 
     Args:
         injuries: Lista de dicts com jogadores ausentes [{name, type, reason, team_id}]
@@ -85,25 +132,29 @@ def _calculate_injury_impact(injuries):
     """
     if not injuries:
         return 0
-    count = len(injuries)
-    suspended = sum(1 for p in injuries if p.get('type', '').lower() == 'suspended')
-    # Peso efetivo: suspenso conta como 1.5, lesionado como 1.0
-    effective_count = (count - suspended) * 1.0 + suspended * 1.5
-    if effective_count >= 4:
-        penalty = 15
-    elif effective_count >= 2:
-        penalty = 10
-    else:
-        penalty = 5
-    return penalty
+    effective_weight = sum(_injury_weight(p) for p in injuries)
+    if effective_weight >= 5.0:
+        return 15
+    elif effective_weight >= 2.5:
+        return 10
+    elif effective_weight >= 1.0:
+        return 5
+    return 0
 
 
 def _get_injury_severity_label(injuries):
     """
-    TASK 4 - PHOENIX V4.0: Mapeia lista de ausências para rótulo de severidade.
+    TASK 4 - PHOENIX V4.0: Mapeia ausências ponderadas para rótulo de severidade.
 
-    Severidade é usada pelo confidence_calculator para aplicar penalidade de
-    confiança quando o elenco disponível diverge do usado nas médias históricas.
+    Usa _injury_weight() para classificar apenas ausências de impacto real
+    (suspensos, lesões graves) — "questionáveis" têm peso reduzido e raramente
+    atingem os limiares superiores sozinhos.
+
+    Limiar por peso efetivo total:
+      < 1.0  → "none"
+      ≥ 1.0  → "minor"
+      ≥ 2.5  → "moderate"
+      ≥ 5.0  → "severe"
 
     Args:
         injuries: Lista de dicts com jogadores ausentes [{name, type, reason, team_id}]
@@ -113,14 +164,14 @@ def _get_injury_severity_label(injuries):
     """
     if not injuries:
         return "none"
-    count = len(injuries)
-    suspended = sum(1 for p in injuries if p.get('type', '').lower() == 'suspended')
-    effective_count = (count - suspended) * 1.0 + suspended * 1.5
-    if effective_count >= 4:
+    effective_weight = sum(_injury_weight(p) for p in injuries)
+    if effective_weight >= 5.0:
         return "severe"
-    elif effective_count >= 2:
+    elif effective_weight >= 2.5:
         return "moderate"
-    return "minor"
+    elif effective_weight >= 1.0:
+        return "minor"
+    return "none"
 
 
 def _calculate_power_score(team_stats):

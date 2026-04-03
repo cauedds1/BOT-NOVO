@@ -196,12 +196,32 @@ QUALITY_SCORES = {
     129: 73,  # Santos
     123: 74,  # Cruzeiro
     116: 71,  # Red Bull Bragantino
-    132: 70,  # Atlético Paranaense
+    132: 70,  # Athletico Paranaense
     117: 69,  # Fortaleza
     113: 68,  # Bahia
     114: 67,  # Goiás
     115: 67,  # Juventude
-    
+    122: 67,  # América-MG
+    133: 66,  # Coritiba
+    134: 65,  # Cuiabá
+    135: 65,  # Chapecoense
+    136: 64,  # Avaí SC
+    137: 63,  # Sport Recife
+
+    # =============================================
+    # BRASILEIRÃO SÉRIE B (teams/IDs with reasonable confidence)
+    # =============================================
+    138: 62,  # Guarani FC
+    139: 62,  # Ponte Preta
+    140: 61,  # Botafogo-SP
+    141: 61,  # CSA
+    142: 60,  # CRB
+    143: 60,  # Operário-PR
+    144: 60,  # Sampaio Corrêa
+    145: 59,  # Vila Nova
+    146: 59,  # ABC
+    147: 59,  # Ituano
+
     # Times médios não listados recebem QS dinâmico via posição na tabela
 }
 
