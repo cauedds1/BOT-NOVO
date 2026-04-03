@@ -39,6 +39,7 @@ from analysts.gabt_analyzer import analisar_mercado_gabt
 from analysts.correct_score_analyzer import analisar_mercado_placar_exato
 from analysts.european_handicap_analyzer import analisar_mercado_handicap_europeu
 from analysts.first_goal_analyzer import analisar_mercado_primeiro_a_marcar
+from config import LEAGUE_WEIGHTING_FACTOR, QUALITY_SCORES
 
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -98,6 +99,21 @@ async def shutdown_event():
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────
 
+def _calcular_score_destaque(liga_id: int, time_casa_id: int, time_fora_id: int) -> float:
+    """
+    Calcula um score de destaque (0–100) combinando:
+    - Peso da liga (LEAGUE_WEIGHTING_FACTOR)
+    - Qualidade média dos dois times (QUALITY_SCORES)
+    Score = liga_peso * (qs_casa + qs_fora) / 2
+    Liga 1.0 com dois times de 90 → score 90.0
+    Liga 0.60 com dois times de 65 → score 39.0
+    """
+    liga_peso = LEAGUE_WEIGHTING_FACTOR.get(liga_id, 0.60)
+    qs_casa = QUALITY_SCORES.get(time_casa_id, 65)
+    qs_fora = QUALITY_SCORES.get(time_fora_id, 65)
+    return round(liga_peso * (qs_casa + qs_fora) / 2, 1)
+
+
 def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
     """Serializa um fixture da API-Football para o formato do frontend."""
     liga_id = jogo.get("league", {}).get("id")
@@ -115,6 +131,11 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
         except Exception:
             horario_brt = ""
 
+    time_casa_id = jogo.get("teams", {}).get("home", {}).get("id")
+    time_fora_id = jogo.get("teams", {}).get("away", {}).get("id")
+    liga_peso = LEAGUE_WEIGHTING_FACTOR.get(liga_id, 0.60)
+    score_destaque = _calcular_score_destaque(liga_id, time_casa_id, time_fora_id)
+
     return {
         "fixture_id": jogo.get("fixture", {}).get("id"),
         "status": jogo.get("fixture", {}).get("status", {}).get("short", "NS"),
@@ -128,16 +149,18 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
             "bandeira": jogo.get("league", {}).get("flag", ""),
         },
         "time_casa": {
-            "id": jogo.get("teams", {}).get("home", {}).get("id"),
+            "id": time_casa_id,
             "nome": jogo.get("teams", {}).get("home", {}).get("name", ""),
             "logo": jogo.get("teams", {}).get("home", {}).get("logo", ""),
         },
         "time_fora": {
-            "id": jogo.get("teams", {}).get("away", {}).get("id"),
+            "id": time_fora_id,
             "nome": jogo.get("teams", {}).get("away", {}).get("name", ""),
             "logo": jogo.get("teams", {}).get("away", {}).get("logo", ""),
         },
         "tem_analise": tem_analise,
+        "score_destaque": score_destaque,
+        "liga_peso": liga_peso,
     }
 
 
@@ -318,10 +341,16 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
 
 @app.get("/api/jogos/hoje")
 async def jogos_hoje():
-    """Retorna todos os jogos do dia com flag de análise disponível."""
+    """
+    Retorna os jogos do dia organizados em duas estruturas:
+    - principais: top 8 jogos por score_destaque (liga × qualidade dos times)
+    - por_pais: todos os jogos agrupados País → Liga → Partidas
+    """
+    from api_client import ORDEM_PAISES
+
     jogos_raw = await buscar_jogos_do_dia()
     if not jogos_raw:
-        return {"jogos": [], "total": 0}
+        return {"total": 0, "principais": [], "por_pais": []}
 
     resultado = []
     for jogo in jogos_raw:
@@ -334,20 +363,55 @@ async def jogos_hoje():
 
     resultado.sort(key=lambda x: x.get("data_iso", ""))
 
-    # Agrupar por liga
-    ligas: dict = {}
+    # ── Principais: top 8 por score_destaque ────────────────────────────
+    principais = sorted(resultado, key=lambda x: x.get("score_destaque", 0), reverse=True)[:8]
+
+    # ── Por País: País → Liga → Partidas ─────────────────────────────────
+    paises_map: dict = {}
     for item in resultado:
+        pais = item["liga"]["pais"] or "Outros"
         liga_id = item["liga"]["id"]
-        if liga_id not in ligas:
-            ligas[liga_id] = {
+
+        if pais not in paises_map:
+            paises_map[pais] = {"ligas": {}, "peso_max": 0.0}
+
+        liga_peso = item.get("liga_peso", 0.60)
+        if liga_peso > paises_map[pais]["peso_max"]:
+            paises_map[pais]["peso_max"] = liga_peso
+
+        if liga_id not in paises_map[pais]["ligas"]:
+            paises_map[pais]["ligas"][liga_id] = {
                 "liga": item["liga"],
+                "liga_peso": liga_peso,
                 "jogos": [],
             }
-        ligas[liga_id]["jogos"].append(item)
+        paises_map[pais]["ligas"][liga_id]["jogos"].append(item)
+
+    def _ordem_pais(pais_nome: str) -> tuple:
+        ordem = ORDEM_PAISES.get(pais_nome, 999)
+        peso_max = paises_map[pais_nome]["peso_max"]
+        return (ordem, -peso_max)
+
+    por_pais = []
+    for pais_nome in sorted(paises_map.keys(), key=_ordem_pais):
+        info = paises_map[pais_nome]
+        ligas_ordenadas = sorted(
+            info["ligas"].values(),
+            key=lambda l: -l["liga_peso"],
+        )
+        por_pais.append({
+            "pais": pais_nome,
+            "peso_max": info["peso_max"],
+            "ligas": [
+                {"liga": l["liga"], "jogos": l["jogos"]}
+                for l in ligas_ordenadas
+            ],
+        })
 
     return {
         "total": len(resultado),
-        "ligas": list(ligas.values()),
+        "principais": principais,
+        "por_pais": por_pais,
     }
 
 

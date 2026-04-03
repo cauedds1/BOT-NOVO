@@ -1,12 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
-function ConfidencePill({ value }) {
-  let cls = 'badge badge-red'
-  if (value >= 7) cls = 'badge badge-green'
-  else if (value >= 5.5) cls = 'badge badge-yellow'
-  return <span className={cls}>{value?.toFixed(1)}/10</span>
-}
+const AUTO_REFRESH_SECS = 600
 
 function TeamLogo({ logo, name, size = 28 }) {
   const [err, setErr] = useState(false)
@@ -17,7 +12,7 @@ function TeamLogo({ logo, name, size = 28 }) {
           width: size, height: size, borderRadius: '50%',
           background: 'rgba(99,102,241,0.2)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: size * 0.45, color: '#818cf8', fontWeight: 700,
+          fontSize: size * 0.45, color: '#818cf8', fontWeight: 700, flexShrink: 0,
         }}
       >
         {name?.[0] || '?'}
@@ -27,13 +22,13 @@ function TeamLogo({ logo, name, size = 28 }) {
   return (
     <img
       src={logo} alt={name}
-      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 4 }}
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
       onError={() => setErr(true)}
     />
   )
 }
 
-function MatchCard({ jogo }) {
+function MatchCard({ jogo, compact = false }) {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
 
@@ -79,30 +74,34 @@ function MatchCard({ jogo }) {
     >
       <div
         className="card"
-        style={{ padding: '14px 16px', marginBottom: 8, cursor: 'pointer', position: 'relative' }}
+        style={{ padding: compact ? '12px 14px' : '14px 16px', marginBottom: 8, cursor: 'pointer' }}
       >
         <div className="flex items-center gap-3">
-          <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, minWidth: 38 }}>
+          <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, minWidth: 38, flexShrink: 0 }}>
             {jogo.horario_brt}
           </span>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+            <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={compact ? 22 : 28} />
+            <span style={{
+              fontSize: compact ? 12 : 13, fontWeight: 600, color: '#e2e8f0',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100,
+            }}>
               {jogo.time_casa?.nome}
             </span>
-            <span style={{ fontSize: 11, color: '#475569', margin: '0 2px' }}>vs</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+            <span style={{ fontSize: 11, color: '#475569', margin: '0 2px', flexShrink: 0 }}>vs</span>
+            <span style={{
+              fontSize: compact ? 12 : 13, fontWeight: 600, color: '#e2e8f0',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100,
+            }}>
               {jogo.time_fora?.nome}
             </span>
-            <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} />
+            <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={compact ? 22 : 28} />
           </div>
 
           <div className="ml-auto flex-shrink-0">
             {isReady && (
-              <span className="badge badge-green" style={{ fontSize: 11 }}>
-                ✓ Analisado
-              </span>
+              <span className="badge badge-green" style={{ fontSize: 11 }}>✓ Analisado</span>
             )}
             {isProcessing && (
               <span className="badge badge-blue" style={{ fontSize: 11, gap: 5 }}>
@@ -115,10 +114,131 @@ function MatchCard({ jogo }) {
                 onClick={handleAnalyze}
                 style={{
                   fontSize: 11, fontWeight: 600, padding: '3px 10px',
-                  background: 'rgba(99,102,241,0.15)',
-                  color: '#818cf8',
-                  border: '1px solid rgba(99,102,241,0.3)',
-                  borderRadius: 8, cursor: 'pointer',
+                  background: 'rgba(99,102,241,0.15)', color: '#818cf8',
+                  border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, cursor: 'pointer',
+                }}
+              >
+                Analisar →
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+function FeaturedMatchCard({ jogo }) {
+  const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
+
+  const handleAnalyze = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading || status === 'processing') return
+    setLoading(true)
+    setStatus('processing')
+    try {
+      const r = await fetch(`/api/analisar/${jogo.fixture_id}`, { method: 'POST' })
+      const d = await r.json()
+      if (d.status === 'ready') setStatus('ready')
+      else setStatus('processing')
+    } catch {
+      setStatus('none')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (status !== 'processing') return
+    const poll = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/status/${jogo.fixture_id}`)
+        const d = await r.json()
+        if (d.status === 'ready') { setStatus('ready'); clearInterval(poll) }
+        if (d.status === 'error') { setStatus('none'); clearInterval(poll) }
+      } catch { clearInterval(poll) }
+    }, 3000)
+    return () => clearInterval(poll)
+  }, [status, jogo.fixture_id])
+
+  const isProcessing = status === 'processing'
+  const isReady = status === 'ready'
+  const score = jogo.score_destaque || 0
+
+  return (
+    <Link
+      to={isReady ? `/jogo/${jogo.fixture_id}` : '#'}
+      onClick={isReady ? undefined : handleAnalyze}
+      style={{ textDecoration: 'none', display: 'block' }}
+    >
+      <div
+        className="card"
+        style={{
+          padding: '16px 18px', marginBottom: 10, cursor: 'pointer',
+          border: '1px solid rgba(99,102,241,0.25)',
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(15,23,42,0.8) 100%)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              {jogo.liga.logo && (
+                <img
+                  src={jogo.liga.logo} alt=""
+                  style={{ width: 16, height: 16, objectFit: 'contain' }}
+                  onError={e => e.target.style.display = 'none'}
+                />
+              )}
+              <span style={{ fontSize: 11, color: '#818cf8', fontWeight: 600 }}>
+                {jogo.liga.nome}
+              </span>
+              <span style={{ fontSize: 10, color: '#475569' }}>·</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{jogo.horario_brt}</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={32} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                  {jogo.time_casa?.nome}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: '#475569', fontWeight: 700 }}>vs</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>
+                  {jogo.time_fora?.nome}
+                </span>
+                <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={32} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: '#f59e0b',
+              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: 6, padding: '2px 7px',
+            }}>
+              ⭐ {score.toFixed(0)}
+            </div>
+            {isReady && (
+              <span className="badge badge-green" style={{ fontSize: 11 }}>✓ Analisado</span>
+            )}
+            {isProcessing && (
+              <span className="badge badge-blue" style={{ fontSize: 11, gap: 5 }}>
+                <div className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                Analisando...
+              </span>
+            )}
+            {!isReady && !isProcessing && (
+              <button
+                onClick={handleAnalyze}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: '4px 12px',
+                  background: 'rgba(99,102,241,0.2)', color: '#818cf8',
+                  border: '1px solid rgba(99,102,241,0.35)', borderRadius: 8, cursor: 'pointer',
                 }}
               >
                 Analisar →
@@ -135,33 +255,73 @@ function LeagueSection({ liga, jogos }) {
   const [open, setOpen] = useState(true)
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 6 }}>
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-          background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
-          borderRadius: 10, padding: '9px 14px', cursor: 'pointer', marginBottom: 8,
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.1)',
+          borderRadius: 8, padding: '8px 12px', cursor: 'pointer', marginBottom: open ? 6 : 0,
         }}
       >
         {liga.logo && (
-          <img src={liga.logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />
+          <img src={liga.logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />
         )}
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#c7d2fe' }}>
-          {liga.nome}
-        </span>
-        <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>
-          {liga.pais}
-        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#c7d2fe' }}>{liga.nome}</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
           {jogos.length} jogo{jogos.length !== 1 ? 's' : ''} {open ? '▲' : '▼'}
         </span>
       </button>
-
       {open && jogos.map(j => (
-        <MatchCard key={j.fixture_id} jogo={j} />
+        <MatchCard key={j.fixture_id} jogo={j} compact />
       ))}
     </div>
+  )
+}
+
+function CountrySection({ pais, ligas }) {
+  const [open, setOpen] = useState(true)
+  const totalJogos = ligas.reduce((acc, l) => acc + l.jogos.length, 0)
+  const bandeira = ligas[0]?.liga?.bandeira || ''
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
+          borderRadius: 10, padding: '10px 14px', cursor: 'pointer', marginBottom: open ? 10 : 0,
+        }}
+      >
+        {bandeira && (
+          <img src={bandeira} alt="" style={{ width: 20, height: 14, objectFit: 'cover', borderRadius: 2 }} onError={e => e.target.style.display = 'none'} />
+        )}
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{pais}</span>
+        <span style={{ fontSize: 11, color: '#475569', marginLeft: 4 }}>
+          {ligas.length} liga{ligas.length !== 1 ? 's' : ''} · {totalJogos} jogo{totalJogos !== 1 ? 's' : ''}
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#475569' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ paddingLeft: 8 }}>
+          {ligas.map((grupo) => (
+            <LeagueSection key={grupo.liga.id} liga={grupo.liga} jogos={grupo.jogos} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AutoRefreshTimer({ secondsLeft }) {
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = secondsLeft % 60
+  return (
+    <span style={{ fontSize: 11, color: '#475569' }}>
+      Atualiza em {mins}:{String(secs).padStart(2, '0')}
+    </span>
   )
 }
 
@@ -169,8 +329,11 @@ export default function Home() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [countdown, setCountdown] = useState(AUTO_REFRESH_SECS)
+  const timerRef = useRef(null)
+  const countRef = useRef(AUTO_REFRESH_SECS)
 
-  const fetchJogos = async () => {
+  const fetchJogos = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -183,9 +346,34 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchJogos() }, [])
+  const resetTimer = useCallback(() => {
+    countRef.current = AUTO_REFRESH_SECS
+    setCountdown(AUTO_REFRESH_SECS)
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    resetTimer()
+    fetchJogos()
+  }, [fetchJogos, resetTimer])
+
+  useEffect(() => {
+    fetchJogos()
+  }, [fetchJogos])
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      countRef.current -= 1
+      setCountdown(countRef.current)
+      if (countRef.current <= 0) {
+        countRef.current = AUTO_REFRESH_SECS
+        setCountdown(AUTO_REFRESH_SECS)
+        fetchJogos()
+      }
+    }, 1000)
+    return () => clearInterval(timerRef.current)
+  }, [fetchJogos])
 
   if (loading) {
     return (
@@ -203,7 +391,7 @@ export default function Home() {
         <p style={{ color: '#f87171', fontSize: 14 }}>Erro ao conectar com a API</p>
         <p style={{ color: '#64748b', fontSize: 12 }}>{error}</p>
         <button
-          onClick={fetchJogos}
+          onClick={handleRefresh}
           style={{
             marginTop: 8, padding: '8px 20px', borderRadius: 8,
             background: 'rgba(99,102,241,0.15)', color: '#818cf8',
@@ -216,33 +404,38 @@ export default function Home() {
     )
   }
 
-  const ligas = data?.ligas || []
+  const principais = data?.principais || []
+  const porPais = data?.por_pais || []
   const total = data?.total || 0
+  const totalPaises = porPais.length
 
   return (
-    <div style={{ paddingTop: 28 }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 24 }}>
+    <div style={{ paddingTop: 24 }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
             Jogos de Hoje
           </h1>
           <p style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
-            {total} partida{total !== 1 ? 's' : ''} em {ligas.length} liga{ligas.length !== 1 ? 's' : ''}
+            {total} partida{total !== 1 ? 's' : ''} em {totalPaises} pa{totalPaises !== 1 ? 'íses' : 'ís'}
           </p>
         </div>
-        <button
-          onClick={fetchJogos}
-          style={{
-            fontSize: 12, padding: '6px 14px', borderRadius: 8,
-            background: 'rgba(99,102,241,0.1)', color: '#818cf8',
-            border: '1px solid rgba(99,102,241,0.2)', cursor: 'pointer',
-          }}
-        >
-          ↻ Atualizar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <AutoRefreshTimer secondsLeft={countdown} />
+          <button
+            onClick={handleRefresh}
+            style={{
+              fontSize: 12, padding: '6px 14px', borderRadius: 8,
+              background: 'rgba(99,102,241,0.1)', color: '#818cf8',
+              border: '1px solid rgba(99,102,241,0.2)', cursor: 'pointer',
+            }}
+          >
+            ↻ Atualizar
+          </button>
+        </div>
       </div>
 
-      {ligas.length === 0 ? (
+      {total === 0 ? (
         <div style={{
           textAlign: 'center', padding: '60px 0', color: '#64748b',
           background: 'rgba(99,102,241,0.04)', border: '1px dashed rgba(99,102,241,0.15)',
@@ -253,13 +446,39 @@ export default function Home() {
           <p style={{ fontSize: 13, marginTop: 6 }}>Nenhuma partida encontrada nas ligas monitoradas.</p>
         </div>
       ) : (
-        ligas.map((grupo) => (
-          <LeagueSection
-            key={grupo.liga.id}
-            liga={grupo.liga}
-            jogos={grupo.jogos}
-          />
-        ))
+        <>
+          {principais.length > 0 && (
+            <section style={{ marginBottom: 36 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>⭐ Principais Jogos</span>
+                <span style={{
+                  fontSize: 11, color: '#f59e0b',
+                  background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)',
+                  borderRadius: 20, padding: '2px 8px',
+                }}>
+                  Top {principais.length}
+                </span>
+              </div>
+              {principais.map(j => (
+                <FeaturedMatchCard key={j.fixture_id} jogo={j} />
+              ))}
+            </section>
+          )}
+
+          {porPais.length > 0 && (
+            <section>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>🌍 Todos os Jogos</span>
+                <span style={{ fontSize: 11, color: '#64748b' }}>
+                  por país e liga
+                </span>
+              </div>
+              {porPais.map(({ pais, ligas }) => (
+                <CountrySection key={pais} pais={pais} ligas={ligas} />
+              ))}
+            </section>
+          )}
+        </>
       )}
     </div>
   )
