@@ -370,9 +370,9 @@ class DatabaseManager:
         Insere palpites individuais em palpites_historico após análise de um jogo.
         Usa INSERT ... ON CONFLICT DO NOTHING para ser idempotente.
 
-        Apenas mercados avaliáveis automaticamente pelo result_tracker são persistidos.
-        Mercados não avaliáveis (Finalizações, Cartões, Primeiro Marcador, Asian Handicap)
-        são ignorados para evitar palpites com acertou=NULL indefinidamente.
+        Todos os mercados são persistidos. Mercados não avaliáveis automaticamente
+        (Finalizações, Cartões, Primeiro Marcador, Asian Handicap) ficam com
+        acertou=NULL até que um avaliador específico seja implementado.
 
         Args:
             fixture_id: ID do jogo
@@ -382,9 +382,6 @@ class DatabaseManager:
         if not conn:
             return
 
-        from result_tracker import MERCADOS_AVALIÁVEIS
-
-        # Todos os mercados, mas só inserimos os avaliáveis
         MERCADOS = [
             'gols', 'cantos', 'btts', 'resultado', 'cartoes',
             'finalizacoes', 'handicaps', 'dupla_chance', 'gabt',
@@ -392,7 +389,6 @@ class DatabaseManager:
         ]
 
         inseridos = 0
-        ignorados = 0
         try:
             cursor = conn.cursor()
             for mercado_key in MERCADOS:
@@ -410,11 +406,6 @@ class DatabaseManager:
                     odd = p.get('odd')
                     periodo = p.get('periodo', 'FT') or 'FT'
                     time_aposta = p.get('time') or 'Total'
-
-                    # Apenas persistir mercados que podem ser avaliados automaticamente
-                    if mercado_nome not in MERCADOS_AVALIÁVEIS:
-                        ignorados += 1
-                        continue
 
                     try:
                         odd_val = float(odd) if odd is not None else None
@@ -436,11 +427,8 @@ class DatabaseManager:
 
             conn.commit()
             cursor.close()
-            if inseridos or ignorados:
-                print(
-                    f"📋 Palpites histórico: {inseridos} palpites salvos para Fixture #{fixture_id}"
-                    + (f" ({ignorados} mercados não-avaliáveis ignorados)" if ignorados else "")
-                )
+            if inseridos:
+                print(f"📋 Palpites histórico: {inseridos} palpites salvos para Fixture #{fixture_id}")
 
         except Exception as e:
             print(f"❌ Erro ao salvar palpites_historico para Fixture #{fixture_id}: {e}")

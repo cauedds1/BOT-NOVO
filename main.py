@@ -642,6 +642,11 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
         except Exception:
             pass
         analise_db = db_manager.buscar_analise(id_jogo, data_jogo=_data_kickoff)
+        # Se TTL expirou (kickoff <2h ou análise muito antiga), tentar stale como fallback
+        if not analise_db:
+            analise_db = db_manager.buscar_analise(id_jogo, permitir_stale=True)
+            if analise_db:
+                print(f"⏳ STALE FALLBACK: Usando análise stale do Fixture #{id_jogo} (API indisponível)")
         if analise_db:
             usar_cache_otimizado = True
             print(f"💾 CACHE OTIMIZADO: Usando análise salva do Fixture #{id_jogo}")
@@ -708,11 +713,6 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 print(f"⚠️  SEM STATS FORA: Jogo {id_jogo} - {jogo['teams']['away']['name']}")
             if not odds:
                 print(f"⚠️  SEM ODDS: Jogo {id_jogo}")
-            # Tentar servir análise stale antes de retornar None
-            analise_stale = db_manager.buscar_analise(id_jogo, permitir_stale=True)
-            if analise_stale:
-                print(f"⏳ STALE FALLBACK: Servindo análise stale do Fixture #{id_jogo}")
-                return analise_stale
             return None
 
         classificacao = await buscar_classificacao_liga(id_liga)
