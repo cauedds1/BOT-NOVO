@@ -46,32 +46,58 @@ def format_evidence_based_dossier(
     
     # === SECTION 1: HEADER ===
     msg = _format_header_evidence_based(jogo)
-    
+
+    # Separar palpites Dupla Chance dos demais para seção dedicada
+    palpites_dc = [p for p in todos_palpites if p.get('mercado') == 'Dupla Chance']
+    palpites_outros = [p for p in todos_palpites if p.get('mercado') != 'Dupla Chance']
+
     # === SECTION 2: ANÁLISE PRINCIPAL ===
-    palpite_principal = todos_palpites[0]  # Maior confiança
-    msg += _format_analise_principal_evidence_based(
-        palpite_principal, 
-        evidencias_home, 
-        evidencias_away,
-        home_team_name,
-        away_team_name
-    )
-    
-    # === SECTION 3: SUGESTÕES TÁTICAS (restante dos palpites) ===
-    if len(todos_palpites) > 1:
-        msg += _format_sugestoes_taticas_evidence_based(
-            todos_palpites[1:], 
-            evidencias_home, 
+    if palpites_outros:
+        palpite_principal = palpites_outros[0]  # Maior confiança (excluindo DC)
+        msg += _format_analise_principal_evidence_based(
+            palpite_principal,
+            evidencias_home,
             evidencias_away,
             home_team_name,
             away_team_name
         )
-    
-    # === SECTION 4: AVISOS (se houver) ===
+
+        # === SECTION 3: SUGESTÕES TÁTICAS (restante dos palpites, exceto DC) ===
+        if len(palpites_outros) > 1:
+            msg += _format_sugestoes_taticas_evidence_based(
+                palpites_outros[1:],
+                evidencias_home,
+                evidencias_away,
+                home_team_name,
+                away_team_name
+            )
+    else:
+        # Fallback: se só há DC, usar como principal
+        if palpites_dc:
+            palpite_principal = palpites_dc[0]
+            msg += _format_analise_principal_evidence_based(
+                palpite_principal,
+                evidencias_home,
+                evidencias_away,
+                home_team_name,
+                away_team_name
+            )
+
+    # === SECTION 4: DUPLA CHANCE (seção dedicada - sempre visível quando há picks) ===
+    if palpites_dc:
+        msg += _format_dupla_chance_section(
+            palpites_dc,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 5: AVISOS (se houver) ===
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
-    
+
     return msg
 
 
@@ -332,6 +358,46 @@ def _format_dupla_chance_evidence(evidencias_home, evidencias_away, home_team_na
         msg += f"         📉 Média Gols Marcados (Fora): {media:.1f}\n"
     else:
         msg += f"         (Dados não disponíveis)\n"
+
+    return msg
+
+
+def _format_dupla_chance_section(
+    palpites_dc: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str
+) -> str:
+    """
+    Seção DEDICADA de Dupla Chance — sempre renderizada quando há picks aprovados.
+    Exibe odds explicitamente, pois o valor comparativo (odd vs prob) é central neste mercado.
+    """
+    msg = f"🔀 DUPLA CHANCE\n\n"
+
+    for palpite in palpites_dc:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        odd = palpite.get('odd', 0)
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.1f}%\n"
+        if odd and odd > 0:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += f"   Odd: Não disponível\n"
+
+        justificativa = generate_evidence_based_justification(
+            'Dupla Chance', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    # Evidências resumidas
+    msg += f"   📊 EVIDÊNCIAS:\n"
+    msg += _format_dupla_chance_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += f"\n---\n\n"
 
     return msg
 
