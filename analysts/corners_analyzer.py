@@ -236,7 +236,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            bet_type = f"Over {linha} HT"
+            bet_type = f"Over {linha} Cantos HT"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
                 bet_type=bet_type,
@@ -265,7 +265,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
             )
             prob_under = 100.0 - prob_over
             
-            bet_type = f"Under {linha} HT"
+            bet_type = f"Under {linha} Cantos HT"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_under,
                 bet_type=bet_type,
@@ -297,7 +297,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            bet_type = f"Casa Over {linha}"
+            bet_type = f"Casa Over {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
                 bet_type=bet_type,
@@ -326,7 +326,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
             )
             prob_under = 100.0 - prob_over
             
-            bet_type = f"Casa Under {linha}"
+            bet_type = f"Casa Under {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_under,
                 bet_type=bet_type,
@@ -358,7 +358,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 historical_frequency=None
             )
             
-            bet_type = f"Fora Over {linha}"
+            bet_type = f"Fora Over {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_pct,
                 bet_type=bet_type,
@@ -387,7 +387,7 @@ def analisar_mercado_cantos(analysis_packet, odds):
             )
             prob_under = 100.0 - prob_over
             
-            bet_type = f"Fora Under {linha}"
+            bet_type = f"Fora Under {linha} Cantos"
             conf_final, breakdown = calculate_final_confidence(
                 statistical_probability_pct=prob_under,
                 bet_type=bet_type,
