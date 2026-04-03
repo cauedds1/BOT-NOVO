@@ -1082,7 +1082,9 @@ async def buscar_lesoes_jogo(fixture_id: int):
         list: Lista de dicts com {name, type, reason, team_id}
     """
     cache_key = f"lesoes_{fixture_id}"
-    if cached_data := cache_manager.get(cache_key):
+    # Use explicit None check so an empty list (no injuries / 403) is also cached
+    cached_data = cache_manager.get(cache_key)
+    if cached_data is not None:
         return cached_data
 
     params = {"fixture": str(fixture_id)}
