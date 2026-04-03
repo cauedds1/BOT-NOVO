@@ -42,6 +42,8 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_finalizacoes_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Dupla Chance":
         return _justificar_dupla_chance_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Gols Ambos Tempos":
+        return _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -537,6 +539,40 @@ def _justificar_dupla_chance_evidence_based(tipo, evidencias_home, evidencias_aw
         return (
             f"A combinação de resultados cobre a maior parte do espectro probabilístico "
             f"para este confronto, favorecendo {tipo}."
+        )
+
+
+def _justificar_gabt_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Gera justificativa para Gols em Ambos os Tempos baseada em dados reais de gols."""
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    if not gols_home and not gols_away:
+        return f"Análise probabilística por Poisson dos tempos favorece {tipo}."
+
+    media_total_home = (
+        sum(g['total_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
+    )
+    media_total_away = (
+        sum(g['total_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
+    )
+    media_combinada = (media_total_home + media_total_away) / 2
+
+    if 'Sim' in tipo:
+        return (
+            f"A média de gols totais nos jogos do {home_team_name} em casa é de "
+            f"{media_total_home:.1f} e a do {away_team_name} fora é de {media_total_away:.1f}, "
+            f"resultando em média combinada de {media_combinada:.1f} gols/jogo. "
+            f"O modelo Poisson estima probabilidade significativa de pelo menos 1 gol "
+            f"em cada tempo, sustentando {tipo}."
+        )
+    else:
+        return (
+            f"Com média combinada de {media_combinada:.1f} gols por jogo "
+            f"({home_team_name}: {media_total_home:.1f} em casa | "
+            f"{away_team_name}: {media_total_away:.1f} fora), "
+            f"o modelo aponta que um dos tempos pode ficar sem gols, "
+            f"favorecendo {tipo}."
         )
 
 

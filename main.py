@@ -25,6 +25,7 @@ from analysts.cards_analyzer import analisar_mercado_cartoes
 from analysts.shots_analyzer import analisar_mercado_finalizacoes
 from analysts.handicaps_analyzer import analisar_mercado_handicaps
 from analysts.double_chance_analyzer import analisar_mercado_dupla_chance
+from analysts.gabt_analyzer import analisar_mercado_gabt
 # PHOENIX V3.0: filtrar_mercados_por_contexto e get_quality_scores foram removidas na refatoração
 # PURE ANALYST PROTOCOL: value_detector removido - análise independente de odds
 from analysts.justification_generator import generate_persuasive_justification
@@ -445,6 +446,9 @@ async def gerar_analise_completa_todos_mercados(jogo):
     analise_dupla_chance = analisar_mercado_dupla_chance(analysis_packet, odds)
     print("--- ✅ DOUBLE CHANCE ANALYZER DONE ---")
     
+    analise_gabt = analisar_mercado_gabt(analysis_packet, odds)
+    print("--- ✅ GABT ANALYZER DONE ---")
+    
     # 4️⃣ EXTRAIR INFORMAÇÕES DO MASTER PACKET
     reasoning = analysis_packet['analysis_summary']['reasoning']
     power_home = analysis_packet['analysis_summary']['power_score_home']
@@ -479,6 +483,7 @@ async def gerar_analise_completa_todos_mercados(jogo):
         ('Finalizações', '🎯', analise_finalizacoes),
         ('Handicaps', '⚖️', analise_handicaps),
         ('Dupla Chance', '🔀', analise_dupla_chance),
+        ('Gols Ambos Tempos', '⏱️', analise_gabt),
     ]
     
     for mercado_nome, mercado_emoji, analise in mercados_analise:

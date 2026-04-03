@@ -47,9 +47,11 @@ def format_evidence_based_dossier(
     # === SECTION 1: HEADER ===
     msg = _format_header_evidence_based(jogo)
 
-    # Separar palpites Dupla Chance dos demais para seção dedicada
+    # Separar palpites de seções dedicadas dos demais
     palpites_dc = [p for p in todos_palpites if p.get('mercado') == 'Dupla Chance']
-    palpites_outros = [p for p in todos_palpites if p.get('mercado') != 'Dupla Chance']
+    palpites_gabt = [p for p in todos_palpites if p.get('mercado') == 'Gols Ambos Tempos']
+    palpites_outros = [p for p in todos_palpites
+                       if p.get('mercado') not in ('Dupla Chance', 'Gols Ambos Tempos')]
 
     # === SECTION 2: ANÁLISE PRINCIPAL ===
     if palpites_outros:
@@ -85,7 +87,17 @@ def format_evidence_based_dossier(
             away_team_name
         )
 
-    # === SECTION 5: AVISOS (se houver) ===
+    # === SECTION 5: GOLS EM AMBOS OS TEMPOS (seção dedicada) ===
+    if palpites_gabt:
+        msg += _format_gabt_section(
+            palpites_gabt,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 6: AVISOS (se houver) ===
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
@@ -167,6 +179,8 @@ def _format_evidence_section(
         msg += _format_finalizacoes_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Dupla Chance":
         msg += _format_dupla_chance_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado == "Gols Ambos Tempos":
+        msg += _format_gabt_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         msg += f"      (Evidências não disponíveis para este mercado)\n"
     
@@ -394,6 +408,81 @@ def _format_dupla_chance_section(
     return msg
 
 
+def _format_gabt_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name):
+    """Formata evidências de GABT usando dados de gols dos últimos 4 jogos (placar por tempo)."""
+    msg = f"      {home_team_name} (Casa) - Gols por Tempo:\n"
+
+    gols_home = evidencias_home.get('gols', [])
+    if gols_home:
+        for jogo in gols_home[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            total = jogo.get('total_goals', 0)
+            msg += f"         vs {opponent}: {result} ({total} gols no jogo)\n"
+
+        media = sum(j['total_goals'] for j in gols_home) / len(gols_home)
+        msg += f"         📈 Média Gols/Jogo (Casa): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    msg += f"\n      {away_team_name} (Fora) - Gols por Tempo:\n"
+
+    gols_away = evidencias_away.get('gols', [])
+    if gols_away:
+        for jogo in gols_away[:4]:
+            opponent = jogo.get('opponent', 'Adversário')
+            result = jogo.get('result', '?-?')
+            total = jogo.get('total_goals', 0)
+            msg += f"         vs {opponent}: {result} ({total} gols no jogo)\n"
+
+        media = sum(j['total_goals'] for j in gols_away) / len(gols_away)
+        msg += f"         📉 Média Gols/Jogo (Fora): {media:.1f}\n"
+    else:
+        msg += f"         (Dados não disponíveis)\n"
+
+    return msg
+
+
+def _format_gabt_section(
+    palpites_gabt: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str
+) -> str:
+    """
+    Seção DEDICADA de Gols em Ambos os Tempos — renderizada quando há picks aprovados.
+    Exibe odds, probabilidade e confiança para cada opção (Sim / Não).
+    """
+    msg = f"⏱️ GOLS EM AMBOS OS TEMPOS\n\n"
+
+    for palpite in palpites_gabt:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        odd = palpite.get('odd', 0)
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.1f}%\n"
+        if odd and odd > 0:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += f"   Odd: Não disponível\n"
+
+        from analysts.justification_generator import generate_evidence_based_justification
+        justificativa = generate_evidence_based_justification(
+            'Gols Ambos Tempos', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += f"   📊 EVIDÊNCIAS:\n"
+    msg += _format_gabt_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += f"\n---\n\n"
+
+    return msg
+
+
 def _select_diverse_predictions(palpites: List[Dict], max_predictions: int = 5) -> List[Dict]:
     """
     ACTION 2.2 - DIVERSITY LOGIC: Seleciona predições garantindo variedade de mercados.
@@ -543,6 +632,16 @@ def _format_evidence_summary(mercado, evidencias_home, evidencias_away, home_tea
             media_away = sum(j['team_goals'] for j in gols_away) / len(gols_away)
             msg += f"      {away_team_name}: {media_away:.1f} gols marcados/jogo (fora)\n"
 
+    elif mercado == "Gols Ambos Tempos":
+        gols_home = evidencias_home.get('gols', [])
+        gols_away = evidencias_away.get('gols', [])
+        if gols_home:
+            media_home = sum(j['total_goals'] for j in gols_home) / len(gols_home)
+            msg += f"      {home_team_name}: {media_home:.1f} gols/jogo (casa)\n"
+        if gols_away:
+            media_away = sum(j['total_goals'] for j in gols_away) / len(gols_away)
+            msg += f"      {away_team_name}: {media_away:.1f} gols/jogo (fora)\n"
+
     return msg
 
 
@@ -605,7 +704,7 @@ def format_confidence_debug_report(
     msg += f"THRESHOLD DE APROVAÇÃO: {threshold:.1f}\n\n"
     
     # Processar cada mercado
-    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps', 'Dupla Chance']
+    mercados_ordem = ['Gols', 'Resultado', 'Cantos', 'BTTS', 'Cartões', 'Finalizações', 'Handicaps', 'Dupla Chance', 'Gols Ambos Tempos']
     
     for mercado_nome in mercados_ordem:
         if mercado_nome not in all_predictions or not all_predictions[mercado_nome]:

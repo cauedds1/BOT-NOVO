@@ -1312,6 +1312,11 @@ def normalizar_odds(odds_formatadas):
             odds_normalizadas["btts_sim"] = odds_dict.get("Yes", 0)
             odds_normalizadas["btts_nao"] = odds_dict.get("No", 0)
 
+        elif mercado_key.startswith("goals_both_halves"):
+            # Mercado Gols em Ambos os Tempos (Goals Both Halves)
+            odds_normalizadas["gabt_sim"] = odds_dict.get("Yes", 0)
+            odds_normalizadas["gabt_nao"] = odds_dict.get("No", 0)
+
         elif mercado_key.startswith("double_chance"):
             # Mercado Dupla Chance
             odds_normalizadas["dupla_1x"] = odds_dict.get("Home/Draw", 0)
@@ -1400,6 +1405,9 @@ async def buscar_odds_do_jogo(id_jogo: int):
 
                 elif bet_name == "Both Teams Score":
                     odds_formatadas["btts"] = {v['value']: float(v['odd']) for v in values_raw}
+
+                elif bet_name == "Goals Both Halves":
+                    odds_formatadas["goals_both_halves"] = {v['value']: float(v['odd']) for v in values_raw}
 
                 elif bet_name == "Double Chance":
                     odds_formatadas["double_chance"] = {v['value']: float(v['odd']) for v in values_raw}
