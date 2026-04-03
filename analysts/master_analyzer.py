@@ -142,6 +142,49 @@ def _calculate_injury_impact(injuries):
     return 0
 
 
+def _get_injury_role_label(injuries):
+    """
+    Infere o papel predominante dos jogadores lesionados com base em palavras-chave
+    na razão/tipo da lesão e em keywords de posição quando disponíveis.
+
+    A API /injuries nem sempre retorna posição diretamente; usamos heurística:
+      - Palavras-chave de goleiro  → 'defensive'
+      - Palavras-chave de atacante → 'offensive'
+      - Sem evidência clara        → 'mixed'
+
+    Returns:
+        str: 'offensive' | 'defensive' | 'mixed'
+    """
+    if not injuries:
+        return "mixed"
+
+    _GOALKEEPER_KW = frozenset({'goalkeeper', 'keeper', 'portero', 'goleiro', 'gk'})
+    _FORWARD_KW    = frozenset({'forward', 'striker', 'attacker', 'winger', 'atacante',
+                                'centroavante', 'ponta', 'delantero'})
+    _DEFENDER_KW   = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
+                                'back', 'defensor', 'zagueiro', 'lateral'})
+
+    offense_score = 0
+    defense_score = 0
+
+    for p in injuries:
+        name_lower    = (p.get('name') or '').lower()
+        reason_lower  = (p.get('reason') or '').lower()
+        pos_lower     = (p.get('position') or '').lower()  # presente se API retornar
+        combined      = f"{name_lower} {reason_lower} {pos_lower}"
+
+        if any(kw in combined for kw in _GOALKEEPER_KW | _DEFENDER_KW):
+            defense_score += 1
+        if any(kw in combined for kw in _FORWARD_KW):
+            offense_score += 1
+
+    if offense_score > defense_score:
+        return "offensive"
+    elif defense_score > offense_score:
+        return "defensive"
+    return "mixed"
+
+
 def _get_injury_severity_label(injuries):
     """
     TASK 4 - PHOENIX V4.0: Mapeia ausências ponderadas para rótulo de severidade.
@@ -1538,6 +1581,8 @@ async def generate_match_analysis(jogo):
     _injuries_summary_away = [f"{p['name']} ({p['type']})" for p in away_injuries] if away_injuries else []
     injury_severity_home = _get_injury_severity_label(home_injuries)
     injury_severity_away = _get_injury_severity_label(away_injuries)
+    injury_role_home = _get_injury_role_label(home_injuries)
+    injury_role_away = _get_injury_role_label(away_injuries)
 
     # Adicionar contexto de desfalques ao reasoning tático para narrativa completa
     if home_injuries or away_injuries:
@@ -1585,7 +1630,9 @@ async def generate_match_analysis(jogo):
             'injury_penalty_home': injury_penalty_home,
             'injury_penalty_away': injury_penalty_away,
             'injury_severity_home': injury_severity_home,
-            'injury_severity_away': injury_severity_away
+            'injury_severity_away': injury_severity_away,
+            'injury_role_home': injury_role_home,
+            'injury_role_away': injury_role_away,
         },
         'calculated_probabilities': {
             **probabilities,

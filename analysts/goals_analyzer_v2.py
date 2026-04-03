@@ -41,9 +41,12 @@ def analisar_mercado_gols(analysis_packet, odds):
     script = analysis_packet['analysis_summary']['selected_script']
     reasoning = analysis_packet['analysis_summary']['reasoning']
 
-    # TASK 4: Extrair severidade de desfalques para penalidade de confiança
-    _sev_home = analysis_packet.get('analysis_summary', {}).get('injury_severity_home', 'none')
-    _sev_away = analysis_packet.get('analysis_summary', {}).get('injury_severity_away', 'none')
+    # TASK 4: Extrair severidade e papel dos desfalques para modificador direcional
+    _summary = analysis_packet.get('analysis_summary', {})
+    _sev_home  = _summary.get('injury_severity_home', 'none')
+    _sev_away  = _summary.get('injury_severity_away', 'none')
+    _role_home = _summary.get('injury_role_home', 'mixed')
+    _role_away = _summary.get('injury_role_away', 'mixed')
     
     # Extrair lambdas individuais calculados pelo master analyzer (FASE 2)
     lambda_data = probabilities.get('lambda_goals', {})
@@ -145,7 +148,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
@@ -167,7 +172,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -189,7 +196,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 2.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -211,7 +220,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 2.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -233,7 +244,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 3.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -255,7 +268,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 3.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -277,7 +292,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 4.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -299,7 +316,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 4.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -323,7 +342,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 0.5 HT",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -345,7 +366,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 0.5 HT",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -367,7 +390,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Over 1.5 HT",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -389,7 +414,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Under 1.5 HT",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -414,7 +441,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="BTTS Sim",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -437,7 +466,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="BTTS Não",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -461,7 +492,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Casa Over 0.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -483,7 +516,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Casa Under 0.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -505,7 +540,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Casa Over 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -527,7 +564,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Casa Under 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -551,7 +590,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Fora Over 0.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -573,7 +614,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Fora Under 0.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -595,7 +638,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Fora Over 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -617,7 +662,9 @@ def analisar_mercado_gols(analysis_packet, odds):
             bet_type="Fora Under 1.5",
             tactical_script=script,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            injury_role_home=_role_home,
+            injury_role_away=_role_away,
         )
         if confianca >= 5.0:
             all_predictions.append({

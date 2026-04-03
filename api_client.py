@@ -82,7 +82,7 @@ async def close_http_client(client=None):
 
 @retry(
     stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=1, max=8),
+    wait=wait_exponential(multiplier=1, min=2, max=30),
     retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.TimeoutException, httpx.NetworkError)),
     before_sleep=before_sleep_log(logger, logging.WARNING),
     reraise=True
@@ -90,29 +90,40 @@ async def close_http_client(client=None):
 async def api_request_with_retry(method: str, url: str, **kwargs):
     """
     Wrapper para requisições HTTP com retry automático e exponential backoff.
-    
+
     Estratégia de Retry:
     - Tentativas: até 5
-    - Backoff: 1s, 2s, 4s, 8s (exponencial)
-    - Retry em: 502 Bad Gateway, 503 Service Unavailable, Timeout, Network Errors
-    
+    - Backoff: 2s, 4s, 8s, 16s, 30s (exponencial, cap 30s)
+    - Retry em: 429 Rate Limit, 502 Bad Gateway, 503 Service Unavailable,
+                Timeout, Network Errors
+
+    Para 429, respeita o header Retry-After se presente (aguarda o tempo
+    indicado pela API antes de tentar novamente).
+
     Args:
         method: Método HTTP ('GET', 'POST', etc)
         url: URL completa da requisição
         **kwargs: Parâmetros adicionais (params, headers, etc)
-    
+
     Returns:
         httpx.Response: Resposta da requisição
-        
+
     Raises:
         httpx.HTTPStatusError: Após todas as tentativas falharem
     """
     client = get_http_client()
     response = await client.request(method, url, **kwargs)
-    
-    if response.status_code in (502, 503):
+
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After")
+        wait_secs = int(retry_after) if retry_after and retry_after.isdigit() else 30
+        logger.warning(f"⚠️ Rate limit (429) — aguardando {wait_secs}s antes de retry")
+        await asyncio.sleep(wait_secs)
         response.raise_for_status()
-    
+
+    if response.status_code in (500, 502, 503):
+        response.raise_for_status()
+
     return response
 
 # ============================================
@@ -579,11 +590,35 @@ async def get_current_season(league_id):
     brasilia_tz = ZoneInfo("America/Sao_Paulo")
     agora = datetime.now(brasilia_tz)
     ano_atual = agora.year
-    
-    fallback_season = str(ano_atual - 1)
+
+    # Ligas cujo calendário coincide com o ano civil (não com a temporada europeia ago-mai)
+    # Para estas, o fallback correto é o ano atual, não ano - 1
+    LIGAS_ANO_CIVIL = {
+        # Brasil
+        71, 72, 73, 74, 75, 76,
+        # EUA / Canadá
+        253, 254, 255,
+        # México (Apertura+Clausura dentro do mesmo ano civil para fins de fallback)
+        262, 263,
+        # América do Sul - ligas de ano calendário
+        239,  # Colombia
+        240,  # Equador
+        249,  # Venezuela
+        268,  # Uruguai
+        281,  # Peru
+        291,  # Bolívia
+        # Austrália / Oceânia
+        188,  # A-League Australia
+    }
+
+    if int(league_id) in LIGAS_ANO_CIVIL:
+        fallback_season = str(ano_atual)
+    else:
+        fallback_season = str(ano_atual - 1)
+
     print(f"ℹ️ Usando fallback de temporada para liga {league_id}: {fallback_season}")
     cache_manager.set(cache_key, fallback_season)
-    
+
     return fallback_season
 
 async def buscar_jogos_do_dia():

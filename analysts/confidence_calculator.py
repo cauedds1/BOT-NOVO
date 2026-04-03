@@ -323,47 +323,89 @@ def apply_tactical_script_modifier(
 def apply_injury_confidence_modifier(
     bet_type: str,
     injury_severity_home: str = "none",
-    injury_severity_away: str = "none"
+    injury_severity_away: str = "none",
+    injury_role_home: str = "mixed",
+    injury_role_away: str = "mixed",
 ) -> float:
     """
-    TASK 4 - PHOENIX V4.0: Aplica penalidade de confiança baseada em desfalques.
+    PHOENIX V4.0 — Modificador de confiança baseado em desfalques DIRECIONAL.
 
-    Desfalques confirmados afetam a confiabilidade das probabilidades calculadas, pois
-    as médias históricas foram geradas com o elenco completo.
+    A direção do modificador depende do PAPEL do jogador ausente e do TIPO de aposta:
 
-    Severidade:
-      - "none"     → sem penalidade
-      - "minor"    → 1 ausência (lesionado): -0.3
-      - "moderate" → 2-3 ausências ou 1 suspenso: -0.6
-      - "severe"   → 4+ ausências ou 2+ suspensos: -1.0
+      injury_role = 'offensive' (atacante/meia lesionado):
+        - Apostas de OVER / ataque → penalidade (menos gols esperados)
+        - Apostas de UNDER / defensivas → bônus (menos gols = Under mais provável)
+        - BTTS Sim → penalidade
 
-    A penalidade é aplicada ao time FAVORECIDO pela aposta:
-      - Bets "casa" → usar severidade do time da casa
-      - Bets "fora" → usar severidade do visitante
-      - Bets "total" → usar o pior dos dois
+      injury_role = 'defensive' (defensor/goleiro lesionado):
+        - Apostas de OVER / ataque → bônus (defesa fragilizada = mais gols)
+        - Apostas de UNDER / defensivas → penalidade
+        - BTTS Sim → bônus
+
+      injury_role = 'mixed' (papel desconhecido):
+        - Comportamento simétrico: apenas penalidade moderada em qualquer direção
+
+    Severidade → magnitude:
+      - "none"     → 0.0
+      - "minor"    → 0.3
+      - "moderate" → 0.6
+      - "severe"   → 1.0
 
     Args:
-        bet_type: Tipo de aposta (string com 'casa', 'fora' ou total)
+        bet_type:            Tipo de aposta
         injury_severity_home: Severidade de desfalques do mandante
         injury_severity_away: Severidade de desfalques do visitante
+        injury_role_home:    Papel dos lesionados do mandante ('offensive'/'defensive'/'mixed')
+        injury_role_away:    Papel dos lesionados do visitante ('offensive'/'defensive'/'mixed')
 
     Returns:
-        float: Penalidade de confiança (≤ 0)
+        float: Modificador de confiança (pode ser positivo ou negativo)
     """
-    SEVERITY_MAP = {"none": 0.0, "minor": -0.3, "moderate": -0.6, "severe": -1.0}
+    SEVERITY_MAP = {"none": 0.0, "minor": 0.3, "moderate": 0.6, "severe": 1.0}
 
     bet_lower = bet_type.lower()
-    if "casa" in bet_lower or "home" in bet_lower:
-        # Aposta no mandante → penalizar pelo seu desfalque
-        return SEVERITY_MAP.get(injury_severity_home, 0.0)
-    elif "fora" in bet_lower or "away" in bet_lower or "visitante" in bet_lower:
-        # Aposta no visitante → penalizar pelo desfalque do visitante
-        return SEVERITY_MAP.get(injury_severity_away, 0.0)
+
+    # Detectar direção da aposta
+    is_over = "over" in bet_lower or "btts sim" in bet_lower or "sim" in bet_lower
+    is_under = "under" in bet_lower or "btts não" in bet_lower or "não" in bet_lower
+    is_home_bet = "casa" in bet_lower or "home" in bet_lower
+    is_away_bet = "fora" in bet_lower or "away" in bet_lower or "visitante" in bet_lower
+
+    def _directional_mod(magnitude: float, role: str, is_attack_favored: bool) -> float:
+        """
+        Calcula o modificador direcional baseado no papel do lesionado.
+        is_attack_favored=True → aposta favorece mais gols (Over/BTTS Sim/Resultado fora)
+        """
+        if magnitude == 0.0:
+            return 0.0
+        if role == "offensive":
+            # Atacante lesionado → menos gols → Over perde, Under ganha
+            return -magnitude if is_attack_favored else +magnitude * 0.7
+        elif role == "defensive":
+            # Defensor lesionado → mais gols → Over ganha, Under perde
+            return +magnitude * 0.7 if is_attack_favored else -magnitude
+        else:
+            # Papel desconhecido: penalidade simétrica reduzida
+            return -magnitude * 0.5
+
+    mod = 0.0
+
+    if is_home_bet:
+        mag = SEVERITY_MAP.get(injury_severity_home, 0.0)
+        mod = _directional_mod(mag, injury_role_home, is_attack_favored=is_over)
+    elif is_away_bet:
+        mag = SEVERITY_MAP.get(injury_severity_away, 0.0)
+        mod = _directional_mod(mag, injury_role_away, is_attack_favored=is_over)
     else:
-        # Mercado total → usar a pior penalidade dos dois times
-        penalty_h = SEVERITY_MAP.get(injury_severity_home, 0.0)
-        penalty_a = SEVERITY_MAP.get(injury_severity_away, 0.0)
-        return min(penalty_h, penalty_a)  # min pois são negativos
+        # Mercado total → combinar ambos os times
+        mag_h = SEVERITY_MAP.get(injury_severity_home, 0.0)
+        mag_a = SEVERITY_MAP.get(injury_severity_away, 0.0)
+        mod_h = _directional_mod(mag_h, injury_role_home, is_attack_favored=is_over)
+        mod_a = _directional_mod(mag_a, injury_role_away, is_attack_favored=is_over)
+        # Para mercados totais, ambos os times influenciam na mesma direção
+        mod = mod_h + mod_a
+
+    return round(mod, 2)
 
 
 def calculate_final_confidence(
@@ -371,39 +413,47 @@ def calculate_final_confidence(
     bet_type: str,
     tactical_script: Optional[str] = None,
     injury_severity_home: str = "none",
-    injury_severity_away: str = "none"
+    injury_severity_away: str = "none",
+    injury_role_home: str = "mixed",
+    injury_role_away: str = "mixed",
 ) -> Tuple[float, Dict[str, float]]:
     """
     PURE ANALYST PROTOCOL - STEP 4: Calcula Confiança Final (sem dependência de odds).
 
-    TASK 4 PHOENIX V4.0: Aceita modificadores de desfalques por time para aplicar
-    penalidade de confiança quando jogadores importantes estão ausentes.
-    
+    PHOENIX V4.0: Modificador de desfalques DIRECIONAL — lesões ofensivas aumentam
+    confiança em Under, lesões defensivas aumentam confiança em Over/BTTS.
+
     Args:
         statistical_probability_pct: Probabilidade estatística base (0-100%)
-        bet_type: Tipo da aposta
-        tactical_script: Script tático (opcional)
-        injury_severity_home: Severidade de desfalques do mandante ("none"|"minor"|"moderate"|"severe")
-        injury_severity_away: Severidade de desfalques do visitante ("none"|"minor"|"moderate"|"severe")
-    
+        bet_type:             Tipo da aposta
+        tactical_script:      Script tático (opcional)
+        injury_severity_home: Severidade de desfalques do mandante
+        injury_severity_away: Severidade de desfalques do visitante
+        injury_role_home:     Papel dos lesionados do mandante ('offensive'/'defensive'/'mixed')
+        injury_role_away:     Papel dos lesionados do visitante ('offensive'/'defensive'/'mixed')
+
     Returns:
         tuple: (confianca_final, breakdown_dict)
     """
     # STEP 2: Base confidence
     base_conf = convert_probability_to_base_confidence(statistical_probability_pct)
-    
+
     # STEP 3: Tactical script modifier
     mod_script = apply_tactical_script_modifier(base_conf, bet_type, tactical_script)
 
-    # STEP 3b: Injury severity modifier (Task 4)
-    mod_injury = apply_injury_confidence_modifier(bet_type, injury_severity_home, injury_severity_away)
-    
+    # STEP 3b: Injury modifier — direcional por papel do lesionado
+    mod_injury = apply_injury_confidence_modifier(
+        bet_type,
+        injury_severity_home, injury_severity_away,
+        injury_role_home, injury_role_away,
+    )
+
     # STEP 4: Final
     final_conf = base_conf + mod_script + mod_injury
-    
+
     # Cap entre 1.0 e 10.0
     final_conf = max(1.0, min(10.0, final_conf))
-    
+
     breakdown = {
         "probabilidade_base": statistical_probability_pct,
         "confianca_base": base_conf,
@@ -411,5 +461,5 @@ def calculate_final_confidence(
         "modificador_lesoes": mod_injury,
         "confianca_final": final_conf
     }
-    
+
     return final_conf, breakdown
