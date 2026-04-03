@@ -325,11 +325,23 @@ function AutoRefreshTimer({ secondsLeft }) {
   )
 }
 
+function matchesSearch(jogo, q) {
+  const lq = q.toLowerCase().trim()
+  if (!lq) return true
+  return (
+    jogo.time_casa?.nome?.toLowerCase().includes(lq) ||
+    jogo.time_fora?.nome?.toLowerCase().includes(lq) ||
+    jogo.liga?.nome?.toLowerCase().includes(lq) ||
+    jogo.liga?.pais?.toLowerCase().includes(lq)
+  )
+}
+
 export default function Home() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [countdown, setCountdown] = useState(AUTO_REFRESH_SECS)
+  const [search, setSearch] = useState('')
   const timerRef = useRef(null)
   const countRef = useRef(AUTO_REFRESH_SECS)
 
@@ -410,6 +422,27 @@ export default function Home() {
   const totalPaises = porPais.length
   const isDemo = data?.is_demo || false
 
+  const q = search.trim()
+
+  const filteredPrincipais = q
+    ? principais.filter(j => matchesSearch(j, q))
+    : principais
+
+  const filteredPorPais = q
+    ? porPais
+        .map(p => ({
+          ...p,
+          ligas: p.ligas
+            .map(l => ({ ...l, jogos: l.jogos.filter(j => matchesSearch(j, q)) }))
+            .filter(l => l.jogos.length > 0),
+        }))
+        .filter(p => p.ligas.length > 0)
+    : porPais
+
+  const totalFiltrados = q
+    ? filteredPorPais.reduce((acc, p) => acc + p.ligas.reduce((a, l) => a + l.jogos.length, 0), 0)
+    : total
+
   return (
     <div style={{ paddingTop: 24 }}>
       {isDemo && (
@@ -430,13 +463,18 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between" style={{ marginBottom: 28 }}>
+
+      {/* ── Cabeçalho ─────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.02em' }}>
             Jogos de Hoje
           </h1>
           <p style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
-            {total} partida{total !== 1 ? 's' : ''} em {totalPaises} pa{totalPaises !== 1 ? 'íses' : 'ís'}
+            {q
+              ? `${totalFiltrados} resultado${totalFiltrados !== 1 ? 's' : ''} para "${q}"`
+              : `${total} partida${total !== 1 ? 's' : ''} em ${totalPaises} pa${totalPaises !== 1 ? 'íses' : 'ís'}`
+            }
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -454,6 +492,42 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── Campo de busca ────────────────────────────────────── */}
+      <div style={{ position: 'relative', marginBottom: 28 }}>
+        <span style={{
+          position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+          fontSize: 15, color: '#475569', pointerEvents: 'none',
+        }}>
+          🔍
+        </span>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar por time, competição ou país..."
+          style={{
+            width: '100%', padding: '10px 40px 10px 40px',
+            background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(99,102,241,0.2)',
+            borderRadius: 10, color: '#e2e8f0', fontSize: 14, outline: 'none',
+            transition: 'border-color 0.2s',
+          }}
+          onFocus={e => e.target.style.borderColor = 'rgba(99,102,241,0.55)'}
+          onBlur={e => e.target.style.borderColor = 'rgba(99,102,241,0.2)'}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            style={{
+              position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', color: '#475569', cursor: 'pointer',
+              fontSize: 16, lineHeight: 1, padding: 2,
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       {total === 0 ? (
         <div style={{
           textAlign: 'center', padding: '60px 0', color: '#64748b',
@@ -464,9 +538,31 @@ export default function Home() {
           <p style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Sem jogos disponíveis</p>
           <p style={{ fontSize: 13, marginTop: 6 }}>Nenhuma partida encontrada nas ligas monitoradas.</p>
         </div>
+      ) : q && totalFiltrados === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '48px 0', color: '#64748b',
+          background: 'rgba(99,102,241,0.04)', border: '1px dashed rgba(99,102,241,0.15)',
+          borderRadius: 12,
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Nenhum resultado</p>
+          <p style={{ fontSize: 13, marginTop: 6 }}>
+            Não há jogos com "<span style={{ color: '#818cf8' }}>{q}</span>" hoje.
+          </p>
+          <button
+            onClick={() => setSearch('')}
+            style={{
+              marginTop: 16, padding: '7px 20px', borderRadius: 8, cursor: 'pointer',
+              background: 'rgba(99,102,241,0.15)', color: '#818cf8',
+              border: '1px solid rgba(99,102,241,0.3)', fontSize: 13,
+            }}
+          >
+            Limpar busca
+          </button>
+        </div>
       ) : (
         <>
-          {principais.length > 0 && (
+          {filteredPrincipais.length > 0 && (
             <section style={{ marginBottom: 36 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>⭐ Principais Jogos</span>
@@ -475,16 +571,16 @@ export default function Home() {
                   background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)',
                   borderRadius: 20, padding: '2px 8px',
                 }}>
-                  Top {principais.length}
+                  Top {filteredPrincipais.length}
                 </span>
               </div>
-              {principais.map(j => (
+              {filteredPrincipais.map(j => (
                 <FeaturedMatchCard key={j.fixture_id} jogo={j} />
               ))}
             </section>
           )}
 
-          {porPais.length > 0 && (
+          {filteredPorPais.length > 0 && (
             <section>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <span style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>🌍 Todos os Jogos</span>
@@ -492,7 +588,7 @@ export default function Home() {
                   por país e liga
                 </span>
               </div>
-              {porPais.map(({ pais, ligas }) => (
+              {filteredPorPais.map(({ pais, ligas }) => (
                 <CountrySection key={pais} pais={pais} ligas={ligas} />
               ))}
             </section>

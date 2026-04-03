@@ -8,7 +8,7 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen" style={{ background: '#0d0f1a' }}>
         <Header />
-        <main className="max-w-6xl mx-auto px-4 pb-16">
+        <main style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px 64px' }}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/jogo/:fixtureId" element={<MatchDetail />} />
