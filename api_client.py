@@ -664,7 +664,7 @@ async def buscar_jogos_do_dia():
         print(f"\n📅 Buscando data: {data_busca} (Season: {season})")
         
         for idx, liga_id in enumerate(LIGAS_DE_INTERESSE, 1):
-            params = {"league": str(liga_id), "season": season, "date": data_busca, "status": "NS"}
+            params = {"league": str(liga_id), "season": season, "date": data_busca}
             
             # 🔍 DEBUG: Log dos parâmetros enviados à API
             if idx == 1:  # Log apenas na primeira liga para não poluir
@@ -692,7 +692,7 @@ async def buscar_jogos_do_dia():
         print(f"\n🔄 FALLBACK: Nenhum jogo encontrado para HOJE, buscando AMANHÃ ({amanha_brt})...")
         
         for idx, liga_id in enumerate(LIGAS_DE_INTERESSE, 1):
-            params = {"league": str(liga_id), "season": season, "date": amanha_brt, "status": "NS"}
+            params = {"league": str(liga_id), "season": season, "date": amanha_brt}
             try:
                 response = await api_request_with_retry("GET", API_URL + "fixtures", params=params)
                 response.raise_for_status()
