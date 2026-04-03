@@ -5,7 +5,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api_client import (
     buscar_estatisticas_gerais_time,
-    buscar_estatisticas_jogo
+    buscar_estatisticas_jogo,
+    buscar_h2h
 )
 
 
@@ -114,17 +115,15 @@ def _calculate_power_score(team_stats):
     return max(0, min(100, score))
 
 
-def _calculate_tactical_profile(team_stats):
+def _calculate_tactical_profile(team_stats, context='total'):
     """
     🧠 NOVO: Calcula perfil tático do time - como ele JOGA (volume de jogo).
     
-    Extrai métricas de:
-    - Escanteios gerados/cedidos
-    - Finalizações geradas/cedidas
-    - Posse ofensiva
+    Usa dados REAIS de cantos e finalizações quando disponíveis na API.
     
     Args:
-        team_stats: Estatísticas completas do time
+        team_stats: Estatísticas completas do time (dict com chaves 'casa'/'fora')
+        context: 'casa' para time mandante, 'fora' para visitante, 'total' para média
     
     Returns:
         dict: Perfil tático com médias de volume de jogo
@@ -134,48 +133,69 @@ def _calculate_tactical_profile(team_stats):
         'corners_against_avg': 0,
         'shots_for_avg': 0,
         'shots_against_avg': 0,
-        'offensive_style': 'neutro',  # ofensivo/neutro/defensivo
-        'volume_intensity': 'medio'    # alto/medio/baixo
+        'offensive_style': 'neutro',
+        'volume_intensity': 'medio'
     }
-    
-    # Extrair médias de escanteios se disponíveis
-    fixtures = team_stats.get('fixtures', {})
-    total_jogos = fixtures.get('played', {}).get('total', 1)
-    
-    # Tentar pegar estatísticas médias (se API fornecer)
-    # Caso contrário, estimar baseado em outros dados
-    
-    # Análise de estilo ofensivo baseado em gols
+
+    # Análise de estilo ofensivo baseado em gols (para classificação)
     goals_for_avg = team_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0)
     goals_for_avg = float(goals_for_avg) if goals_for_avg else 0.0
     goals_against_avg = team_stats.get('goals', {}).get('against', {}).get('average', {}).get('total', 0)
     goals_against_avg = float(goals_against_avg) if goals_against_avg else 0.0
-    
-    # Classificar estilo tático
+
+    # Ler dados REAIS de cantos e finalizações da estrutura stats
+    ctx_data = team_stats.get(context, {}) if context in ('casa', 'fora') else {}
+    if not ctx_data and context == 'total':
+        # Tentar média entre casa e fora quando context='total'
+        casa = team_stats.get('casa', {})
+        fora = team_stats.get('fora', {})
+        cantos_feitos_real = (float(casa.get('cantos_feitos', 0) or 0) +
+                              float(fora.get('cantos_feitos', 0) or 0)) / 2
+        cantos_sofridos_real = (float(casa.get('cantos_sofridos', 0) or 0) +
+                                float(fora.get('cantos_sofridos', 0) or 0)) / 2
+        finalizacoes_real = (float(casa.get('finalizacoes', 0) or 0) +
+                             float(fora.get('finalizacoes', 0) or 0)) / 2
+    else:
+        cantos_feitos_real = float(ctx_data.get('cantos_feitos', 0) or 0)
+        cantos_sofridos_real = float(ctx_data.get('cantos_sofridos', 0) or 0)
+        finalizacoes_real = float(ctx_data.get('finalizacoes', 0) or 0)
+
+    # Classificar estilo ofensivo baseado em gols
     if goals_for_avg > 1.8:
         profile['offensive_style'] = 'ofensivo'
-        profile['corners_for_avg'] = 6.5  # Estimativa para times ofensivos
-        profile['shots_for_avg'] = 15.0
+        _corners_est = 6.5
+        _shots_est = 15.0
     elif goals_for_avg > 1.2:
         profile['offensive_style'] = 'neutro'
-        profile['corners_for_avg'] = 5.0
-        profile['shots_for_avg'] = 12.0
+        _corners_est = 5.0
+        _shots_est = 12.0
     else:
         profile['offensive_style'] = 'defensivo'
-        profile['corners_for_avg'] = 3.5
-        profile['shots_for_avg'] = 9.0
-    
-    # Escanteios cedidos (baseado em gols sofridos)
-    if goals_against_avg > 1.5:
+        _corners_est = 3.5
+        _shots_est = 9.0
+
+    # Usar dados reais se disponíveis, caso contrário usar estimativa
+    profile['corners_for_avg'] = cantos_feitos_real if cantos_feitos_real > 0 else _corners_est
+    profile['shots_for_avg'] = finalizacoes_real if finalizacoes_real > 0 else _shots_est
+
+    # Dados reais de cantos cedidos / estimativa baseada em gols sofridos
+    if cantos_sofridos_real > 0:
+        profile['corners_against_avg'] = cantos_sofridos_real
+    elif goals_against_avg > 1.5:
         profile['corners_against_avg'] = 6.0
-        profile['shots_against_avg'] = 14.0
     elif goals_against_avg > 1.0:
         profile['corners_against_avg'] = 4.5
-        profile['shots_against_avg'] = 11.0
     else:
         profile['corners_against_avg'] = 3.0
+
+    # shots_against: sem dado real direto — estimar por gols sofridos
+    if goals_against_avg > 1.5:
+        profile['shots_against_avg'] = 14.0
+    elif goals_against_avg > 1.0:
+        profile['shots_against_avg'] = 11.0
+    else:
         profile['shots_against_avg'] = 8.0
-    
+
     # Volume de jogo total
     total_volume = profile['corners_for_avg'] + profile['shots_for_avg']
     if total_volume > 20:
@@ -184,7 +204,7 @@ def _calculate_tactical_profile(team_stats):
         profile['volume_intensity'] = 'medio'
     else:
         profile['volume_intensity'] = 'baixo'
-    
+
     return profile
 
 
@@ -235,6 +255,56 @@ def _adjust_volume_by_opponent(my_profile, opponent_moment, opponent_power):
         adjusted['shots_expected'] *= 1.0
     
     return adjusted
+
+
+async def _process_h2h_data(h2h_list):
+    """
+    Processa lista de confrontos H2H e calcula médias de gols e cantos.
+
+    Busca estatísticas de cantos por fixture quando disponível.
+
+    Args:
+        h2h_list: Lista de confrontos retornada por buscar_h2h()
+
+    Returns:
+        dict ou None: {count, avg_goals, avg_corners, games} quando há 3+ jogos válidos
+    """
+    if not h2h_list:
+        return None
+
+    valid = [c for c in h2h_list
+             if c.get('home_goals') is not None and c.get('away_goals') is not None]
+
+    if len(valid) < 3:
+        return None
+
+    total_goals = sum((c['home_goals'] or 0) + (c['away_goals'] or 0) for c in valid)
+    avg_goals = total_goals / len(valid)
+
+    # Tentar buscar cantos por fixture (usa cache; não força API extra se já em cache)
+    corner_totals = []
+    for confronto in valid[:5]:
+        fid = confronto.get('fixture_id')
+        if fid:
+            try:
+                stats = await buscar_estatisticas_jogo(fid)
+                if stats:
+                    home_c = int(stats.get('home', {}).get('Corner Kicks', 0) or 0)
+                    away_c = int(stats.get('away', {}).get('Corner Kicks', 0) or 0)
+                    corner_totals.append(home_c + away_c)
+            except Exception:
+                pass
+
+    avg_corners = sum(corner_totals) / len(corner_totals) if corner_totals else None
+
+    print(f"  🔗 H2H processado: {len(valid)} jogos | avg_goals={avg_goals:.2f} | avg_corners={avg_corners}")
+
+    return {
+        'count': len(valid),
+        'avg_goals': round(avg_goals, 2),
+        'avg_corners': round(avg_corners, 1) if avg_corners is not None else None,
+        'games': valid[:5]
+    }
 
 
 def _identify_contextual_factors(venue_info):
@@ -1182,8 +1252,8 @@ async def generate_match_analysis(jogo):
     print(f"  📊 Fora: {weighted_away['weighted_corners_for']:.1f} cantos | {weighted_away['weighted_shots_for']:.1f} finalizações (ponderado)")
     
     print("🎯 Calculando Perfil Tático (Volume de Jogo)...")
-    profile_home = _calculate_tactical_profile(home_stats) if home_stats else {'corners_for_avg': 5, 'shots_for_avg': 12, 'offensive_style': 'neutro'}
-    profile_away = _calculate_tactical_profile(away_stats) if away_stats else {'corners_for_avg': 5, 'shots_for_avg': 12, 'offensive_style': 'neutro'}
+    profile_home = _calculate_tactical_profile(home_stats, context='casa') if home_stats else {'corners_for_avg': 5, 'shots_for_avg': 12, 'offensive_style': 'neutro'}
+    profile_away = _calculate_tactical_profile(away_stats, context='fora') if away_stats else {'corners_for_avg': 5, 'shots_for_avg': 12, 'offensive_style': 'neutro'}
     print(f"  ⚔️ Casa: {profile_home['offensive_style']} | Fora: {profile_away['offensive_style']}")
     
     print("🌍 Identificando fatores contextuais...")
@@ -1292,6 +1362,14 @@ async def generate_match_analysis(jogo):
     evidencias_away = _extract_evidence_from_recent_games(ultimos_jogos_fora, away_team_id, away_team_name) if ultimos_jogos_fora else {}
     
     print(f"  ✅ Evidências extraídas: Casa ({len(evidencias_home.get('gols', []))} jogos) | Fora ({len(evidencias_away.get('gols', []))} jogos)")
+
+    print("🔗 H2H: Buscando confrontos diretos...")
+    h2h_list = await buscar_h2h(home_team_id, away_team_id, limite=5)
+    h2h_stats = await _process_h2h_data(h2h_list)
+    if h2h_stats:
+        print(f"  ✅ H2H: {h2h_stats['count']} jogos | avg_goals={h2h_stats['avg_goals']:.2f} | avg_corners={h2h_stats['avg_corners']}")
+    else:
+        print(f"  ⚠️ H2H: Dados insuficientes (menos de 3 jogos válidos)")
     
     analysis_packet = {
         'fixture_id': fixture_id,
@@ -1333,7 +1411,8 @@ async def generate_match_analysis(jogo):
             'home_stats': home_stats,
             'away_stats': away_stats,
             'fixture_data': jogo
-        }
+        },
+        'h2h': h2h_stats
     }
     
     print("✅ MASTER ANALYZER: Análise completa gerada com QSC, SoS, Weighted Metrics e Evidências!\n")

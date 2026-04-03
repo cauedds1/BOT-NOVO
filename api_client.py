@@ -754,20 +754,30 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         corners_avg = corners_data.get('average', {})
         cantos_avg_casa = float(corners_avg.get('home', 0) or 0)
         cantos_avg_fora = float(corners_avg.get('away', 0) or 0)
+
+        # Extrair dados de finalizações da API primária (/teams/statistics)
+        shots_data = data.get('shots', {})
+        shots_total_data = shots_data.get('total', {})
+        shots_on_data = shots_data.get('on', {})
+        finalizacoes_casa_primary = float(shots_total_data.get('home', 0) or 0)
+        finalizacoes_fora_primary = float(shots_total_data.get('away', 0) or 0)
+        finalizacoes_no_gol_casa_primary = float(shots_on_data.get('home', 0) or 0)
+        finalizacoes_no_gol_fora_primary = float(shots_on_data.get('away', 0) or 0)
         
         # DEBUG: Mostrar valores finais extraídos
         print(f"\n     📊 VALORES EXTRAÍDOS:")
         print(f"        Gols Casa: {gols_casa_marcados:.1f} | Fora: {gols_fora_marcados:.1f}")
         print(f"        Cantos Casa: {cantos_avg_casa:.1f} | Fora: {cantos_avg_fora:.1f}")
+        print(f"        Finalizações (primária) Casa: {finalizacoes_casa_primary:.1f} | Fora: {finalizacoes_fora_primary:.1f}")
 
         # 🎯 FALLBACK: Se API retornar 0.0, calcular dos últimos jogos (cantos, finalizações, etc)
-        # Inicializar TODAS as variáveis que podem não ser calculadas
+        # Inicializar com valores da API primária quando disponíveis
         cantos_sofridos_casa = 0.0
         cantos_sofridos_fora = 0.0
-        finalizacoes_casa = 0.0
-        finalizacoes_fora = 0.0
-        finalizacoes_no_gol_casa = 0.0
-        finalizacoes_no_gol_fora = 0.0
+        finalizacoes_casa = finalizacoes_casa_primary
+        finalizacoes_fora = finalizacoes_fora_primary
+        finalizacoes_no_gol_casa = finalizacoes_no_gol_casa_primary
+        finalizacoes_no_gol_fora = finalizacoes_no_gol_fora_primary
         cartoes_amarelos_casa = 0.0
         cartoes_vermelhos_casa = 0.0
         cartoes_amarelos_fora = 0.0
@@ -1081,6 +1091,7 @@ async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
                     continue
                 
                 confrontos.append({
+                    'fixture_id': jogo['fixture']['id'],
                     'date': jogo['fixture']['date'],
                     'home_team': jogo['teams']['home']['name'],
                     'away_team': jogo['teams']['away']['name'],
