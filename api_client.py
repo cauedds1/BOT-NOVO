@@ -785,8 +785,17 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         vitorias_casa = 0
         vitorias_fora = 0
 
-        if cantos_avg_casa == 0.0 and cantos_avg_fora == 0.0:
-            print(f"  🔄 FALLBACK: API retornou 0.0, buscando estatísticas dos últimos jogos...")
+        # 🎯 FALLBACK INDEPENDENTE: acionar se cantos OU finalizações estiverem ausentes
+        needs_corners_fallback = cantos_avg_casa == 0.0 and cantos_avg_fora == 0.0
+        needs_shots_fallback = finalizacoes_casa == 0.0 and finalizacoes_fora == 0.0
+
+        if needs_corners_fallback or needs_shots_fallback:
+            _reason = []
+            if needs_corners_fallback:
+                _reason.append("cantos")
+            if needs_shots_fallback:
+                _reason.append("finalizações")
+            print(f"  🔄 FALLBACK ({', '.join(_reason)}): API retornou 0.0, buscando estatísticas dos últimos jogos...")
             ultimos_jogos = await buscar_ultimos_jogos_time(time_id, limite=5)
 
             if ultimos_jogos:
@@ -894,18 +903,22 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
                 cartoes_vermelhos_fora = 0.0
                 
                 if jogos_casa > 0:
-                    cantos_avg_casa = cantos_feitos_casa_soma / jogos_casa
-                    cantos_sofridos_casa = cantos_cedidos_casa_soma / jogos_casa
-                    finalizacoes_casa = finalizacoes_casa_soma / jogos_casa
-                    finalizacoes_no_gol_casa = finalizacoes_gol_casa_soma / jogos_casa
+                    if needs_corners_fallback:
+                        cantos_avg_casa = cantos_feitos_casa_soma / jogos_casa
+                        cantos_sofridos_casa = cantos_cedidos_casa_soma / jogos_casa
+                    if needs_shots_fallback:
+                        finalizacoes_casa = finalizacoes_casa_soma / jogos_casa
+                        finalizacoes_no_gol_casa = finalizacoes_gol_casa_soma / jogos_casa
                     cartoes_amarelos_casa = cartoes_amarelos_casa_soma / jogos_casa
                     cartoes_vermelhos_casa = cartoes_vermelhos_casa_soma / jogos_casa
 
                 if jogos_fora > 0:
-                    cantos_avg_fora = cantos_feitos_fora_soma / jogos_fora
-                    cantos_sofridos_fora = cantos_cedidos_fora_soma / jogos_fora
-                    finalizacoes_fora = finalizacoes_fora_soma / jogos_fora
-                    finalizacoes_no_gol_fora = finalizacoes_gol_fora_soma / jogos_fora
+                    if needs_corners_fallback:
+                        cantos_avg_fora = cantos_feitos_fora_soma / jogos_fora
+                        cantos_sofridos_fora = cantos_cedidos_fora_soma / jogos_fora
+                    if needs_shots_fallback:
+                        finalizacoes_fora = finalizacoes_fora_soma / jogos_fora
+                        finalizacoes_no_gol_fora = finalizacoes_gol_fora_soma / jogos_fora
                     cartoes_amarelos_fora = cartoes_amarelos_fora_soma / jogos_fora
                     cartoes_vermelhos_fora = cartoes_vermelhos_fora_soma / jogos_fora
 

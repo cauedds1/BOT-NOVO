@@ -281,19 +281,28 @@ async def _process_h2h_data(h2h_list):
     total_goals = sum((c['home_goals'] or 0) + (c['away_goals'] or 0) for c in valid)
     avg_goals = total_goals / len(valid)
 
-    # Tentar buscar cantos por fixture (usa cache; não força API extra se já em cache)
+    # Enriquecer cada jogo com total_goals e tentar buscar total_corners via fixture stats
+    enriched_games = []
     corner_totals = []
     for confronto in valid[:5]:
         fid = confronto.get('fixture_id')
+        total_goals = (confronto.get('home_goals') or 0) + (confronto.get('away_goals') or 0)
+        total_corners = None
         if fid:
             try:
                 stats = await buscar_estatisticas_jogo(fid)
                 if stats:
                     home_c = int(stats.get('home', {}).get('Corner Kicks', 0) or 0)
                     away_c = int(stats.get('away', {}).get('Corner Kicks', 0) or 0)
-                    corner_totals.append(home_c + away_c)
+                    total_corners = home_c + away_c
+                    corner_totals.append(total_corners)
             except Exception:
                 pass
+        enriched_games.append({
+            **confronto,
+            'total_goals': total_goals,
+            'total_corners': total_corners
+        })
 
     avg_corners = sum(corner_totals) / len(corner_totals) if corner_totals else None
 
@@ -303,7 +312,7 @@ async def _process_h2h_data(h2h_list):
         'count': len(valid),
         'avg_goals': round(avg_goals, 2),
         'avg_corners': round(avg_corners, 1) if avg_corners is not None else None,
-        'games': valid[:5]
+        'games': enriched_games
     }
 
 
