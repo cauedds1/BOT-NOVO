@@ -261,6 +261,7 @@ def analisar_mercado_primeiro_a_marcar(analysis_packet: dict, odds: dict):
             continue
 
         candidatos.append({
+            'mercado': 'Primeiro a Marcar',
             'tipo': nome,
             'confianca': round(confianca, 1),
             'odd': odd,

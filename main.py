@@ -740,9 +740,10 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
             analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
             analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
             analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+            analisar_mercado_primeiro_a_marcar(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
         ]
 
-        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}, HE={bool(analises_brutas[9])}")
+        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}, HE={bool(analises_brutas[9])}, PM={bool(analises_brutas[10])}")
 
         # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
         # Apenas retorna análises válidas (não None)
