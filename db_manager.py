@@ -5,7 +5,7 @@ import psycopg2
 from psycopg2 import pool
 from psycopg2.extras import RealDictCursor, Json
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from zoneinfo import ZoneInfo
 from contextlib import contextmanager
 import cache_manager
@@ -16,6 +16,39 @@ BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
 def agora_brasilia():
     """Retorna datetime atual no horário de Brasília"""
     return datetime.now(BRASILIA_TZ)
+
+
+def calcular_ttl_analise(data_jogo: Optional[datetime]) -> Optional[int]:
+    """
+    Calcula o TTL (em horas) para cache de análise baseado no horário de kickoff.
+
+    Regras:
+      - data_jogo ausente           → 12h (padrão conservador)
+      - kickoff em mais de 24h      → 12h TTL (dados estáveis)
+      - kickoff entre 2h e 24h      → 2h TTL (escalação ainda pode mudar)
+      - kickoff em menos de 2h      → None (sem cache; dados oficiais devem ser frescos)
+
+    Returns:
+        int com horas de TTL, ou None para desabilitar cache.
+    """
+    if data_jogo is None:
+        return 12
+
+    agora = agora_brasilia()
+    # Garantir timezone aware
+    if data_jogo.tzinfo is None:
+        data_jogo = data_jogo.replace(tzinfo=BRASILIA_TZ)
+
+    delta = data_jogo - agora
+    horas_restantes = delta.total_seconds() / 3600
+
+    if horas_restantes > 24:
+        return 12   # Jogo distante → cache longo
+    elif horas_restantes > 2:
+        return 2    # Jogo hoje → cache curto
+    else:
+        return None  # Iminente → sem cache (escalação oficial)
+
 
 class DatabaseManager:
     """
@@ -131,6 +164,40 @@ class DatabaseManager:
         COMMENT ON TABLE daily_analyses IS 'Análises processadas em batch pelo sistema de fila assíncrona';
         COMMENT ON COLUMN daily_analyses.analysis_type IS 'Tipo: full, goals_only, corners_only, btts_only, result_only, simple_bet, multiple_bet, bingo';
         COMMENT ON COLUMN daily_analyses.dossier_json IS 'JSON completo do dossier de análise gerado pelo master_analyzer';
+
+        -- Tabela de histórico de palpites individuais (rastreamento permanente)
+        CREATE TABLE IF NOT EXISTS palpites_historico (
+            id SERIAL PRIMARY KEY,
+            fixture_id INTEGER NOT NULL,
+            mercado VARCHAR(100) NOT NULL,
+            linha VARCHAR(100) NOT NULL,
+            confianca INTEGER NOT NULL DEFAULT 0,
+            odd DECIMAL(8,2),
+            resultado_esperado VARCHAR(200),
+            periodo VARCHAR(10) DEFAULT 'FT',
+            acertou BOOLEAN,
+            roi_unitario DECIMAL(8,4),
+            criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_palpites_historico_fixture_id ON palpites_historico(fixture_id);
+        CREATE INDEX IF NOT EXISTS idx_palpites_historico_mercado ON palpites_historico(mercado);
+        CREATE INDEX IF NOT EXISTS idx_palpites_historico_acertou ON palpites_historico(acertou);
+        CREATE INDEX IF NOT EXISTS idx_palpites_historico_criado_em ON palpites_historico(criado_em);
+
+        -- Tabela de resultados reais dos jogos analisados
+        CREATE TABLE IF NOT EXISTS resultado_jogos (
+            id SERIAL PRIMARY KEY,
+            fixture_id INTEGER UNIQUE NOT NULL,
+            placar_casa INTEGER,
+            placar_fora INTEGER,
+            status_final VARCHAR(20),
+            buscado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_resultado_jogos_fixture_id ON resultado_jogos(fixture_id);
+        CREATE INDEX IF NOT EXISTS idx_resultado_jogos_status_final ON resultado_jogos(status_final);
+
+        COMMENT ON TABLE palpites_historico IS 'Palpites individuais gerados para cada jogo analisado com resultado real';
+        COMMENT ON TABLE resultado_jogos IS 'Resultado real (placar final) dos jogos analisados';
         """
         
         try:
@@ -148,7 +215,7 @@ class DatabaseManager:
                 cursor.close()
                 
                 print("✅ Database schema inicializado com sucesso!")
-                print("   📋 Tabelas criadas: analises_jogos, daily_analyses")
+                print("   📋 Tabelas criadas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos")
                 return True
                 
         except Exception as e:
@@ -249,6 +316,10 @@ class DatabaseManager:
                         cursor.close()
 
                         print(f"✅ Análise salva no banco: Fixture #{fixture_id} ({total_palpites} palpites)")
+
+                        # Salvar palpites individuais em palpites_historico
+                        self._salvar_palpites_historico(fixture_id, analises, conn)
+
                         return True
 
             except Exception as e:
@@ -291,17 +362,109 @@ class DatabaseManager:
         
         return False
 
-    def buscar_analise(self, fixture_id: int, max_idade_horas: int = 12) -> Optional[Dict]:
+    def _salvar_palpites_historico(self, fixture_id: int, analises: dict, conn) -> None:
+        """
+        Insere palpites individuais em palpites_historico após análise de um jogo.
+        Usa INSERT ... ON CONFLICT DO NOTHING para ser idempotente.
+
+        Args:
+            fixture_id: ID do jogo
+            analises: Dict com análises por mercado (gols, cantos, btts, etc.)
+            conn: Conexão psycopg2 já aberta (mesma transação)
+        """
+        if not conn:
+            return
+
+        MERCADOS = [
+            'gols', 'cantos', 'btts', 'resultado', 'cartoes',
+            'finalizacoes', 'handicaps', 'dupla_chance', 'gabt',
+            'placar_exato', 'handicap_europeu', 'primeiro_marcador',
+        ]
+
+        inseridos = 0
+        try:
+            cursor = conn.cursor()
+            for mercado_key in MERCADOS:
+                analise_mercado = analises.get(mercado_key)
+                if not analise_mercado:
+                    continue
+                palpites = analise_mercado.get('palpites', [])
+                if not palpites:
+                    continue
+
+                for p in palpites:
+                    tipo = p.get('tipo', '')
+                    mercado_nome = p.get('mercado') or mercado_key.capitalize()
+                    confianca = int(p.get('confianca', 0))
+                    odd = p.get('odd')
+                    periodo = p.get('periodo', 'FT') or 'FT'
+
+                    try:
+                        odd_val = float(odd) if odd is not None else None
+                    except (TypeError, ValueError):
+                        odd_val = None
+
+                    cursor.execute(
+                        """
+                        INSERT INTO palpites_historico
+                            (fixture_id, mercado, linha, confianca, odd, resultado_esperado, periodo)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (fixture_id, mercado_nome, tipo, confianca, odd_val, tipo, periodo),
+                    )
+                    inseridos += 1
+
+            conn.commit()
+            cursor.close()
+            if inseridos:
+                print(f"📋 Palpites histórico: {inseridos} palpites salvos para Fixture #{fixture_id}")
+
+        except Exception as e:
+            print(f"❌ Erro ao salvar palpites_historico para Fixture #{fixture_id}: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+    def buscar_analise(
+        self,
+        fixture_id: int,
+        max_idade_horas: int = 12,
+        data_jogo: Optional[datetime] = None,
+        permitir_stale: bool = False,
+    ) -> Optional[Dict]:
         """
         Busca análise existente no banco de dados ou cache.json.
 
+        TTL Inteligente (quando data_jogo é fornecido):
+          - kickoff em mais de 24h → 12h TTL
+          - kickoff entre 2h e 24h → 2h TTL
+          - kickoff em menos de 2h → sem cache (escalação oficial iminente)
+
+        Graceful degradation: quando permitir_stale=True e nenhuma análise
+        válida for encontrada, retorna qualquer análise armazenada (mesmo stale)
+        para evitar falha total quando a API está indisponível.
+
         Args:
             fixture_id: ID único do jogo
-            max_idade_horas: Idade máxima da análise em horas (padrão: 12h)
+            max_idade_horas: Idade máxima em horas (usado se data_jogo ausente)
+            data_jogo: Horário do kickoff para TTL dinâmico
+            permitir_stale: Retornar análise stale se não houver cache válido
 
         Returns:
             Dict com a análise completa ou None se não encontrar
         """
+        # Determinar TTL efetivo
+        if data_jogo is not None:
+            ttl_horas = calcular_ttl_analise(data_jogo)
+        else:
+            ttl_horas = max_idade_horas
+
+        # TTL=None → kickoff iminente, não retornar cache (mas stale ainda pode)
+        if ttl_horas is None and not permitir_stale:
+            print(f"⏱️  CACHE SKIP: Kickoff iminente para Fixture #{fixture_id} — análise fresca obrigatória")
+            return None
+
         # Se banco de dados está habilitado, tentar buscar lá primeiro
         if self.enabled:
             try:
@@ -309,24 +472,38 @@ class DatabaseManager:
                     if conn:
                         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-                        # Buscar apenas análises recentes
-                        limite_tempo = agora_brasilia() - timedelta(hours=max_idade_horas)
+                        if ttl_horas is not None:
+                            # Buscar apenas análises dentro do TTL
+                            limite_tempo = agora_brasilia() - timedelta(hours=ttl_horas)
+                            query = """
+                                SELECT * FROM analises_jogos
+                                WHERE fixture_id = %s
+                                AND atualizado_em >= %s
+                            """
+                            cursor.execute(query, (fixture_id, limite_tempo))
+                        else:
+                            # Stale: buscar qualquer análise existente
+                            query = "SELECT * FROM analises_jogos WHERE fixture_id = %s"
+                            cursor.execute(query, (fixture_id,))
 
-                        query = """
-                            SELECT * FROM analises_jogos 
-                            WHERE fixture_id = %s 
-                            AND atualizado_em >= %s
-                        """
-
-                        cursor.execute(query, (fixture_id, limite_tempo))
                         resultado = cursor.fetchone()
+
+                        if not resultado and permitir_stale and ttl_horas is not None:
+                            # Fallback gracioso: retornar análise stale se existir
+                            cursor.execute(
+                                "SELECT * FROM analises_jogos WHERE fixture_id = %s",
+                                (fixture_id,),
+                            )
+                            resultado = cursor.fetchone()
+                            if resultado:
+                                print(f"⚠️  CACHE STALE (DB): Análise stale servida para Fixture #{fixture_id}")
 
                         cursor.close()
 
                         if resultado:
-                            # Converter de dict do psycopg2 para dict normal
                             analise = dict(resultado)
-                            print(f"🎯 CACHE HIT (DB): Análise encontrada para Fixture #{fixture_id} ({analise['palpites_totais']} palpites)")
+                            stale_tag = " [STALE]" if permitir_stale and ttl_horas is None else ""
+                            print(f"🎯 CACHE HIT (DB){stale_tag}: Análise encontrada para Fixture #{fixture_id} ({analise['palpites_totais']} palpites)")
                             return analise
                         else:
                             print(f"⚡ CACHE MISS (DB): Análise não encontrada para Fixture #{fixture_id}")
@@ -334,19 +511,19 @@ class DatabaseManager:
 
             except Exception as e:
                 print(f"❌ Erro ao buscar análise no banco: {e}")
-        
+
         # Fallback: buscar no cache.json se banco não está disponível
         if self.use_cache_fallback:
             cache_key = f"analise_jogo_{fixture_id}_None_None"
             analise_cached = cache_manager.get(cache_key)
-            
+
             if analise_cached:
                 print(f"🎯 CACHE HIT (JSON): Análise encontrada para Fixture #{fixture_id}")
                 return analise_cached
             else:
                 print(f"⚡ CACHE MISS (JSON): Análise não encontrada para Fixture #{fixture_id}")
                 return None
-        
+
         return None
 
     def limpar_analises_antigas(self, dias: int = 7):
@@ -574,3 +751,179 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Erro ao contar daily analyses: {e}")
             return 0
+
+    # ─── Métodos para rastreamento de resultados (result_tracker) ─────────
+
+    def buscar_fixtures_sem_resultado(self, janela_horas: int = 48) -> List[int]:
+        """
+        Retorna fixture_ids que têm palpites pendentes e não têm resultado gravado.
+        Filtra jogos cuja data_jogo está dentro da janela de horas (padrão: 48h atrás).
+
+        Args:
+            janela_horas: Quantas horas atrás buscar jogos encerrados
+
+        Returns:
+            Lista de fixture_ids sem resultado registrado
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor()
+                limite = agora_brasilia() - timedelta(hours=janela_horas)
+
+                query = """
+                    SELECT DISTINCT aj.fixture_id
+                    FROM analises_jogos aj
+                    LEFT JOIN resultado_jogos rj ON rj.fixture_id = aj.fixture_id
+                    WHERE rj.fixture_id IS NULL
+                      AND aj.data_jogo >= %s
+                      AND aj.data_jogo <= %s
+                    ORDER BY aj.fixture_id
+                """
+                cursor.execute(query, (limite, agora_brasilia()))
+                rows = cursor.fetchall()
+                cursor.close()
+
+                return [r[0] for r in rows]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar fixtures sem resultado: {e}")
+            return []
+
+    def salvar_resultado_jogo(
+        self,
+        fixture_id: int,
+        placar_casa: Optional[int],
+        placar_fora: Optional[int],
+        status_final: str,
+    ) -> bool:
+        """
+        Grava o resultado real de um jogo em resultado_jogos.
+        Usa UPSERT para ser idempotente.
+
+        Args:
+            fixture_id: ID do jogo
+            placar_casa: Gols do time da casa (None se jogo não encerrado)
+            placar_fora: Gols do time visitante
+            status_final: Status da API (FT, AET, PEN, etc.)
+
+        Returns:
+            True se salvo com sucesso
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return False
+
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO resultado_jogos
+                        (fixture_id, placar_casa, placar_fora, status_final, buscado_em)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (fixture_id) DO UPDATE SET
+                        placar_casa  = EXCLUDED.placar_casa,
+                        placar_fora  = EXCLUDED.placar_fora,
+                        status_final = EXCLUDED.status_final,
+                        buscado_em   = EXCLUDED.buscado_em
+                    """,
+                    (fixture_id, placar_casa, placar_fora, status_final, agora_brasilia()),
+                )
+                conn.commit()
+                cursor.close()
+                return True
+
+        except Exception as e:
+            print(f"❌ Erro ao salvar resultado do jogo #{fixture_id}: {e}")
+            return False
+
+    def buscar_palpites_pendentes(self, fixture_id: int) -> List[Dict]:
+        """
+        Retorna palpites sem resultado (acertou IS NULL) para um fixture.
+
+        Args:
+            fixture_id: ID do jogo
+
+        Returns:
+            Lista de dicts com os palpites pendentes
+        """
+        if not self.enabled:
+            return []
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return []
+
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT id, fixture_id, mercado, linha, confianca, odd,
+                           resultado_esperado, periodo
+                    FROM palpites_historico
+                    WHERE fixture_id = %s AND acertou IS NULL
+                    ORDER BY id
+                    """,
+                    (fixture_id,),
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [dict(r) for r in rows]
+
+        except Exception as e:
+            print(f"❌ Erro ao buscar palpites pendentes #{fixture_id}: {e}")
+            return []
+
+    def atualizar_palpite_resultado(
+        self,
+        palpite_id: int,
+        acertou: bool,
+        roi_unitario: float,
+    ) -> bool:
+        """
+        Marca um palpite como acertado/errado e registra ROI unitário.
+
+        ROI unitário:
+          - Acertou → odd − 1  (lucro unitário)
+          - Errou   → −1       (perda unitária)
+
+        Args:
+            palpite_id: PK da tabela palpites_historico
+            acertou: True se o palpite foi correto
+            roi_unitario: Lucro/prejuízo unitário calculado
+
+        Returns:
+            True se atualizado com sucesso
+        """
+        if not self.enabled:
+            return False
+
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return False
+
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE palpites_historico
+                    SET acertou = %s, roi_unitario = %s
+                    WHERE id = %s
+                    """,
+                    (acertou, roi_unitario, palpite_id),
+                )
+                conn.commit()
+                cursor.close()
+                return True
+
+        except Exception as e:
+            print(f"❌ Erro ao atualizar palpite #{palpite_id}: {e}")
+            return False

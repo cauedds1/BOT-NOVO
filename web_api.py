@@ -68,7 +68,7 @@ app.add_middleware(
 # ── Lifecycle ────────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    """Inicializa o cliente HTTP compartilhado."""
+    """Inicializa o cliente HTTP compartilhado e agenda job noturno."""
     api_key = os.environ.get("API_FOOTBALL_KEY")
     headers = {k: v for k, v in {
         "x-rapidapi-host": "v3.football.api-sports.io",
@@ -86,6 +86,17 @@ async def startup_event():
         print("✅ [WebAPI] HTTP client inicializado com chave de API")
     else:
         print("⚠️ [WebAPI] HTTP client iniciado SEM chave de API. Configure API_FOOTBALL_KEY.")
+
+    # Inicializar schema do banco (inclui palpites_historico e resultado_jogos)
+    db.initialize_database()
+
+    # Iniciar job noturno de rastreamento de resultados (03:00 BRT)
+    try:
+        from result_tracker import _scheduler_job_noturno
+        asyncio.create_task(_scheduler_job_noturno(db))
+        print("✅ [WebAPI] Job noturno de resultados agendado (03:00 BRT)")
+    except Exception as e:
+        print(f"⚠️ [WebAPI] Não foi possível iniciar job noturno: {e}")
 
 
 @app.on_event("shutdown")
@@ -470,7 +481,17 @@ async def jogos_hoje():
             fid = jogo.get("fixture", {}).get("id")
             tem_analise = False
             if fid:
-                cached = db.buscar_analise(fid, max_idade_horas=24)
+                # Extrair data do kickoff para TTL inteligente
+                data_utc_str = jogo.get("fixture", {}).get("date", "")
+                data_kickoff = None
+                if data_utc_str:
+                    try:
+                        from zoneinfo import ZoneInfo as _ZI
+                        dt_utc = datetime.fromisoformat(data_utc_str.replace("Z", "+00:00"))
+                        data_kickoff = dt_utc.astimezone(_ZI("America/Sao_Paulo"))
+                    except Exception:
+                        pass
+                cached = db.buscar_analise(fid, data_jogo=data_kickoff, permitir_stale=True)
                 tem_analise = cached is not None
             resultado_raw_list.append(_formatar_jogo(jogo, tem_analise=tem_analise))
         resultado = sorted(resultado_raw_list, key=lambda x: x.get("data_iso", ""))
@@ -545,7 +566,7 @@ async def get_analise(fixture_id: int):
     if status_atual == "error":
         raise HTTPException(status_code=500, detail="Erro na análise. Tente novamente.")
 
-    analise_db = db.buscar_analise(fixture_id, max_idade_horas=24)
+    analise_db = db.buscar_analise(fixture_id, max_idade_horas=24, permitir_stale=True)
     if not analise_db:
         if status_atual == "ready":
             _processing_status.pop(fixture_id, None)
