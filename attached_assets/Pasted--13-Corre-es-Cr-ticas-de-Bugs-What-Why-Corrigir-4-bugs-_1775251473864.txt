@@ -1,0 +1,29 @@
+#13 - Correções Críticas de Bugs
+What & Why
+Corrigir 4 bugs que causam análises incorretas hoje: tratamento de erro 429 da API, lógica invertida de penalidade por lesão, fallback de temporada quebrado para ligas de ano calendário, e ausência de modificadores de script tático no analisador de Resultado (1X2).
+
+Done looks like
+Erros 429 (rate limit) da API-Football disparam retry com backoff exponencial em vez de retornar dados vazios silenciosamente
+Quando um ATACANTE está lesionado, a confiança em apostas de Under Gols aumenta (em vez de ser penalizada junto com os Overs); quando um DEFENSOR está lesionado, a confiança em Over e BTTS aumenta
+Ligas de ano calendário (Brasileirão, MLS, Argentino, Chileno, etc.) buscam corretamente a temporada do ano atual em vez de ano - 1
+O analisador de Resultado (1X2) aplica os modificadores de script tático (DOMÍNIO CASA, TIME EM CHAMAS, GIANT vs MINNOW, etc.) na confiança final, assim como já fazem os demais analisadores
+Out of scope
+Melhorias de modelo (HT ratio, QSC threshold, double-counting) — essas ficam para a próxima tarefa
+Novos mercados
+Interface ou banco de dados
+Tasks
+Retry 429 no api_client — Adicionar tratamento explícito de HTTP 429 no retry decorator e em api_request_with_retry: aguardar o tempo indicado pelo header Retry-After (ou usar backoff de 30s) e tentar novamente, em vez de retornar resposta silenciosa com dados vazios.
+
+Lógica de lesão direcional no confidence_calculator — Refatorar apply_injury_confidence_modifier para distinguir o papel do jogador lesionado: lesão ofensiva (atacante/meia) aumenta confiança em Under e penaliza Over; lesão defensiva (defensor/goleiro) aumenta confiança em Over e BTTS. Adicionar campo injury_role nos dados de desfalque passados pelos analisadores.
+
+Fallback de temporada para ligas de ano calendário — Em api_client.py, criar lista de ligas cujo calendário coincide com o ano civil (Brasileirão, Serie B, MLS, Argentino, Chileno, Colombiano, Peruano, Ecuatoriano, etc.) e usar str(ano_atual) como fallback para essas ligas em vez de str(ano_atual - 1).
+
+Script tático no match_result_analyzer — Adicionar chamada a apply_tactical_script_modifier no match_result_analyzer_v2.py antes de retornar a confiança final de cada palpite de Resultado, consistente com o padrão já usado pelos analisadores de gols, cantos e cartões.
+
+Relevant files
+api_client.py
+analysts/confidence_calculator.py
+analysts/match_result_analyzer_v2.py
+analysts/goals_analyzer_v2.py
+analysts/btts_analyzer.py
+analysts/master_analyzer.py

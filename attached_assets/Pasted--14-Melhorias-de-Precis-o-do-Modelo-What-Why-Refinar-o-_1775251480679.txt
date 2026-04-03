@@ -1,0 +1,37 @@
+#14 - Melhorias de Precisão do Modelo
+What & Why
+Refinar o motor de análise após as correções críticas: eliminar double-counting nos cantos, melhorar o Moment Score para resistir a vitórias isoladas contra times fracos, suavizar o threshold binário do Giant vs Minnow, corrigir o HT ratio fixo, adicionar penalidade de lesões ao BTTS, e atualizar o schema.sql para refletir a estrutura real do banco. Todas as mudanças aumentam a acurácia estatística sem mudar a arquitetura existente.
+
+Done looks like
+O analisador de cantos não aplica ajuste de intensidade de jogo quando o confidence_calculator já vai aplicar o modificador de script — zero double-counting
+O Moment Score considera a força do adversário dos últimos 5 jogos: vitórias contra times fracos valem menos que vitórias contra fortes
+O Giant vs Minnow ativa gradualmente (não mais binário em 25 pontos): QSC gap 15-25 → ajuste parcial, >25 → ajuste completo
+O HT ratio é calculado dinamicamente a partir do histórico real de gols por tempo de cada time, usando o fallback de 0.43 apenas quando não há dados
+O analisador BTTS passa severidade de lesões para calculate_final_confidence, alinhado com os demais analisadores
+O schema.sql tem todas as colunas atuais (gabt, placar_exato, handicap_europeu, primeiro_marcador) e pode ser usado para setup do zero sem precisar das migrations
+A função de probabilidade de finalizações usa interpolação linear contínua em vez de 5 faixas fixas
+Out of scope
+Novos mercados de apostas
+Interface web ou Telegram
+Mudanças em db_manager.py além do schema.sql
+Tasks
+Eliminar double-counting em corners_analyzer — Remover o fator_cantos de intensidade de jogo que o corners_analyzer aplica internamente antes de passar para o confidence_calculator, já que o confidence_calculator aplica o mesmo ajuste via script tático. Garantir que apenas um dos dois aplique o modificador de intensidade.
+
+Moment Score ponderado por força do adversário — Refatorar _calculate_moment_score no master_analyzer para considerar o nível do adversário de cada um dos últimos 5 jogos: vitória contra top-5 da liga vale mais que vitória contra lanterna, derrota contra líder penaliza menos que derrota contra igual.
+
+Giant vs Minnow gradual (QSC contínuo) — Substituir o threshold binário de 25 pontos por uma escala contínua: diferença de 10-20 pontos ajusta probabilidades parcialmente, 20-30 ajusta mais, >30 aplica o ajuste máximo. Eliminar o salto abrupto entre jogo "equilibrado" e "Giant vs Minnow".
+
+HT ratio dinâmico — No goals_analyzer_v2.py e no master_analyzer, calcular o ht_ratio real a partir dos jogos históricos do time casa e fora (média de gols no HT / total de gols), usando 0.43 como fallback apenas quando histórico insuficiente (<3 jogos com dado de HT).
+
+Lesões no BTTS analyzer — Passar injury_severity_home e injury_severity_away para calculate_final_confidence no btts_analyzer.py, alinhando com o padrão dos demais analisadores especializados.
+
+schema.sql atualizado + finalizações contínuas — Sincronizar schema.sql com a estrutura real do banco (adicionar as 4 colunas faltantes). Substituir os "buckets" fixos de probabilidade de finalizações em confidence_calculator.py por interpolação linear contínua baseada na distância entre média esperada e linha.
+
+Relevant files
+analysts/corners_analyzer.py
+analysts/master_analyzer.py
+analysts/goals_analyzer_v2.py
+analysts/btts_analyzer.py
+analysts/confidence_calculator.py
+schema.sql
+Dependencies
