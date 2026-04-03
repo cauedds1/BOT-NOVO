@@ -630,7 +630,18 @@ async def buscar_jogos_do_dia():
     mes_atual = agora_brasilia.month
     ano_atual = agora_brasilia.year
     season = str(ano_atual) if mes_atual >= 7 else str(ano_atual - 1)
-    
+
+    # ⚠️ MODO TESTE: plano gratuito só acessa temporadas até 2024.
+    # Enquanto o plano não for atualizado, usar season 2024 e recuar
+    # a data de busca em 1 ano para exibir dados reais equivalentes.
+    MAX_FREE_SEASON = 2024
+    season_int = int(season)
+    if season_int > MAX_FREE_SEASON:
+        anos_recuar = season_int - MAX_FREE_SEASON
+        agora_brasilia = agora_brasilia.replace(year=agora_brasilia.year - anos_recuar)
+        season = str(MAX_FREE_SEASON)
+        print(f"⚠️ [MODO TESTE] Plano gratuito: usando season {season} com data recuada {anos_recuar} ano(s)")
+
     # 🎯 LÓGICA DE BUSCA POR HORÁRIO
     # Antes das 20:30 BRT: buscar apenas HOJE
     # Após 20:30 BRT: buscar HOJE + AMANHÃ (jogos noturnos aparecem no dia seguinte na API UTC)
