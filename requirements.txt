@@ -6,12 +6,3 @@ python-telegram-bot
 requests
 scipy
 tenacity
-httpx
-numpy
-psycopg2-binary
-python-dotenv
-python-telegram-bot
-requests
-scipy
-telegram
-tenacity
