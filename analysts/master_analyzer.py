@@ -411,6 +411,8 @@ def _select_match_script(analysis_data):
     moment_away = analysis_data['moment_away']
     power_home = analysis_data['power_score_home']
     power_away = analysis_data['power_score_away']
+    qsc_home = analysis_data.get('qsc_home', power_home)
+    qsc_away = analysis_data.get('qsc_away', power_away)
     contextual = analysis_data['contextual_factors']
     league_round = analysis_data.get('league_round', '')
     
@@ -450,21 +452,23 @@ def _select_match_script(analysis_data):
             )
     
     # PRIORIDADE 4: Cenários baseados em MOMENTO e análise cruzada
-    power_diff_raw = power_home - power_away
+    qsc_diff = qsc_home - qsc_away  # Usar QSC (Quality Score Composto) como medida de gap de qualidade
 
-    # PRIORIDADE 4.1: GIANT vs MINNOW — diferença técnica abissal (>= 25 pontos)
-    if power_diff_raw >= 25 and scenario['home_will_dominate']:
+    # PRIORIDADE 4.1: GIANT vs MINNOW — diferença de QSC abissal (>= 25 pontos)
+    # QSC mede reputação + posição na tabela + saldo de gols + forma recente
+    # Uma diferença de 25+ pontos é um fosso de qualidade real e persistente
+    if qsc_diff >= 25 and scenario['home_will_dominate']:
         return (
             'SCRIPT_GIANT_VS_MINNOW',
-            f"👑 GIGANTE vs MINNOW (Casa): Diferença técnica abissal de {int(power_diff_raw)} pontos. "
-            f"Casa é MUITO superior. Espere domínio total, posse esmagadora e pressão constante. "
+            f"👑 GIGANTE vs MINNOW (Casa): Gap de qualidade real de {int(qsc_diff)} pontos de QSC. "
+            f"Casa é estruturalmente MUITO superior. Espere domínio total, posse esmagadora e pressão constante. "
             f"BTTS Não e Vitória da Casa são as apostas mais lógicas."
         )
 
-    if power_diff_raw <= -25 and scenario['away_will_dominate']:
+    if qsc_diff <= -25 and scenario['away_will_dominate']:
         return (
             'SCRIPT_GIANT_VS_MINNOW',
-            f"👑 GIGANTE vs MINNOW (Fora): Visitante é MUITO superior, diferença de {int(abs(power_diff_raw))} pontos. "
+            f"👑 GIGANTE vs MINNOW (Fora): Visitante é estruturalmente MUITO superior, gap de QSC de {int(abs(qsc_diff))} pontos. "
             f"Espere domínio do visitante mesmo jogando fora. "
             f"BTTS Não e Vitória Fora são as apostas mais lógicas."
         )
