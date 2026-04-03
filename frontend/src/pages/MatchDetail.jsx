@@ -259,7 +259,10 @@ export default function MatchDetail() {
         const r = await fetch('/api/jogos/hoje')
         if (!r.ok) return
         const d = await r.json()
-        for (const grupo of d.ligas || []) {
+        const grupos = d.por_pais
+          ? d.por_pais.flatMap(p => p.ligas || [])
+          : (d.ligas || [])
+        for (const grupo of grupos) {
           for (const j of grupo.jogos || []) {
             if (j.fixture_id === parseInt(fixtureId)) {
               setJogoInfo(j)
