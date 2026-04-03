@@ -747,7 +747,9 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 for a in analises_brutas:
                     if a:
                         mercado_lower = a['mercado'].lower()
-                        if 'gol' in mercado_lower and 'btts' not in mercado_lower:
+                        if 'ambos tempos' in mercado_lower or 'gabt' in mercado_lower:
+                            analises_dict['gabt'] = a
+                        elif 'gol' in mercado_lower and 'btts' not in mercado_lower:
                             analises_dict['gols'] = a
                         elif 'canto' in mercado_lower or 'escanteio' in mercado_lower:
                             analises_dict['cantos'] = a
@@ -761,8 +763,6 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                             analises_dict['finalizacoes'] = a
                         elif 'handicap' in mercado_lower:
                             analises_dict['handicaps'] = a
-                        elif 'ambos tempos' in mercado_lower or 'gabt' in mercado_lower:
-                            analises_dict['gabt'] = a
 
                 stats_dict = {
                     'stats_casa': stats_casa,
