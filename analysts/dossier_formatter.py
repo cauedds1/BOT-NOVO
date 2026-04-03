@@ -470,7 +470,6 @@ def _format_gabt_section(
         else:
             msg += f"   Odd: Não disponível\n"
 
-        from analysts.justification_generator import generate_evidence_based_justification
         justificativa = generate_evidence_based_justification(
             'Gols Ambos Tempos', tipo, evidencias_home, evidencias_away, home_team_name, away_team_name
         )

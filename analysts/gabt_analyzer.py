@@ -5,22 +5,24 @@ Mercado GABT (Goals Both Halves): o jogo deve ter pelo menos 1 gol no 1º tempo
 e pelo menos 1 gol no 2º tempo.
 
 Matemática:
-  λ_total  = lambda_goals do analysis_packet (Poisson esperado do jogo)
-  λ_1T     = λ_total × HT_RATIO  (proporção histórica de gols no 1T ≈ 0.43)
-  λ_2T     = λ_total × (1 - HT_RATIO)
+  lambda_goals = calculated_probabilities['lambda_goals'] (dict do master_analyzer)
+  λ_total  = lambda_goals['lambda_total']
+  ht_ratio = lambda_goals.get('ht_ratio', HT_RATIO_DEFAULT)
+  λ_1T     = λ_total × ht_ratio
+  λ_2T     = λ_total × (1 - ht_ratio)
   P(≥1 gol em T) = 1 - e^(-λ_T)   [distribuição Poisson]
   P(GABT Sim) = P(≥1 no 1T) × P(≥1 no 2T)   [independência dos tempos]
 
 Calibração:
   - Confiança calculada via calculate_final_confidence (pipeline compartilhado)
-  - Threshold: 6.5 (GABT é mais difícil de atingir que BTTS; probs típicas 22-40%)
+  - Threshold: 6.5 (GABT é mais difícil de atingir que BTTS; probs típicas 22-75%)
   - Odds obrigatórias (gabt_sim / gabt_nao) — sem odds não há palpite
 """
 
 import math
 from analysts.confidence_calculator import calculate_final_confidence
 
-HT_RATIO = 0.43
+HT_RATIO_DEFAULT = 0.43
 THRESHOLD = 6.5
 
 
@@ -47,10 +49,24 @@ def analisar_mercado_gabt(analysis_packet: dict, odds: dict) -> dict | None:
         return None
 
     probabilities = analysis_packet.get('calculated_probabilities', {})
-    lambda_goals = probabilities.get('lambda_goals', None)
+    lambda_goals_data = probabilities.get('lambda_goals', None)
 
-    if lambda_goals is None or lambda_goals <= 0:
+    if not lambda_goals_data:
         print("  ⚠️  GABT: lambda_goals não disponível no pacote, abortando")
+        return None
+
+    if isinstance(lambda_goals_data, dict):
+        lambda_total = lambda_goals_data.get('lambda_total', 0)
+        ht_ratio = lambda_goals_data.get('ht_ratio', HT_RATIO_DEFAULT)
+    elif isinstance(lambda_goals_data, (int, float)):
+        lambda_total = float(lambda_goals_data)
+        ht_ratio = HT_RATIO_DEFAULT
+    else:
+        print(f"  ⚠️  GABT: lambda_goals tipo inesperado ({type(lambda_goals_data)}), abortando")
+        return None
+
+    if not lambda_total or lambda_total <= 0:
+        print("  ⚠️  GABT: lambda_total zero ou inválido, abortando")
         return None
 
     summary = analysis_packet.get('analysis_summary', {})
@@ -61,8 +77,8 @@ def analisar_mercado_gabt(analysis_packet: dict, odds: dict) -> dict | None:
     power_home = summary.get('power_score_home', 0)
     power_away = summary.get('power_score_away', 0)
 
-    lam_1t = lambda_goals * HT_RATIO
-    lam_2t = lambda_goals * (1.0 - HT_RATIO)
+    lam_1t = lambda_total * ht_ratio
+    lam_2t = lambda_total * (1.0 - ht_ratio)
 
     prob_gol_1t = _poisson_prob_at_least_one(lam_1t)
     prob_gol_2t = _poisson_prob_at_least_one(lam_2t)
@@ -74,7 +90,8 @@ def analisar_mercado_gabt(analysis_packet: dict, odds: dict) -> dict | None:
     prob_gabt_nao_pct = round(prob_gabt_nao * 100, 1)
 
     print(
-        f"  🔢 GABT: λ_total={lambda_goals:.2f} | λ_1T={lam_1t:.2f} | λ_2T={lam_2t:.2f} "
+        f"  🔢 GABT: λ_total={lambda_total:.2f} | ht_ratio={ht_ratio:.2f} "
+        f"| λ_1T={lam_1t:.2f} | λ_2T={lam_2t:.2f} "
         f"| P(≥1 1T)={prob_gol_1t:.1%} | P(≥1 2T)={prob_gol_2t:.1%} "
         f"| P(GABT Sim)={prob_gabt_sim_pct}%"
     )
@@ -140,7 +157,7 @@ def analisar_mercado_gabt(analysis_packet: dict, odds: dict) -> dict | None:
 
     suporte = (
         f"💡 {reasoning}\n\n"
-        f"   - <b>λ Gols (Poisson):</b> {lambda_goals:.2f}\n"
+        f"   - <b>λ Gols (Poisson):</b> {lambda_total:.2f}\n"
         f"   - <b>P(≥1 gol 1T):</b> {prob_gol_1t:.1%}\n"
         f"   - <b>P(≥1 gol 2T):</b> {prob_gol_2t:.1%}\n"
         f"   - <b>P(GABT Sim):</b> {prob_gabt_sim_pct}% | <b>P(GABT Não):</b> {prob_gabt_nao_pct}%\n"
