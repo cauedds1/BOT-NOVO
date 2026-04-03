@@ -642,11 +642,6 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
         except Exception:
             pass
         analise_db = db_manager.buscar_analise(id_jogo, data_jogo=_data_kickoff)
-        # Se TTL expirou (kickoff <2h ou análise muito antiga), tentar stale como fallback
-        if not analise_db:
-            analise_db = db_manager.buscar_analise(id_jogo, permitir_stale=True)
-            if analise_db:
-                print(f"⏳ STALE FALLBACK: Usando análise stale do Fixture #{id_jogo} (API indisponível)")
         if analise_db:
             usar_cache_otimizado = True
             print(f"💾 CACHE OTIMIZADO: Usando análise salva do Fixture #{id_jogo}")
@@ -713,57 +708,99 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 print(f"⚠️  SEM STATS FORA: Jogo {id_jogo} - {jogo['teams']['away']['name']}")
             if not odds:
                 print(f"⚠️  SEM ODDS: Jogo {id_jogo}")
-            return None
+            # Degradação graciosa: API indisponível → servir cache stale se existir
+            analise_stale = db_manager.buscar_analise(id_jogo, permitir_stale=True)
+            if analise_stale:
+                print(f"⏳ STALE FALLBACK: API indisponível — usando análise stale do Fixture #{id_jogo}")
+                # Reconstituir analises_brutas a partir do cache stale para seguir o fluxo normal
+                analise_db = analise_stale
+                usar_cache_otimizado = True
+            else:
+                return None
 
-        classificacao = await buscar_classificacao_liga(id_liga)
-        pos_casa = "N/A"
-        pos_fora = "N/A"
-
-        if classificacao:
-            for time_info in classificacao:
-                if time_info['team']['name'] == jogo['teams']['home']['name']:
-                    pos_casa = time_info['rank']
-                if time_info['team']['name'] == jogo['teams']['away']['name']:
-                    pos_fora = time_info['rank']
-
-        # PURE ANALYST PROTOCOL: Análise independente de valor de mercado
-        print(f"  🧠 PURE ANALYST MODE: Análise baseada em probabilidades estatísticas")
-
-        # 📜 PHOENIX V3.0: game_script agora vem do master_analyzer
-        # Buscar análise master para contexto tático
-        analysis_packet = await generate_match_analysis(jogo)
-        
-        # Adicionar posições e classificação ao analysis_packet
-        if analysis_packet and 'error' not in analysis_packet:
-            analysis_packet['home_position'] = pos_casa
-            analysis_packet['away_position'] = pos_fora
-            analysis_packet['league_standings'] = classificacao
-            script = analysis_packet.get('analysis_summary', {}).get('selected_script', 'EQUILIBRADO')
-            stats_casa = analysis_packet.get('raw_data', {}).get('home_stats', {})
-            stats_fora = analysis_packet.get('raw_data', {}).get('away_stats', {})
+        if usar_cache_otimizado:
+            # Stale fallback path: reconstituir analises_brutas do cache stale
+            analises_brutas = []
+            if analise_db.get('analise_gols'):
+                analises_brutas.append(analise_db['analise_gols'])
+            if analise_db.get('analise_cantos'):
+                analises_brutas.append(analise_db['analise_cantos'])
+            if analise_db.get('analise_btts'):
+                analises_brutas.append(analise_db['analise_btts'])
+            if analise_db.get('analise_resultado'):
+                analises_brutas.append(analise_db['analise_resultado'])
+            if analise_db.get('analise_cartoes'):
+                analises_brutas.append(analise_db['analise_cartoes'])
+            if analise_db.get('analise_finalizacoes'):
+                analises_brutas.append(analise_db['analise_finalizacoes'])
+            if analise_db.get('analise_handicaps'):
+                analises_brutas.append(analise_db['analise_handicaps'])
+            if analise_db.get('analise_gabt'):
+                analises_brutas.append(analise_db['analise_gabt'])
+            if analise_db.get('analise_placar_exato'):
+                analises_brutas.append(analise_db['analise_placar_exato'])
+            if analise_db.get('analise_handicap_europeu'):
+                analises_brutas.append(analise_db['analise_handicap_europeu'])
+            if analise_db.get('analise_primeiro_marcador'):
+                analises_brutas.append(analise_db['analise_primeiro_marcador'])
+            analises_encontradas = [a for a in analises_brutas if a]
+            stats_casa = analise_db.get('stats_casa', {})
+            stats_fora = analise_db.get('stats_fora', {})
+            classificacao = analise_db.get('classificacao', [])
         else:
-            script = 'EQUILIBRADO'
-        
-        analises_brutas = [
-            analisar_mercado_gols(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_cantos(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_btts(stats_casa, stats_fora, odds, script),
-            analisar_mercado_resultado_final(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_cartoes(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_finalizacoes(stats_casa, stats_fora, odds, analysis_packet, script),
-            analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script),
-            analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-            analisar_mercado_primeiro_a_marcar(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
-        ]
+            # Caminho normal: buscar dados frescos da API
+            pass
 
-        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}, HE={bool(analises_brutas[9])}, PM={bool(analises_brutas[10])}")
+        if not usar_cache_otimizado:
+            classificacao = await buscar_classificacao_liga(id_liga)
+            pos_casa = "N/A"
+            pos_fora = "N/A"
 
-        # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
-        # Apenas retorna análises válidas (não None)
-        analises_encontradas = [a for a in analises_brutas if a]
-        print(f"  ✅ PHOENIX V3.0: {len(analises_encontradas)} mercados analisados (filtro interno por confiança)")
+            if classificacao:
+                for time_info in classificacao:
+                    if time_info['team']['name'] == jogo['teams']['home']['name']:
+                        pos_casa = time_info['rank']
+                    if time_info['team']['name'] == jogo['teams']['away']['name']:
+                        pos_fora = time_info['rank']
+
+            # PURE ANALYST PROTOCOL: Análise independente de valor de mercado
+            print(f"  🧠 PURE ANALYST MODE: Análise baseada em probabilidades estatísticas")
+
+            # 📜 PHOENIX V3.0: game_script agora vem do master_analyzer
+            # Buscar análise master para contexto tático
+            analysis_packet = await generate_match_analysis(jogo)
+
+            # Adicionar posições e classificação ao analysis_packet
+            if analysis_packet and 'error' not in analysis_packet:
+                analysis_packet['home_position'] = pos_casa
+                analysis_packet['away_position'] = pos_fora
+                analysis_packet['league_standings'] = classificacao
+                script = analysis_packet.get('analysis_summary', {}).get('selected_script', 'EQUILIBRADO')
+                stats_casa = analysis_packet.get('raw_data', {}).get('home_stats', {})
+                stats_fora = analysis_packet.get('raw_data', {}).get('away_stats', {})
+            else:
+                script = 'EQUILIBRADO'
+
+            analises_brutas = [
+                analisar_mercado_gols(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_cantos(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_btts(stats_casa, stats_fora, odds, script),
+                analisar_mercado_resultado_final(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_cartoes(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_finalizacoes(stats_casa, stats_fora, odds, analysis_packet, script),
+                analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script),
+                analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_placar_exato(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_handicap_europeu(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+                analisar_mercado_primeiro_a_marcar(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
+            ]
+
+            print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}, PlacarExato={bool(analises_brutas[8])}, HE={bool(analises_brutas[9])}, PM={bool(analises_brutas[10])}")
+
+            # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
+            # Apenas retorna análises válidas (não None)
+            analises_encontradas = [a for a in analises_brutas if a]
+            print(f"  ✅ PHOENIX V3.0: {len(analises_encontradas)} mercados analisados (filtro interno por confiança)")
 
         if analises_encontradas:
             total_palpites = sum(len(a.get('palpites', [])) for a in analises_encontradas)
