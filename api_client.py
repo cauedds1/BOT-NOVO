@@ -1352,17 +1352,22 @@ def normalizar_odds(odds_formatadas):
             import re as _re_he
             for raw_val, odd_val in odds_dict.items():
                 raw_lower = raw_val.lower().strip()
-                # Extrair número da linha (pode ser -2, -1, 0, +1, +2)
-                m = _re_he.search(r'([+-]?\d+)$', raw_val.strip())
+                # Extrair número da linha — aceita inteiros e decimais (e.g. "-1", "-1.0", "+2.0")
+                m = _re_he.search(r'([+-]?\d+(?:\.\d+)?)$', raw_val.strip())
                 if not m:
                     continue
-                linha_num = m.group(1)
-                # Normalizar sinal positivo explicitamente
+                linha_str = m.group(1)
+                # Normalizar para inteiro (converte -1.0 → -1, +2.0 → +2)
                 try:
-                    linha_int = int(linha_num)
+                    linha_float = float(linha_str)
+                    linha_int = int(linha_float)
+                    # Guardrail: rejeitar se a linha não é um número inteiro limpo
+                    if abs(linha_float - linha_int) > 0.01:
+                        print(f"  ⚠️  HE normalizer: linha decimal inesperada '{linha_str}' em '{raw_val}', ignorando")
+                        continue
                     linha_key = f"+{linha_int}" if linha_int > 0 else str(linha_int)
                 except ValueError:
-                    linha_key = linha_num
+                    continue
                 if raw_lower.startswith("home") or raw_lower.startswith("casa"):
                     odds_normalizadas[f"he_casa_{linha_key}"] = odd_val
                 elif raw_lower.startswith("draw") or raw_lower.startswith("empate"):

@@ -210,7 +210,20 @@ def analisar_mercado_handicap_europeu(analysis_packet: dict, odds: dict) -> dict
     candidatos = []
     linhas_avaliadas = []
 
-    for linha in SUPPORTED_LINES:
+    # Descoberta dinâmica de linhas disponíveis nas odds (ex: he_casa_-3, he_casa_+3)
+    # Prioriza linhas presentes nas odds; fallback para SUPPORTED_LINES se não houver nenhuma.
+    import re as _re_he_lines
+    linhas_disponiveis_odds = set()
+    for k in odds:
+        m = _re_he_lines.match(r'he_(?:casa|empate|fora)_([+-]?\d+)$', k)
+        if m:
+            try:
+                linhas_disponiveis_odds.add(int(m.group(1)))
+            except ValueError:
+                pass
+    linhas_a_avaliar = sorted(linhas_disponiveis_odds) if linhas_disponiveis_odds else SUPPORTED_LINES
+
+    for linha in linhas_a_avaliar:
         key_suffix = _linha_to_key(linha)
         key_casa = f"he_casa_{key_suffix}"
         key_emp = f"he_empate_{key_suffix}"
