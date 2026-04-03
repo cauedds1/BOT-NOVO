@@ -75,6 +75,8 @@ def _calculate_injury_impact(injuries):
     Classifica o impacto de jogadores ausentes (lesionados e suspensos) no
     Momento Score do time. Quanto mais ausências, maior a penalidade.
 
+    Suspensos têm peso 1.5× vs lesionados (ausência garantida vs questionável).
+
     Args:
         injuries: Lista de dicts com jogadores ausentes [{name, type, reason, team_id}]
 
@@ -85,16 +87,40 @@ def _calculate_injury_impact(injuries):
         return 0
     count = len(injuries)
     suspended = sum(1 for p in injuries if p.get('type', '').lower() == 'suspended')
-    if count >= 4:
+    # Peso efetivo: suspenso conta como 1.5, lesionado como 1.0
+    effective_count = (count - suspended) * 1.0 + suspended * 1.5
+    if effective_count >= 4:
         penalty = 15
-    elif count >= 2:
+    elif effective_count >= 2:
         penalty = 10
     else:
         penalty = 5
-    # Suspensões confirmadas aumentam o impacto em +3 (jogador não joga garantidamente)
-    if suspended >= 2:
-        penalty = min(penalty + 3, 18)
     return penalty
+
+
+def _get_injury_severity_label(injuries):
+    """
+    TASK 4 - PHOENIX V4.0: Mapeia lista de ausências para rótulo de severidade.
+
+    Severidade é usada pelo confidence_calculator para aplicar penalidade de
+    confiança quando o elenco disponível diverge do usado nas médias históricas.
+
+    Args:
+        injuries: Lista de dicts com jogadores ausentes [{name, type, reason, team_id}]
+
+    Returns:
+        str: "none" | "minor" | "moderate" | "severe"
+    """
+    if not injuries:
+        return "none"
+    count = len(injuries)
+    suspended = sum(1 for p in injuries if p.get('type', '').lower() == 'suspended')
+    effective_count = (count - suspended) * 1.0 + suspended * 1.5
+    if effective_count >= 4:
+        return "severe"
+    elif effective_count >= 2:
+        return "moderate"
+    return "minor"
 
 
 def _calculate_power_score(team_stats):
@@ -1456,9 +1482,34 @@ async def generate_match_analysis(jogo):
     else:
         print(f"  ⚠️ H2H: Dados insuficientes (menos de 3 jogos válidos)")
     
-    # Sumário de desfalques para exibição (Task 4)
+    # Sumário de desfalques e severidade para exibição e confidence downgrade (Task 4)
     _injuries_summary_home = [f"{p['name']} ({p['type']})" for p in home_injuries] if home_injuries else []
     _injuries_summary_away = [f"{p['name']} ({p['type']})" for p in away_injuries] if away_injuries else []
+    injury_severity_home = _get_injury_severity_label(home_injuries)
+    injury_severity_away = _get_injury_severity_label(away_injuries)
+
+    # Adicionar contexto de desfalques ao reasoning tático para narrativa completa
+    if home_injuries or away_injuries:
+        _injury_lines = []
+        if home_injuries:
+            _suspended_h = [p['name'] for p in home_injuries if p.get('type', '').lower() == 'suspended']
+            _injured_h   = [p['name'] for p in home_injuries if p.get('type', '').lower() != 'suspended']
+            _parts = []
+            if _suspended_h:
+                _parts.append(f"suspensos: {', '.join(_suspended_h)}")
+            if _injured_h:
+                _parts.append(f"lesionados: {', '.join(_injured_h)}")
+            _injury_lines.append(f"🏥 {home_team_name} ({injury_severity_home.upper()}) — " + " | ".join(_parts))
+        if away_injuries:
+            _suspended_a = [p['name'] for p in away_injuries if p.get('type', '').lower() == 'suspended']
+            _injured_a   = [p['name'] for p in away_injuries if p.get('type', '').lower() != 'suspended']
+            _parts = []
+            if _suspended_a:
+                _parts.append(f"suspensos: {', '.join(_suspended_a)}")
+            if _injured_a:
+                _parts.append(f"lesionados: {', '.join(_injured_a)}")
+            _injury_lines.append(f"🏥 {away_team_name} ({injury_severity_away.upper()}) — " + " | ".join(_parts))
+        reasoning = reasoning + "\n\n⚠️ DESFALQUES:\n" + "\n".join(_injury_lines)
 
     analysis_packet = {
         'fixture_id': fixture_id,
@@ -1481,7 +1532,9 @@ async def generate_match_analysis(jogo):
             'injuries_home': _injuries_summary_home,
             'injuries_away': _injuries_summary_away,
             'injury_penalty_home': injury_penalty_home,
-            'injury_penalty_away': injury_penalty_away
+            'injury_penalty_away': injury_penalty_away,
+            'injury_severity_home': injury_severity_home,
+            'injury_severity_away': injury_severity_away
         },
         'calculated_probabilities': {
             **probabilities,

@@ -320,18 +320,71 @@ def apply_tactical_script_modifier(
 # Analysis is now independent of market odds
 
 
+def apply_injury_confidence_modifier(
+    bet_type: str,
+    injury_severity_home: str = "none",
+    injury_severity_away: str = "none"
+) -> float:
+    """
+    TASK 4 - PHOENIX V4.0: Aplica penalidade de confiança baseada em desfalques.
+
+    Desfalques confirmados afetam a confiabilidade das probabilidades calculadas, pois
+    as médias históricas foram geradas com o elenco completo.
+
+    Severidade:
+      - "none"     → sem penalidade
+      - "minor"    → 1 ausência (lesionado): -0.3
+      - "moderate" → 2-3 ausências ou 1 suspenso: -0.6
+      - "severe"   → 4+ ausências ou 2+ suspensos: -1.0
+
+    A penalidade é aplicada ao time FAVORECIDO pela aposta:
+      - Bets "casa" → usar severidade do time da casa
+      - Bets "fora" → usar severidade do visitante
+      - Bets "total" → usar o pior dos dois
+
+    Args:
+        bet_type: Tipo de aposta (string com 'casa', 'fora' ou total)
+        injury_severity_home: Severidade de desfalques do mandante
+        injury_severity_away: Severidade de desfalques do visitante
+
+    Returns:
+        float: Penalidade de confiança (≤ 0)
+    """
+    SEVERITY_MAP = {"none": 0.0, "minor": -0.3, "moderate": -0.6, "severe": -1.0}
+
+    bet_lower = bet_type.lower()
+    if "casa" in bet_lower or "home" in bet_lower:
+        # Aposta no mandante → penalizar pelo seu desfalque
+        return SEVERITY_MAP.get(injury_severity_home, 0.0)
+    elif "fora" in bet_lower or "away" in bet_lower or "visitante" in bet_lower:
+        # Aposta no visitante → penalizar pelo desfalque do visitante
+        return SEVERITY_MAP.get(injury_severity_away, 0.0)
+    else:
+        # Mercado total → usar a pior penalidade dos dois times
+        penalty_h = SEVERITY_MAP.get(injury_severity_home, 0.0)
+        penalty_a = SEVERITY_MAP.get(injury_severity_away, 0.0)
+        return min(penalty_h, penalty_a)  # min pois são negativos
+
+
 def calculate_final_confidence(
     statistical_probability_pct: float,
     bet_type: str,
-    tactical_script: Optional[str] = None
+    tactical_script: Optional[str] = None,
+    injury_severity_home: str = "none",
+    injury_severity_away: str = "none"
 ) -> Tuple[float, Dict[str, float]]:
     """
     PURE ANALYST PROTOCOL - STEP 4: Calcula Confiança Final (sem dependência de odds).
+
+    TASK 4 PHOENIX V4.0: Aceita modificadores de desfalques por time para aplicar
+    penalidade de confiança quando jogadores importantes estão ausentes.
     
     Args:
         statistical_probability_pct: Probabilidade estatística base (0-100%)
         bet_type: Tipo da aposta
         tactical_script: Script tático (opcional)
+        injury_severity_home: Severidade de desfalques do mandante ("none"|"minor"|"moderate"|"severe")
+        injury_severity_away: Severidade de desfalques do visitante ("none"|"minor"|"moderate"|"severe")
     
     Returns:
         tuple: (confianca_final, breakdown_dict)
@@ -339,11 +392,14 @@ def calculate_final_confidence(
     # STEP 2: Base confidence
     base_conf = convert_probability_to_base_confidence(statistical_probability_pct)
     
-    # STEP 3: Tactical script modifier only
+    # STEP 3: Tactical script modifier
     mod_script = apply_tactical_script_modifier(base_conf, bet_type, tactical_script)
+
+    # STEP 3b: Injury severity modifier (Task 4)
+    mod_injury = apply_injury_confidence_modifier(bet_type, injury_severity_home, injury_severity_away)
     
-    # STEP 4: Final (simplified - no value/odd modifiers)
-    final_conf = base_conf + mod_script
+    # STEP 4: Final
+    final_conf = base_conf + mod_script + mod_injury
     
     # Cap entre 1.0 e 10.0
     final_conf = max(1.0, min(10.0, final_conf))
@@ -352,6 +408,7 @@ def calculate_final_confidence(
         "probabilidade_base": statistical_probability_pct,
         "confianca_base": base_conf,
         "modificador_script": mod_script,
+        "modificador_lesoes": mod_injury,
         "confianca_final": final_conf
     }
     

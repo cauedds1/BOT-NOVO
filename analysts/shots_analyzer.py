@@ -42,6 +42,10 @@ def analisar_mercado_finalizacoes(stats_casa, stats_fora, odds=None, master_data
         dict: Análise de finalizações com palpites ou None
     """
     print(f"  🔍 FINALIZAÇÕES V4.0: Verificando dados disponíveis...")
+
+    # TASK 4: Extrair severidade de desfalques para penalidade de confiança
+    _sev_home = analysis_packet.get('analysis_summary', {}).get('injury_severity_home', 'none') if analysis_packet else 'none'
+    _sev_away = analysis_packet.get('analysis_summary', {}).get('injury_severity_away', 'none') if analysis_packet else 'none'
     
     if not stats_casa or not stats_fora:
         print(f"  ⚠️ FINALIZAÇÕES: Faltam estatísticas")
@@ -108,7 +112,9 @@ def analisar_mercado_finalizacoes(stats_casa, stats_fora, odds=None, master_data
         conf_final, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob_pct,
             bet_type=bet_type,
-            tactical_script=script_name
+            tactical_script=script_name,
+            injury_severity_home=_sev_home,
+            injury_severity_away=_sev_away
         )
         
         print(f"     {bet_type}: Prob={prob_pct:.1f}% → Conf={conf_final:.1f}")
@@ -137,7 +143,9 @@ def analisar_mercado_finalizacoes(stats_casa, stats_fora, odds=None, master_data
         conf_final, breakdown = calculate_final_confidence(
             statistical_probability_pct=prob_under,
             bet_type=bet_type,
-            tactical_script=script_name
+            tactical_script=script_name,
+            injury_severity_home=_sev_home,
+            injury_severity_away=_sev_away
         )
         
         if conf_final >= 5.5:
