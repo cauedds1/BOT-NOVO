@@ -637,6 +637,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                 analises_brutas.append(analise_db['analise_finalizacoes'])
             if analise_db.get('analise_handicaps'):
                 analises_brutas.append(analise_db['analise_handicaps'])
+            if analise_db.get('analise_gabt'):
+                analises_brutas.append(analise_db['analise_gabt'])
 
             analises_encontradas = [a for a in analises_brutas if a]
             stats_casa = analise_db['stats_casa']
@@ -713,10 +715,11 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
             analisar_mercado_resultado_final(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
             analisar_mercado_cartoes(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
             analisar_mercado_finalizacoes(stats_casa, stats_fora, odds, analysis_packet, script),
-            analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script)
+            analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao, pos_casa, pos_fora, script),
+            analisar_mercado_gabt(analysis_packet, odds) if analysis_packet and 'error' not in analysis_packet else None,
         ]
 
-        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}")
+        print(f"  DEBUG Jogo {id_jogo}: Gols={bool(analises_brutas[0])}, Cantos={bool(analises_brutas[1])}, BTTS={bool(analises_brutas[2])}, Resultado={bool(analises_brutas[3])}, Cartões={bool(analises_brutas[4])}, Finalizações={bool(analises_brutas[5])}, Handicaps={bool(analises_brutas[6])}, GABT={bool(analises_brutas[7])}")
 
         # 🎯 PHOENIX V3.0: Filtro de contexto removido - todos os analyzers já filtram internamente via confidence_calculator
         # Apenas retorna análises válidas (não None)
@@ -758,6 +761,8 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
                             analises_dict['finalizacoes'] = a
                         elif 'handicap' in mercado_lower:
                             analises_dict['handicaps'] = a
+                        elif 'ambos tempos' in mercado_lower or 'gabt' in mercado_lower:
+                            analises_dict['gabt'] = a
 
                 stats_dict = {
                     'stats_casa': stats_casa,

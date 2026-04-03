@@ -1406,7 +1406,13 @@ async def buscar_odds_do_jogo(id_jogo: int):
                 elif bet_name == "Both Teams Score":
                     odds_formatadas["btts"] = {v['value']: float(v['odd']) for v in values_raw}
 
-                elif bet_name == "Goals Both Halves":
+                elif bet_name in (
+                    "Goals Both Halves",
+                    "Both Teams Score Both Halves",
+                    "Gols em Ambos os Tempos",
+                    "Score Both Halves",
+                    "Goals in Both Halves",
+                ):
                     odds_formatadas["goals_both_halves"] = {v['value']: float(v['odd']) for v in values_raw}
 
                 elif bet_name == "Double Chance":
