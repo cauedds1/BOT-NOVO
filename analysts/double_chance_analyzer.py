@@ -9,43 +9,13 @@ Mercado Dupla Chance cobre duas das três possibilidades de resultado:
 Consome o pacote do Master Analyzer para obter probabilidades já calculadas
 pelo motor Poisson+H2H. Usa as odds normalizadas dupla_1x, dupla_x2, dupla_12.
 
-Threshold elevado (6.0) porque probabilidades de DC são naturalmente altas;
-usar o mesmo threshold de 1X2 geraria palpites de baixo valor.
+Calibração:
+  - Confiança calculada via calculate_final_confidence (pipeline compartilhado)
+  - Threshold final: 7.0 (mais exigente que 1X2 pois probs são naturalmente altas)
+  - Odds ausentes/zero → opção filtrada (sem mercado = sem valor)
 """
 
-
-def _prob_to_confianca(prob_pct: float) -> float:
-    """
-    Converte probabilidade percentual para escala de confiança 0-10.
-
-    Escala ajustada para DC (probabilidades naturalmente altas):
-      >= 85% → 9.5
-      >= 80% → 9.0
-      >= 75% → 8.5
-      >= 70% → 8.0
-      >= 65% → 7.5
-      >= 60% → 7.0
-      >= 55% → 6.5
-      >= 50% → 6.0
-      <  50% → 5.0 (abaixo do threshold)
-    """
-    if prob_pct >= 85:
-        return 9.5
-    elif prob_pct >= 80:
-        return 9.0
-    elif prob_pct >= 75:
-        return 8.5
-    elif prob_pct >= 70:
-        return 8.0
-    elif prob_pct >= 65:
-        return 7.5
-    elif prob_pct >= 60:
-        return 7.0
-    elif prob_pct >= 55:
-        return 6.5
-    elif prob_pct >= 50:
-        return 6.0
-    return 5.0
+from analysts.confidence_calculator import calculate_final_confidence
 
 
 def analisar_mercado_dupla_chance(analysis_packet: dict, odds: dict) -> dict | None:
@@ -54,10 +24,11 @@ def analisar_mercado_dupla_chance(analysis_packet: dict, odds: dict) -> dict | N
 
     Args:
         analysis_packet: Pacote completo gerado pelo master_analyzer.
-        odds: Dicionário de odds normalizado pelo api_client (keys: dupla_1x, dupla_x2, dupla_12).
+        odds: Dicionário de odds normalizado pelo api_client
+              (chaves esperadas: dupla_1x, dupla_x2, dupla_12).
 
     Returns:
-        dict com 'mercado', 'palpites' e 'dados_suporte', ou None se sem dados.
+        dict com 'mercado', 'palpites' e 'dados_suporte', ou None se sem dados suficientes.
     """
     if not analysis_packet or 'error' in analysis_packet:
         return None
@@ -73,50 +44,76 @@ def analisar_mercado_dupla_chance(analysis_packet: dict, odds: dict) -> dict | N
         print("  ⚠️  Dupla Chance: probabilidades 1X2 não disponíveis no pacote")
         return None
 
-    reasoning = analysis_packet.get('analysis_summary', {}).get('reasoning', '')
-    power_home = analysis_packet.get('analysis_summary', {}).get('power_score_home', 0)
-    power_away = analysis_packet.get('analysis_summary', {}).get('power_score_away', 0)
+    summary = analysis_packet.get('analysis_summary', {})
+    reasoning = summary.get('reasoning', '')
+    power_home = summary.get('power_score_home', 0)
+    power_away = summary.get('power_score_away', 0)
+    tactical_script = summary.get('selected_script', None)
+    injury_sev_home = summary.get('injury_severity_home', 'none')
+    injury_sev_away = summary.get('injury_severity_away', 'none')
 
-    palpites = []
-    THRESHOLD = 6.0
+    THRESHOLD = 7.0
 
     dc_options = [
         {
             'tipo': 'Dupla Chance 1X (Casa ou Empate)',
-            'prob': home_win_prob + draw_prob,
+            'prob': round(home_win_prob + draw_prob, 2),
             'odd_key': 'dupla_1x',
         },
         {
             'tipo': 'Dupla Chance X2 (Empate ou Fora)',
-            'prob': draw_prob + away_win_prob,
+            'prob': round(draw_prob + away_win_prob, 2),
             'odd_key': 'dupla_x2',
         },
         {
             'tipo': 'Dupla Chance 12 (Casa ou Fora)',
-            'prob': home_win_prob + away_win_prob,
+            'prob': round(home_win_prob + away_win_prob, 2),
             'odd_key': 'dupla_12',
         },
     ]
 
-    for opt in dc_options:
-        prob = round(opt['prob'], 2)
-        confianca = _prob_to_confianca(prob)
+    palpites = []
 
-        if confianca < THRESHOLD:
-            print(f"  ℹ️  Dupla Chance: {opt['tipo']} → prob={prob}% confiança={confianca} (abaixo do threshold)")
+    for opt in dc_options:
+        odd_value = odds.get(opt['odd_key'], 0)
+
+        # Gate 1: Odds devem estar disponíveis — sem mercado não há valor
+        if not odd_value or odd_value == 0:
+            print(f"  ℹ️  Dupla Chance: {opt['tipo']} → sem odds disponíveis, ignorando")
             continue
 
-        odd_value = odds.get(opt['odd_key'], 0)
+        prob = opt['prob']
+
+        # Gate 2: Calcular confiança via pipeline compartilhado (com script + desfalques)
+        final_conf, breakdown = calculate_final_confidence(
+            statistical_probability_pct=prob,
+            bet_type=opt['tipo'],
+            tactical_script=tactical_script,
+            injury_severity_home=injury_sev_home,
+            injury_severity_away=injury_sev_away,
+        )
+
+        # Gate 3: Threshold calibrado (mais exigente para DC pois probs são naturalmente altas)
+        if final_conf < THRESHOLD:
+            print(
+                f"  ℹ️  Dupla Chance: {opt['tipo']} → prob={prob}% "
+                f"confiança={final_conf:.1f} (abaixo do threshold {THRESHOLD})"
+            )
+            continue
 
         palpites.append({
             'mercado': 'Dupla Chance',
             'tipo': opt['tipo'],
-            'confianca': confianca,
+            'confianca': round(final_conf, 1),
             'odd': odd_value,
             'probabilidade': prob,
+            'confidence_breakdown': breakdown,
         })
 
-        print(f"  ✅ Dupla Chance: {opt['tipo']} → prob={prob}% confiança={confianca} odd={odd_value}")
+        print(
+            f"  ✅ Dupla Chance: {opt['tipo']} → prob={prob}% "
+            f"confiança={final_conf:.1f} odd={odd_value}"
+        )
 
     if not palpites:
         print("  ℹ️  Dupla Chance: nenhum palpite acima do threshold")
@@ -128,7 +125,8 @@ def analisar_mercado_dupla_chance(analysis_packet: dict, odds: dict) -> dict | N
         f"💡 {reasoning}\n\n"
         f"   - <b>Power Score Casa:</b> {power_home}\n"
         f"   - <b>Power Score Fora:</b> {power_away}\n"
-        f"   - <b>Probabilidades 1X2:</b> Casa {home_win_prob}% | Empate {draw_prob}% | Fora {away_win_prob}%"
+        f"   - <b>Probabilidades 1X2:</b> Casa {home_win_prob}% | "
+        f"Empate {draw_prob}% | Fora {away_win_prob}%"
     )
 
     return {
