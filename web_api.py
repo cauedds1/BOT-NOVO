@@ -388,9 +388,9 @@ async def jogos_hoje():
         paises_map[pais]["ligas"][liga_id]["jogos"].append(item)
 
     def _ordem_pais(pais_nome: str) -> tuple:
-        ordem = ORDEM_PAISES.get(pais_nome, 999)
         peso_max = paises_map[pais_nome]["peso_max"]
-        return (ordem, -peso_max)
+        ordem_fallback = ORDEM_PAISES.get(pais_nome, 999)
+        return (-peso_max, ordem_fallback, pais_nome)
 
     por_pais = []
     for pais_nome in sorted(paises_map.keys(), key=_ordem_pais):
