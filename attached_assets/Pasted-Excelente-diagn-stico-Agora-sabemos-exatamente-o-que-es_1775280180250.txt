@@ -1,0 +1,12 @@
+Excelente diagnóstico! Agora sabemos exatamente o que está errado. Gera esse prompt para ele:
+
+PROMPT:
+O diagnóstico identificou 4 problemas claros. Corrija todos agora:
+Correção 1 — Lesões duplicadas
+Os jogadores estão aparecendo duas vezes na lista de desfalques. Encontre onde os desfalques são coletados e salvos no banco, identifique por que estão sendo inseridos em duplicata e corrija para que cada jogador apareça apenas uma vez. Após corrigir, limpe os dados duplicados já salvos no banco.
+Correção 2 — Modificador de lesões travado em -1.0
+O problema tem duas causas: duplicação gerando SEVERE para todos, e role sempre "mixed". Corrija assim: com a duplicação resolvida a severidade vai variar naturalmente. Para o role, implemente uma lógica simples baseada na posição do jogador — atacantes e meias ofensivos impactam Over gols positivamente quando ausentes, zagueiros e goleiros impactam Under gols e clean sheet. Se a posição não estiver disponível use "mixed" mas com peso menor, não o mesmo peso de uma posição confirmada. O modificador final deve variar entre -0.2 e -0.8 dependendo do número real de desfalques e suas posições, nunca travado em -1.0 para todos.
+Correção 3 — Under 4.5 aparecendo em todo jogo
+Under 4.5 com odd 1.14 a 1.28 não tem nenhum valor para o usuário mesmo sendo matematicamente correto. Implemente uma regra simples: se a odd disponível for menor que 1.35 o palpite não é gerado independente da confiança calculada. Isso elimina palpites óbvios sem edge. Adicionalmente, se um mercado aparece em mais de 70% dos jogos analisados na última semana no histórico, reduzir automaticamente a confiança dele em 10% porque indica que é um mercado trivial sem diferenciação.
+Correção 4 — Reativar ODD_MINIMA_PENALIDADE
+O filtro foi removido mas o valor existe no config.py. Reative a penalidade para odds baixas. A lógica deve ser: odds abaixo de 1.35 não geram palpite. Odds entre 1.35 e 1.50 recebem penalidade de -1.5 na confiança. Odds entre 1.50 e 1.70 recebem penalidade de -0.5. Odds acima de 1.70 sem penalidade. Isso faz o bot focar em palpites com valor real para o usuário.

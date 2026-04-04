@@ -1,0 +1,27 @@
+Preciso que você faça uma auditoria completa e honesta do sistema antes de qualquer nova feature. Algo está fundamentalmente errado — o bot está gerando os mesmos palpites para todos os jogos e emitindo odds de 1.14 como recomendações, o que indica que o sistema não está diferenciando os jogos corretamente.
+Quero que você faça o seguinte:
+Passo 1 — Diagnóstico real
+Analise dois jogos completamente diferentes ao mesmo tempo — um jogo entre times grandes ofensivos como Real Madrid vs Barcelona, e um jogo entre times pequenos defensivos. Compare os palpites gerados. Se os palpites forem parecidos ou idênticos, o sistema está quebrado na diferenciação. Me mostre os dois resultados lado a lado.
+Passo 2 — Verifique o fluxo de dados
+Para um jogo específico, rastreie o caminho completo dos dados:
+
+O lambda calculado está diferente para cada jogo?
+O script tático está mudando entre jogos?
+As probabilidades de Over 2.5 estão diferentes para cada jogo?
+Os palpites filtrados estão saindo diferentes?
+
+Se lambda, script e probabilidades estão variando mas os palpites finais são sempre os mesmos, o problema está no filtro de confiança ou no formatador de saída.
+Passo 3 — Verifique os thresholds
+Me mostre todos os valores de MIN_CONFIANCA em config.py. Suspeito que os thresholds estão tão baixos que quase tudo passa, ou tão altos que só mercados óbvios de odds baixas passam — resultando em Under 4.5 gols com odd 1.14 para todo jogo.
+Passo 4 — Verifique o que está sendo enviado ao frontend
+Pegue a resposta JSON completa de GET /api/analise para dois jogos diferentes e compare. Os dados de lambda, script tático e probabilidades estão diferentes entre os dois jogos na resposta da API?
+Passo 5 — Identifique a causa raiz
+Após os passos anteriores me diga claramente:
+
+O problema está no cálculo das probabilidades?
+Está no filtro de confiança?
+Está no formatador de palpites?
+Está na seleção de script tático?
+Está nos dados chegando zerados ou neutros demais?
+
+Não implemente nada ainda. Apenas diagnostique e me mostre o que está errado com evidências concretas dos logs e dos dados. Quero entender o problema antes de qualquer correção.
