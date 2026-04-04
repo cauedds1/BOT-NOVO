@@ -30,10 +30,15 @@ def _load_team_profile_from_db(team_id: int, league_id: int):
     """
     Retorna o perfil computado salvo no DB se ainda fresco (< 48h).
     Resultado: dict com 'sos_data', 'weighted_metrics', 'age_hours' ou None.
+
+    Nota de arquitetura: usa tabela dedicada 'cache_team_profile' (e não
+    'cache_stats_time') pois armazena dados derivados (SoS + weighted_metrics)
+    e não dados brutos da API — separação de responsabilidades intencional.
     """
     try:
         return _get_master_db().get_cache_team_profile(team_id, league_id)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ [team_profile] Falha ao carregar perfil do DB (team={team_id}, league={league_id}): {e} — usando MODO COMPLETO")
         return None
 
 
