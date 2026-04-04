@@ -1624,14 +1624,9 @@ async def generate_match_analysis(jogo):
     # buscar_lineup_confirmado returns a set of team IDs whose startXI was published.
     # This prevents adjusting lambda for a team whose lineup hasn't been announced yet,
     # while still allowing adjustment for the opposing team if theirs is confirmed.
-    # Demo fixtures (id >= 90000) bypass the API and treat BOTH teams as confirmed.
-    _fixture_is_demo = int(fixture_id) >= 90000
-    if _fixture_is_demo:
-        _confirmed_team_ids = {home_team_id, away_team_id}
-    else:
-        _confirmed_team_ids = await buscar_lineup_confirmado(fixture_id)
-    _home_lineup_confirmed = _fixture_is_demo or home_team_id in _confirmed_team_ids
-    _away_lineup_confirmed = _fixture_is_demo or away_team_id in _confirmed_team_ids
+    _confirmed_team_ids = await buscar_lineup_confirmado(fixture_id)
+    _home_lineup_confirmed = home_team_id in _confirmed_team_ids
+    _away_lineup_confirmed = away_team_id in _confirmed_team_ids
 
     injury_penalty_home = _calculate_injury_impact(home_injuries)
     injury_penalty_away = _calculate_injury_impact(away_injuries)
