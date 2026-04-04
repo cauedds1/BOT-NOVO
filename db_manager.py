@@ -137,6 +137,9 @@ class DatabaseManager:
         ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_placar_exato JSONB;
         ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_handicap_europeu JSONB;
         ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_primeiro_marcador JSONB;
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_htft JSONB;
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_win_to_nil JSONB;
+        ALTER TABLE analises_jogos ADD COLUMN IF NOT EXISTS analise_draw_no_bet JSONB;
 
         -- Índices para performance
         CREATE INDEX IF NOT EXISTS idx_analises_jogos_fixture_id ON analises_jogos(fixture_id);
@@ -422,8 +425,9 @@ class DatabaseManager:
                              stats_casa, stats_fora, classificacao,
                              analise_gols, analise_cantos, analise_btts, analise_resultado, analise_cartoes, analise_contexto,
                              analise_gabt, analise_placar_exato, analise_handicap_europeu, analise_primeiro_marcador,
+                             analise_htft, analise_win_to_nil, analise_draw_no_bet,
                              palpites_totais, confianca_media, data_analise, atualizado_em)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (fixture_id) 
                             DO UPDATE SET
                                 stats_casa = EXCLUDED.stats_casa,
@@ -439,6 +443,9 @@ class DatabaseManager:
                                 analise_placar_exato = EXCLUDED.analise_placar_exato,
                                 analise_handicap_europeu = EXCLUDED.analise_handicap_europeu,
                                 analise_primeiro_marcador = EXCLUDED.analise_primeiro_marcador,
+                                analise_htft = EXCLUDED.analise_htft,
+                                analise_win_to_nil = EXCLUDED.analise_win_to_nil,
+                                analise_draw_no_bet = EXCLUDED.analise_draw_no_bet,
                                 palpites_totais = EXCLUDED.palpites_totais,
                                 confianca_media = EXCLUDED.confianca_media,
                                 atualizado_em = EXCLUDED.atualizado_em
@@ -463,6 +470,9 @@ class DatabaseManager:
                             Json(analises.get('placar_exato', {})),
                             Json(analises.get('handicap_europeu', {})),
                             Json(analises.get('primeiro_marcador', {})),
+                            Json(analises.get('htft', {})),
+                            Json(analises.get('win_to_nil', {})),
+                            Json(analises.get('draw_no_bet', {})),
                             total_palpites,
                             confianca_media,
                             agora_brasilia(),
@@ -506,6 +516,9 @@ class DatabaseManager:
                 'analise_placar_exato': analises.get('placar_exato', {}),
                 'analise_handicap_europeu': analises.get('handicap_europeu', {}),
                 'analise_primeiro_marcador': analises.get('primeiro_marcador', {}),
+                'analise_htft': analises.get('htft', {}),
+                'analise_win_to_nil': analises.get('win_to_nil', {}),
+                'analise_draw_no_bet': analises.get('draw_no_bet', {}),
                 'palpites_totais': total_palpites,
                 'confianca_media': confianca_media,
                 'data_analise': agora_brasilia().isoformat(),
