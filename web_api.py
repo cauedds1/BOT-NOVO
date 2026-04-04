@@ -318,15 +318,18 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
             return "BTTS Não"
         return tipo
 
+    _BTTS_TIPOS_VALIDOS = {"Sim", "Não", "BTTS Sim", "BTTS Não"}
+
     def _build_btts_index(analise):
         """
         Constrói índice {tipo_normalizado: confiança} para palpites BTTS.
         Aceita tanto o formato de btts_analyzer ("Sim"/"Não")
         quanto o de goals_analyzer_v2 ("BTTS Sim"/"BTTS Não").
+        Filtra estritamente aos tipos BTTS conhecidos para evitar indexação acidental.
         """
         return {_normalize_btts_tipo(p["tipo"]): p["confianca"]
                 for p in _get_palpites(analise)
-                if isinstance(p, dict) and "tipo" in p}
+                if isinstance(p, dict) and p.get("tipo") in _BTTS_TIPOS_VALIDOS}
 
     def _remove_btts_from(analise, btts_tipo_normalizado, label):
         """Remove palpites BTTS (aceitando forma curta ou longa do tipo)."""
@@ -348,11 +351,12 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
         """
         Aplica as 3 regras de conflito entre um índice BTTS e um índice de gols.
         btts_src / gols_src são as analises de onde os palpites devem ser removidos.
+        Regra 1 é verificada primeiro e impede Regra 2 de rodar (short-circuit).
         """
         # Regra 1: BTTS Sim + Under 0.5 FT → impossível; remove BTTS Sim sempre
         if "BTTS Sim" in btts_index and "Under 0.5" in under_goals_index:
             _remove_btts_from(btts_src, "BTTS Sim", btts_label)
-            return True  # regra 2 não se aplica mais
+            return  # Regra 2 não se aplica: BTTS Sim já foi removido
 
         # Regra 2: BTTS Sim + Under 1.5 FT → quase impossível; mantém o de maior confiança
         if "BTTS Sim" in btts_index and "Under 1.5" in under_goals_index:
@@ -371,7 +375,6 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
                 _remove_btts_from(btts_src, "BTTS Não", btts_label)
             else:
                 _remove_tipo_from(gols_src, "Over 2.5", gols_label)
-        return False
 
     # Helper para Under/Over FT dentro de analise_gols
     def _gols_under_index(analise):
