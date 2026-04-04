@@ -138,11 +138,11 @@ async def _fetch_eventos_odds_api(sport_key: str, date_str: str) -> list:
     if cached is not None:
         return cached
 
-    # The Odds API: pegar eventos com odds — mercados h2h, totals, btts, spreads
+    # The Odds API: pegar eventos com odds — mercados h2h, totals, alternate_totals, btts, spreads
     params = {
         "apiKey": ODDS_API_KEY,
         "regions": "eu",               # odds europeias (formato decimal)
-        "markets": "h2h,totals,btts,spreads",
+        "markets": "h2h,totals,alternate_totals,btts,spreads",
         "oddsFormat": "decimal",
         "dateFormat": "iso",
         "commenceTimeFrom": f"{date_str}T00:00:00Z",
@@ -297,10 +297,10 @@ def _normalizar_evento_odds_api(evento: dict) -> dict:
             elif okey == away_team or _similaridade(okey, away_team) >= 0.75:
                 odds_norm["fora_vence"] = price
 
-    # ── totals → Over/Under gols ─────────────────────────────────────────────
-    if "totals" in best_odds:
-        t = best_odds["totals"]
-        # Agrupar por linha (point)
+    # ── totals + alternate_totals → Over/Under gols ──────────────────────────
+    # Processa ambos os mercados com a mesma lógica; alternate_totals cobre 1.5, 3.5, 4.5 etc.
+    # A odd mais alta (best_odds) já foi selecionada entre bookmakers.
+    def _process_totals_market(t: dict) -> None:
         linhas_vistas: set[float] = set()
         for okey in t:
             if okey.startswith("__"):
@@ -319,12 +319,21 @@ def _normalizar_evento_odds_api(evento: dict) -> dict:
         for linha in linhas_vistas:
             over_key = f"Over_{linha}"
             under_key = f"Under_{linha}"
-            # Formatar linha como string compatível com os analisadores (ex: "2.5")
             linha_fmt = str(int(linha)) if linha == int(linha) else str(linha)
+            norm_over = f"gols_ft_over_{linha_fmt}"
+            norm_under = f"gols_ft_under_{linha_fmt}"
             if over_key in t:
-                odds_norm[f"gols_ft_over_{linha_fmt}"] = t[over_key]
+                # Manter a melhor odd entre totals e alternate_totals
+                if t[over_key] > odds_norm.get(norm_over, 0):
+                    odds_norm[norm_over] = t[over_key]
             if under_key in t:
-                odds_norm[f"gols_ft_under_{linha_fmt}"] = t[under_key]
+                if t[under_key] > odds_norm.get(norm_under, 0):
+                    odds_norm[norm_under] = t[under_key]
+
+    if "totals" in best_odds:
+        _process_totals_market(best_odds["totals"])
+    if "alternate_totals" in best_odds:
+        _process_totals_market(best_odds["alternate_totals"])
 
     # ── btts → Both Teams Score ───────────────────────────────────────────────
     if "btts" in best_odds:

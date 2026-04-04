@@ -13,9 +13,10 @@ ODD_MINIMA_DE_VALOR = 1.20  # Reduzido para capturar valor em favoritos
 # --- THRESHOLDS DE CONFIANÇA RECALIBRADOS (PHOENIX V2.0 - FINAL STAGE) ---
 # Valores ajustados para aumentar produtividade sem sacrificar qualidade
 MIN_CONFIANCA_GERAL = 5.0  # Threshold base para aceitar palpites
-MIN_CONFIANCA_GOLS_OVER_UNDER = 5.0  # Over/Under 2.5 gols
-MIN_CONFIANCA_GOLS_OVER_1_5 = 5.5  # Over 1.5 (mais seguro)
-MIN_CONFIANCA_GOLS_OVER_3_5 = 5.0  # Over 3.5 (mais arriscado)
+MIN_CONFIANCA_GOLS_OVER_UNDER = 6.5  # Over/Under 2.5/3.5/4.5 gols (elevado de 5.0)
+MIN_CONFIANCA_GOLS_OVER_1_5 = 6.0   # Over/Under 1.5 (elevado de 5.5)
+MIN_CONFIANCA_GOLS_OVER_3_5 = 6.0   # Over 3.5+ (elevado de 5.0)
+MAX_PALPITES_GOLS = 3                # Máximo de palpites do mercado de gols por jogo
 MIN_CONFIANCA_CANTOS = 5.0  # Escanteios
 MIN_CONFIANCA_CANTOS_UNDER = 5.5  # Under escanteios (mais conservador)
 MIN_CONFIANCA_CARTOES = 5.0  # Cartões

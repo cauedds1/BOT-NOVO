@@ -1498,13 +1498,19 @@ def normalizar_odds(odds_formatadas):
 
         elif "card" in mercado_key.lower():
             # Mercado Cartões
+            # cards_analyzer espera: cartoes_over_X.5 / cartoes_under_X.5 (sem sufixo de time)
+            # Também emite cartoes_{time}_over_X.5 para uso futuro por time.
             time = "total" if "total" in mercado_key else ("casa" if "home" in mercado_key else "fora")
 
             for linha, valor in odds_dict.items():
                 linha_limpa = linha.lower().replace("over ", "").replace("under ", "").strip()
                 if "over" in linha.lower():
+                    if time == "total":
+                        odds_normalizadas[f"cartoes_over_{linha_limpa}"] = valor
                     odds_normalizadas[f"cartoes_{time}_over_{linha_limpa}"] = valor
                 elif "under" in linha.lower():
+                    if time == "total":
+                        odds_normalizadas[f"cartoes_under_{linha_limpa}"] = valor
                     odds_normalizadas[f"cartoes_{time}_under_{linha_limpa}"] = valor
 
         elif mercado_key == "european_handicap":
