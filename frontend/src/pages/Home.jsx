@@ -66,6 +66,8 @@ function MatchCard({ jogo, compact = false }) {
   const isProcessing = status === 'processing'
   const isReady = status === 'ready'
 
+  const topPick = jogo.best_palpites?.[0]
+
   return (
     <Link
       to={isReady ? `/jogo/${jogo.fixture_id}` : '#'}
@@ -99,7 +101,16 @@ function MatchCard({ jogo, compact = false }) {
             <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={compact ? 22 : 28} />
           </div>
 
-          <div className="ml-auto flex-shrink-0">
+          <div className="ml-auto flex-shrink-0 flex items-center gap-6">
+            {isReady && topPick && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, color: '#64748b' }}>{topPick.mercado}:</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: topPick.confianca >= 7 ? '#22c55e' : '#eab308', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {topPick.tipo}
+                </span>
+                {topPick.odd && <span style={{ fontSize: 10, color: '#818cf8' }}>@{Number(topPick.odd).toFixed(2)}</span>}
+              </div>
+            )}
             {isReady && (
               <span className="badge badge-green" style={{ fontSize: 11 }}>✓ Analisado</span>
             )}
@@ -246,6 +257,23 @@ function FeaturedMatchCard({ jogo }) {
             )}
           </div>
         </div>
+
+        {/* best_palpites preview quando já analisado */}
+        {isReady && jogo.best_palpites?.length > 0 && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(99,102,241,0.12)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {jogo.best_palpites.slice(0, 3).map((p, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
+                borderRadius: 8, padding: '4px 9px',
+              }}>
+                <span style={{ fontSize: 10, color: '#64748b' }}>{p.mercado}:</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308' }}>{p.tipo}</span>
+                {p.odd && <span style={{ fontSize: 10, color: '#818cf8' }}>@{Number(p.odd).toFixed(2)}</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Link>
   )

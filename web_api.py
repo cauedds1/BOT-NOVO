@@ -125,7 +125,7 @@ def _calcular_score_destaque(liga_id: int, time_casa_id: int, time_fora_id: int)
     return round(liga_peso * (qs_casa + qs_fora) / 2, 1)
 
 
-def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
+def _formatar_jogo(jogo: dict, tem_analise: bool = False, analise_db: Optional[dict] = None) -> dict:
     """Serializa um fixture da API-Football para o formato do frontend."""
     liga_id = jogo.get("league", {}).get("id")
     liga_info = NOMES_LIGAS_PT.get(liga_id)
@@ -147,11 +147,47 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
     liga_peso = LEAGUE_WEIGHTING_FACTOR.get(liga_id, 0.60)
     score_destaque = _calcular_score_destaque(liga_id, time_casa_id, time_fora_id)
 
+    # Rodada da competição
+    rodada = jogo.get("league", {}).get("round", "")
+
+    # Venue/árbitro (quando disponível na API)
+    venue = jogo.get("fixture", {}).get("venue", {})
+    venue_nome = venue.get("name", "") if venue else ""
+    venue_cidade = venue.get("city", "") if venue else ""
+    arbitro = jogo.get("fixture", {}).get("referee", "") or ""
+
+    # Melhores palpites (top 3 se análise disponível)
+    best_palpites = []
+    if analise_db:
+        mapa_mercados = [
+            ("Gols", "analise_gols"),
+            ("Resultado", "analise_resultado"),
+            ("BTTS", "analise_btts"),
+            ("Cantos", "analise_cantos"),
+        ]
+        todos_palpites = []
+        for nome_m, chave in mapa_mercados:
+            dados = analise_db.get(chave) or {}
+            for p in (dados.get("palpites") or []):
+                if isinstance(p, dict) and p.get("confianca"):
+                    todos_palpites.append({
+                        "tipo": p.get("tipo", ""),
+                        "mercado": nome_m,
+                        "confianca": p.get("confianca", 0),
+                        "odd": p.get("odd"),
+                    })
+        todos_palpites.sort(key=lambda x: x["confianca"], reverse=True)
+        best_palpites = todos_palpites[:3]
+
     return {
         "fixture_id": jogo.get("fixture", {}).get("id"),
         "status": jogo.get("fixture", {}).get("status", {}).get("short", "NS"),
         "horario_brt": horario_brt,
         "data_iso": data_utc,
+        "rodada": rodada,
+        "venue": venue_nome,
+        "venue_cidade": venue_cidade,
+        "arbitro": arbitro,
         "liga": {
             "id": liga_id,
             "nome": nome_liga,
@@ -170,6 +206,7 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False) -> dict:
             "logo": jogo.get("teams", {}).get("away", {}).get("logo", ""),
         },
         "tem_analise": tem_analise,
+        "best_palpites": best_palpites,
         "score_destaque": score_destaque,
         "liga_peso": liga_peso,
     }
@@ -464,6 +501,49 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         except Exception:
             data_jogo_iso = str(dj)
 
+    # Fixture metadata: venue, árbitro, rodada (armazenados em stats_casa quando disponível)
+    fixture_metadata = {
+        "rodada": stats_casa.get("rodada") or stats_fora.get("rodada") or "",
+        "venue": stats_casa.get("venue") or stats_fora.get("venue") or "",
+        "venue_cidade": stats_casa.get("venue_cidade") or stats_fora.get("venue_cidade") or "",
+        "arbitro": stats_casa.get("arbitro") or stats_fora.get("arbitro") or "",
+        "data_analise": str(analise_db.get("data_analise", "")),
+    }
+
+    # H2H summary: avg goals + BTTS frequency
+    h2h_summary = {}
+    if h2h:
+        total_gols_h2h = 0
+        btts_count = 0
+        valid = 0
+        for jh in h2h:
+            gc = jh.get("gols_casa") if jh.get("gols_casa") is not None else jh.get("home_goals")
+            gf = jh.get("gols_fora") if jh.get("gols_fora") is not None else jh.get("away_goals")
+            if gc is not None and gf is not None:
+                try:
+                    gc, gf = int(gc), int(gf)
+                    total_gols_h2h += gc + gf
+                    if gc > 0 and gf > 0:
+                        btts_count += 1
+                    valid += 1
+                except (TypeError, ValueError):
+                    pass
+        if valid > 0:
+            h2h_summary = {
+                "media_gols": round(total_gols_h2h / valid, 2),
+                "btts_freq": round(btts_count / valid * 100, 1),
+                "total_jogos": valid,
+            }
+
+    # Script tático reasoning (from analise_contexto if stored)
+    analise_contexto = analise_db.get("analise_contexto") or {}
+    script_reasoning = (
+        analise_contexto.get("reasoning")
+        or analise_contexto.get("script_reasoning")
+        or analise_contexto.get("justificativa")
+        or ""
+    )
+
     return {
         "fixture_id": fixture_id,
         "status": "ready",
@@ -476,7 +556,9 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "melhor_confianca": melhor_confianca,
         "mercados": mercados,
         # Dados enriquecidos
+        "fixture_metadata": fixture_metadata,
         "script_tatico": script_tatico,
+        "script_reasoning": script_reasoning,
         "pos_casa": pos_casa,
         "pos_fora": pos_fora,
         "qsc_home": qsc_home,
@@ -484,6 +566,7 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "forma_recente_casa": forma_casa,
         "forma_recente_fora": forma_fora,
         "h2h": h2h,
+        "h2h_summary": h2h_summary,
         "stats_comparativas": stats_comparativas,
         "classificacao": classificacao[:20] if isinstance(classificacao, list) else [],
     }
@@ -636,7 +719,7 @@ async def jogos_hoje():
                         pass
                 cached = db.buscar_analise(fid, data_jogo=data_kickoff, permitir_stale=True)
                 tem_analise = cached is not None
-            resultado_raw_list.append(_formatar_jogo(jogo, tem_analise=tem_analise))
+            resultado_raw_list.append(_formatar_jogo(jogo, tem_analise=tem_analise, analise_db=cached))
         resultado = sorted(resultado_raw_list, key=lambda x: x.get("data_iso", ""))
     else:
         resultado = _get_demo_jogos()

@@ -95,6 +95,37 @@ O sistema é construído com uma arquitetura modular e production-ready.
   - `API_FOOTBALL_KEY` - Chave da API-Football
   - `DATABASE_URL` - URL de conexão PostgreSQL (opcional, mas recomendado)
 
+## Recent Changes (2026-04-04)
+### Task #18: Frontend Overhaul Completo — COMPLETE
+
+**Backend (web_api.py) Enrichment:**
+- `_formatar_jogo()` extended with `rodada`, `venue`, `venue_cidade`, `arbitro`, `best_palpites` (top 3 from Gols/Resultado/BTTS/Cantos sorted by confiança)
+- `_db_to_api_response()` extended with `fixture_metadata` (rodada/venue/árbitro/data_analise), `h2h_summary` (media_gols, btts_freq, total_jogos), `script_reasoning`
+- `jogos_hoje` endpoint now passes `analise_db` to `_formatar_jogo` for analyzed games to populate `best_palpites`
+- New `GET /api/jogadores/{fixture_id}` endpoint for individual player stats
+- Helper functions: `_extrair_forma_recente`, `_extrair_h2h`, `_extrair_stats_comparativas`
+- `Optional` type hint added to `_formatar_jogo` signature
+
+**Frontend (MatchDetail.jsx) — Full Rewrite:**
+- Hero card with countdown timer, team logos, forma recente, QSC scores, top pick stats
+- Tab navigation: Palpites / Análise (Stats) / H2H / Jogadores / Tabela
+- Confidence slider filter (0–9) + mercado dropdown; empty-state uses `totalPalpitesVisiveis` (post-filter count)
+- Odds traffic light: green=value (+5% edge), yellow=fair, red=overpriced
+- Confidence breakdown expandable per palpite
+- FormaRecente badges (V/E/D) with colors
+- H2H section with summary stats (media_gols, btts_freq)
+- StatsComparativas grid (home vs away metrics)
+- JogadoresSection fetching `/api/jogadores/:id` with graceful empty state
+- TabelaClassificacao with team highlight
+- FixtureMetadata: rodada, venue, árbitro, data_analise
+- ScriptTaticoCard with label/color/icon per script type
+- Skeleton loading state
+- Demo fixture 404 handling: shows friendly error instead of infinite spinner
+
+**Frontend (Home.jsx):**
+- MatchCard shows `best_palpites` top pick (mercado: tipo @odd) when analyzed
+- FeaturedMatchCard shows `best_palpites` top 3 pill chips below team row when analyzed
+
 ## Recent Changes (2026-04-03)
 ### Tasks #11 + #12: Interface Web (FastAPI + React/Vite) — COMPLETE
 **Backend (web_api.py):**
