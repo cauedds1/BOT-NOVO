@@ -42,6 +42,7 @@ from analysts.first_goal_analyzer import analisar_mercado_primeiro_a_marcar
 from analysts.htft_analyzer import analisar_mercado_htft
 from analysts.win_to_nil_analyzer import analisar_mercado_win_to_nil
 from analysts.draw_no_bet_analyzer import analisar_mercado_draw_no_bet
+from analysts.context_modifier_engine import compute_context_modifiers, apply_context_multipliers
 from config import LEAGUE_WEIGHTING_FACTOR, QUALITY_SCORES
 
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
@@ -450,6 +451,12 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
         stats_casa = analysis_packet["raw_data"]["home_stats"]
         stats_fora = analysis_packet["raw_data"]["away_stats"]
 
+        # 2b. Motor de Contexto Quantitativo — detecta cenários e ajusta lambdas/métricas
+        print("🧭 CONTEXTO QUANTITATIVO: Calculando modificadores...")
+        context_modifiers = compute_context_modifiers(analysis_packet, classificacao, jogo)
+        analysis_packet["context_modifiers"] = context_modifiers
+        apply_context_multipliers(analysis_packet, context_modifiers)
+
         # 3. Analyzers especializados
         analise_gols = analisar_mercado_gols(analysis_packet, odds)
         analise_resultado = analisar_mercado_resultado_final(analysis_packet, odds)
@@ -542,6 +549,13 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
             "htft": analise_htft,
             "win_to_nil": analise_win_to_nil,
             "draw_no_bet": analise_draw_no_bet,
+            "contexto": {
+                "scenarios_detected": context_modifiers.get("scenarios_detected", []),
+                "context_bullets": context_modifiers.get("context_bullets", []),
+                "referee": context_modifiers.get("referee", ""),
+                "multipliers_home": context_modifiers.get("multipliers_home", {}),
+                "multipliers_away": context_modifiers.get("multipliers_away", {}),
+            },
         }
         stats = {
             "stats_casa": stats_casa,
@@ -757,6 +771,48 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         or ""
     )
 
+    # Context info (detectado pelo context_modifier_engine, salvo em analise_contexto)
+    context_info_raw = analise_db.get("analise_contexto") or {}
+    context_info = {
+        "scenarios_detected": context_info_raw.get("scenarios_detected", []),
+        "context_bullets": context_info_raw.get("context_bullets", []),
+        "referee": context_info_raw.get("referee", ""),
+        "multipliers_home": context_info_raw.get("multipliers_home", {}),
+        "multipliers_away": context_info_raw.get("multipliers_away", {}),
+    }
+
+    # Quality gate: separate predictions into accepted (prob >= 60%) and vetados
+    min_prob_gate = 60.0
+    mercados_quality = []
+    vetados_palpites = []
+    for m in mercados:
+        palpites_ok = []
+        for p in m.get("palpites", []):
+            prob = p.get("probabilidade", 0) or 0
+            if prob > 0 and prob < min_prob_gate:
+                vetados_palpites.append({
+                    "mercado": m["mercado"],
+                    "tipo": p.get("tipo", ""),
+                    "probabilidade": prob,
+                    "confianca": p.get("confianca", 0),
+                    "motivo": f"Probabilidade insuficiente ({prob:.1f}% < {min_prob_gate:.0f}%)",
+                })
+            else:
+                palpites_ok.append(p)
+        if palpites_ok:
+            mercados_quality.append({**m, "palpites": palpites_ok})
+        elif m.get("palpites"):
+            mercados_vetados.append({
+                "mercado": m["mercado"],
+                "motivo": f"Todos os palpites com probabilidade < {min_prob_gate:.0f}%",
+            })
+
+    total_palpites_quality = sum(len(m["palpites"]) for m in mercados_quality)
+    melhor_confianca_quality = 0.0
+    for m in mercados_quality:
+        for p in m["palpites"]:
+            melhor_confianca_quality = max(melhor_confianca_quality, p.get("confianca", 0))
+
     return {
         "fixture_id": fixture_id,
         "status": "ready",
@@ -765,9 +821,9 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "liga": analise_db.get("liga", ""),
         "data_analise": str(analise_db.get("data_analise", "")),
         "data_jogo_iso": data_jogo_iso,
-        "total_palpites": total_palpites,
-        "melhor_confianca": melhor_confianca,
-        "mercados": mercados,
+        "total_palpites": total_palpites_quality,
+        "melhor_confianca": melhor_confianca_quality,
+        "mercados": mercados_quality,
         # Dados enriquecidos
         "fixture_metadata": fixture_metadata,
         "script_tatico": script_tatico,
@@ -783,6 +839,8 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "stats_comparativas": stats_comparativas,
         "classificacao": classificacao[:20] if isinstance(classificacao, list) else [],
         "mercados_vetados": mercados_vetados,
+        "vetados_palpites": vetados_palpites,
+        "context_info": context_info,
     }
 
 

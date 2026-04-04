@@ -19,7 +19,9 @@ from analysts.justification_generator import generate_evidence_based_justificati
 def format_evidence_based_dossier(
     jogo: Dict,
     todos_palpites: List[Dict],
-    master_analysis: Dict
+    master_analysis: Dict,
+    context_modifiers: Optional[Dict] = None,
+    vetados_palpites: Optional[List[Dict]] = None,
 ) -> str:
     """
     EVIDENCE-BASED PROTOCOL: Formata mensagem seguindo especificação exata.
@@ -189,6 +191,16 @@ def format_evidence_based_dossier(
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
+
+    # === SECTION 13: CONTEXTO IDENTIFICADO (context_modifier_engine) ===
+    _ctx = context_modifiers or master_analysis.get("context_modifiers", {})
+    _bullets = _ctx.get("context_bullets", []) if _ctx else []
+    if _bullets:
+        msg += _format_contexto_section(_bullets)
+
+    # === SECTION 14: MERCADOS VETADOS (quality gate rejections) ===
+    if vetados_palpites:
+        msg += _format_vetados_section(vetados_palpites)
 
     return msg
 
@@ -1304,6 +1316,34 @@ def _format_draw_no_bet_section(
 
     msg += "   📊 EVIDÊNCIAS (GOLS):\n"
     msg += _format_gols_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += "\n---\n\n"
+    return msg
+
+
+def _format_contexto_section(context_bullets: List[str]) -> str:
+    """Formata seção ⚠️ CONTEXTO IDENTIFICADO para Telegram."""
+    msg = "⚠️ CONTEXTO IDENTIFICADO\n\n"
+    for bullet in context_bullets:
+        msg += f"   {bullet}\n"
+    msg += "\n---\n\n"
+    return msg
+
+
+def _format_vetados_section(vetados_palpites: List[Dict]) -> str:
+    """Formata seção 🚫 MERCADOS VETADOS (quality gate) para Telegram."""
+    if not vetados_palpites:
+        return ""
+    msg = "🚫 APOSTAS VETADAS\n\n"
+    msg += "   Os seguintes picks foram gerados mas não passaram no filtro de qualidade:\n\n"
+    for v in vetados_palpites[:8]:
+        mercado = v.get("mercado", "")
+        tipo = v.get("tipo", "")
+        motivo = v.get("motivo", "")
+        prob = v.get("probabilidade", 0)
+        msg += f"   • [{mercado}] {tipo}"
+        if prob:
+            msg += f" ({prob:.1f}%)"
+        msg += f"\n     ↳ {motivo}\n"
     msg += "\n---\n\n"
     return msg
 

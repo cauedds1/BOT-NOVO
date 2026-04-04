@@ -496,11 +496,90 @@ function MarketCard({ mercado, minConfianca = 0 }) {
   )
 }
 
+function SectionHeader({ icon, title, count }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 16 }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>{title}</span>
+      {count !== undefined && count > 0 && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '1px 7px' }}>{count}</span>
+      )}
+    </div>
+  )
+}
+
+function ValueBetsSummary({ mercados }) {
+  const allValueBets = (mercados || []).flatMap(m =>
+    (m.palpites || []).filter(p => p.is_value === true).map(p => ({ ...p, mercado: m.mercado }))
+  )
+  if (allValueBets.length === 0) return null
+  return (
+    <div style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: 6 }}>
+      <SectionHeader icon="💰" title="VALUE BETS" count={allValueBets.length} />
+      {allValueBets.map((p, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: i < allValueBets.length - 1 ? '1px solid rgba(34,197,94,0.1)' : 'none', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--green-light)', background: 'var(--green-dim)', border: '1px solid var(--green-border)', borderRadius: 4, padding: '2px 5px', flexShrink: 0 }}>+{(p.edge || 0).toFixed(1)}%</span>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{p.mercado}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{p.tipo}</span>
+          {p.odd && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', flexShrink: 0 }}>@{Number(p.odd).toFixed(2)}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ContextSection({ contextInfo }) {
+  const bullets = contextInfo?.context_bullets || []
+  const scenarios = contextInfo?.scenarios_detected || []
+  if (bullets.length === 0) return null
+  return (
+    <div style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: 6 }}>
+      <SectionHeader icon="⚠️" title="CONTEXTO IDENTIFICADO" count={scenarios.length} />
+      {bullets.map((b, i) => (
+        <div key={i} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, padding: '2px 0', display: 'flex', gap: 6 }}>
+          <span style={{ flexShrink: 0, opacity: 0.5 }}>•</span>
+          <span>{b}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function VetadosSection({ vetados }) {
+  const [open, setOpen] = useState(false)
+  if (!vetados || vetados.length === 0) return null
+  return (
+    <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 6 }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, padding: 0 }}>
+        <span style={{ fontSize: 16 }}>🚫</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-secondary)', flex: 1, textAlign: 'left' }}>APOSTAS VETADAS</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '1px 7px' }}>{vetados.length}</span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 4 }}>{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {vetados.map((v, i) => (
+            <div key={i} style={{ fontSize: 11, padding: '4px 0', borderBottom: i < vetados.length - 1 ? '1px solid rgba(239,68,68,0.1)' : 'none' }}>
+              <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>[{v.mercado}]</span>{' '}
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{v.tipo}</span>
+              {v.probabilidade > 0 && <span style={{ color: 'var(--text-faint)', marginLeft: 4 }}>({v.probabilidade?.toFixed(1)}%)</span>}
+              <div style={{ color: 'var(--red)', fontSize: 10, opacity: 0.7, marginTop: 1, paddingLeft: 4 }}>↳ {v.motivo}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PicksTab({ analise }) {
   const data = analise?.dados || analise
   const mercados = data?.mercados || []
+  const contextInfo = data?.context_info || {}
+  const vetados = data?.vetados_palpites || []
+  const mercadosVetados = data?.mercados_vetados || []
 
-  if (mercados.length === 0) return (
+  if (mercados.length === 0 && !contextInfo?.context_bullets?.length) return (
     <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)' }}>
       <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
       <div style={{ fontSize: 14 }}>Sem previsões disponíveis</div>
@@ -509,7 +588,15 @@ function PicksTab({ analise }) {
 
   return (
     <div>
-      {mercados.map((m, i) => <MarketCard key={i} mercado={m} />)}
+      {mercados.length > 0 && (
+        <>
+          <ValueBetsSummary mercados={mercados} />
+          <SectionHeader icon="🔮" title="PREVISÕES" count={mercados.reduce((s, m) => s + (m.palpites?.length || 0), 0)} />
+          {mercados.map((m, i) => <MarketCard key={i} mercado={m} />)}
+        </>
+      )}
+      <ContextSection contextInfo={contextInfo} />
+      <VetadosSection vetados={[...vetados, ...mercadosVetados.map(mv => ({ mercado: mv.mercado, tipo: '—', motivo: mv.motivo, probabilidade: 0 }))]} />
     </div>
   )
 }

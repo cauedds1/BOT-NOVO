@@ -2061,6 +2061,7 @@ async def generate_match_analysis(jogo):
             'injury_severity_away': injury_severity_away,
             'injury_role_home': injury_role_home,
             'injury_role_away': injury_role_away,
+            'knockout_scenario': knockout_scenario,
         },
         'calculated_probabilities': {
             **probabilities,
@@ -2092,7 +2093,9 @@ async def generate_match_analysis(jogo):
         'raw_data': {
             'home_stats': home_stats,
             'away_stats': away_stats,
-            'fixture_data': jogo
+            'fixture_data': jogo,
+            'recent_fixtures_home': _all_home_ev or [],
+            'recent_fixtures_away': _all_away_ev or [],
         },
         'h2h': h2h_stats
     }
