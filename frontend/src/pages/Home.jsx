@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import MatchDrawer from '../components/MatchDrawer'
 
 const AUTO_REFRESH_SECS = 600
 
@@ -36,54 +36,66 @@ function TeamLogo({ logo, name, size = 28 }) {
   const [err, setErr] = useState(false)
   if (!logo || err) return (
     <div style={{
-      width: size, height: size, borderRadius: '50%', background: 'var(--accent-dim)',
+      width: size, height: size, borderRadius: '50%',
+      background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.42, color: 'var(--accent-light)', fontWeight: 700, flexShrink: 0,
+      fontSize: size * 0.4, color: 'var(--accent-light)', fontWeight: 700, flexShrink: 0,
     }}>
       {name?.[0] || '?'}
     </div>
   )
-  return <img src={logo} alt={name} style={{ width: size, height: size, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }} onError={() => setErr(true)} />
+  return <img src={logo} alt={name} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} onError={() => setErr(true)} />
 }
 
-function PickBadge({ palpite }) {
-  const high = (palpite.confianca || 0) >= 7
+function FormDots({ forma }) {
+  if (!forma || forma.length === 0) return null
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 3,
-      background: 'var(--accent-dim)', border: '1px solid rgba(99,102,241,0.15)',
-      borderRadius: 'var(--radius-sm)', padding: '2px 6px',
-    }}>
-      <span style={{ fontSize: 10 }}>{MERCADO_EMOJI[palpite.mercado] || '📊'}</span>
-      <span style={{
-        fontSize: 10, fontWeight: 700, color: high ? 'var(--green-light)' : 'var(--amber-light)',
-        whiteSpace: 'nowrap', maxWidth: 66, overflow: 'hidden', textOverflow: 'ellipsis',
-      }}>
-        {palpite.tipo}
-      </span>
-      {palpite.probabilidade != null && (
-        <span style={{ fontSize: 9, color: 'var(--accent-light)' }}>{Number(palpite.probabilidade).toFixed(0)}%</span>
-      )}
+    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+      {forma.slice(0, 5).map((r, i) => {
+        const u = String(r).toUpperCase()
+        const cls = (u === 'W' || u === 'V') ? 'form-dot form-dot-w' : (u === 'D' || u === 'E') ? 'form-dot form-dot-d' : 'form-dot form-dot-l'
+        return <div key={i} className={cls} />
+      })}
     </div>
   )
 }
 
-function MatchCard({ jogo, compact = false }) {
+function ProbBar({ palpites }) {
+  let home = 33, draw = 33, away = 34
+  if (palpites?.length > 0) {
+    const resPalpite = palpites.find(p => p.mercado === 'Resultado')
+    if (resPalpite?.prob_casa != null) {
+      home = Number(resPalpite.prob_casa) || 33
+      draw = Number(resPalpite.prob_empate) || 33
+      away = Number(resPalpite.prob_fora) || 34
+    }
+  }
+  const total = home + draw + away
+  const hPct = total > 0 ? (home / total * 100).toFixed(1) : 33.3
+  const dPct = total > 0 ? (draw / total * 100).toFixed(1) : 33.3
+  const aPct = total > 0 ? (away / total * 100).toFixed(1) : 33.4
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 80 }}>
+      <div className="prob-bar">
+        <div className="prob-bar-home" style={{ width: `${hPct}%` }} />
+        <div className="prob-bar-draw" style={{ width: `${dPct}%` }} />
+        <div className="prob-bar-away" style={{ width: `${aPct}%` }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: 'var(--accent-light)' }}>{hPct}%</span>
+        <span style={{ color: 'var(--amber-light)' }}>{dPct}%</span>
+        <span style={{ color: 'var(--green-light)' }}>{aPct}%</span>
+      </div>
+    </div>
+  )
+}
+
+function MatchRow({ jogo, onOpen, featured = false }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
   const { label: countdown, minsLeft } = useCountdown(jogo.data_iso)
   useEffect(() => { setStatus(jogo.tem_analise ? 'ready' : 'none') }, [jogo.tem_analise])
-
-  const handleAnalyze = async (e) => {
-    e.preventDefault(); e.stopPropagation()
-    if (loading || status === 'processing') return
-    setLoading(true); setStatus('processing')
-    try {
-      const r = await fetch(`/api/analisar/${jogo.fixture_id}`, { method: 'POST' })
-      const d = await r.json()
-      setStatus(d.status === 'ready' ? 'ready' : 'processing')
-    } catch { setStatus('none') } finally { setLoading(false) }
-  }
 
   useEffect(() => {
     if (status !== 'processing') return
@@ -98,21 +110,34 @@ function MatchCard({ jogo, compact = false }) {
     return () => clearInterval(poll)
   }, [status, jogo.fixture_id])
 
+  const handleAnalyze = async (e) => {
+    e.preventDefault(); e.stopPropagation()
+    if (loading || status === 'processing') return
+    setLoading(true); setStatus('processing')
+    try {
+      const r = await fetch(`/api/analisar/${jogo.fixture_id}`, { method: 'POST' })
+      const d = await r.json()
+      setStatus(d.status === 'ready' ? 'ready' : 'processing')
+    } catch { setStatus('none') } finally { setLoading(false) }
+  }
+
   const isReady = status === 'ready'
   const isProcessing = status === 'processing'
-  const isLast30 = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
-  const topPicks = jogo.best_palpites?.slice(0, 2) || []
+  const isLiveSoon = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
+  const topPick = jogo.best_palpites?.[0]
+  const forma = jogo.forma_casa || jogo.forma || []
+  const formaFora = jogo.forma_fora || []
 
   if (isProcessing) return (
-    <div className="card skeleton-card" style={{ padding: compact ? '10px 12px' : '11px 14px', marginBottom: 4 }}>
+    <div className="skeleton-card" style={{ padding: '11px 14px', marginBottom: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 44, flexShrink: 0 }}>
-          <div style={{ height: 13, borderRadius: 4, background: 'var(--surface-2)', marginBottom: 4 }} />
-          <div style={{ height: 9, borderRadius: 3, background: 'var(--surface)', width: 32 }} />
+        <div style={{ minWidth: 42, flexShrink: 0 }}>
+          <div style={{ height: 12, borderRadius: 4, background: 'var(--surface-2)', marginBottom: 4, width: 36 }} />
+          <div style={{ height: 8, borderRadius: 3, background: 'var(--surface)', width: 28 }} />
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-faint)' }}>
-          <div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5, flexShrink: 0 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-faint)' }}>
+          <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
           Analisando...
         </div>
       </div>
@@ -120,216 +145,138 @@ function MatchCard({ jogo, compact = false }) {
   )
 
   return (
-    <Link to={isReady ? `/jogo/${jogo.fixture_id}` : '#'} onClick={isReady ? undefined : handleAnalyze}
-      style={{ textDecoration: 'none', display: 'block' }}>
-      <div className="card" style={{
-        padding: compact ? '10px 12px' : '11px 14px', marginBottom: 4, cursor: 'pointer',
-        borderColor: isLast30 ? 'var(--red-border)' : undefined,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 42, flexShrink: 0 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1 }}>
-              {jogo.horario_brt}
+    <div
+      className={`match-row${isReady ? ' analyzed' : ''}${isLiveSoon ? ' live-soon' : ''}`}
+      style={{ padding: '11px 14px', marginBottom: 4, cursor: 'pointer' }}
+      onClick={() => onOpen(jogo.fixture_id, jogo)}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 40, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.01em' }}>
+            {jogo.horario_brt}
+          </span>
+          {countdown && (
+            <span style={{ fontSize: 9, color: isLiveSoon ? 'var(--red)' : 'var(--text-faint)', marginTop: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
+              {countdown}
             </span>
-            {countdown && (
-              <span style={{ fontSize: 9, color: isLast30 ? 'var(--red)' : 'var(--text-faint)', marginTop: 3, whiteSpace: 'nowrap', fontWeight: 500 }}>
-                {countdown}
-              </span>
-            )}
-            {isReady && (
-              jogo.fixture_metadata?.lineup_confirmado
-                ? <span style={{ fontSize: 8, color: 'var(--green)', marginTop: 2, fontWeight: 600 }}>✅ Lineup</span>
-                : <span style={{ fontSize: 8, color: 'var(--amber)', marginTop: 2, fontWeight: 600 }}>⏳ Lineup</span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0, overflow: 'hidden' }}>
-            <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={compact ? 21 : 24} />
-            <span style={{ fontSize: compact ? 11 : 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 88 }}>
-              {jogo.time_casa?.nome}
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--text-faint)', margin: '0 1px', flexShrink: 0, fontWeight: 600 }}>vs</span>
-            <span style={{ fontSize: compact ? 11 : 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 88 }}>
-              {jogo.time_fora?.nome}
-            </span>
-            <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={compact ? 21 : 24} />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-            {isLast30 && isReady && <span className="chip chip-red">🔴 Final</span>}
-            {isReady && topPicks.length > 0 && (
-              <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                {topPicks.map((p, i) => <PickBadge key={i} palpite={p} />)}
-              </div>
-            )}
-            {isReady && <span className="badge badge-green" style={{ fontSize: 10 }}>✓</span>}
-            {isProcessing && (
-              <span className="badge badge-blue" style={{ fontSize: 10, gap: 4 }}>
-                <div className="spinner" style={{ width: 9, height: 9, borderWidth: 1.5 }} /> ...
-              </span>
-            )}
-            {!isReady && !isProcessing && (
-              <button onClick={handleAnalyze} className="pill" style={{ fontSize: 11, padding: '3px 9px', color: 'var(--accent-light)', background: 'var(--accent-dim)', borderColor: 'var(--accent-border)' }}>
-                Analisar →
-              </button>
-            )}
-          </div>
+          )}
+          {isReady && (
+            jogo.fixture_metadata?.lineup_confirmado
+              ? <span style={{ fontSize: 8, color: 'var(--green)', marginTop: 2, fontWeight: 600 }}>✅</span>
+              : null
+          )}
         </div>
-      </div>
-    </Link>
-  )
-}
 
-function FeaturedMatchCard({ jogo }) {
-  const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
-  const [loading, setLoading] = useState(false)
-  const { label: countdown, minsLeft } = useCountdown(jogo.data_iso)
-  useEffect(() => { setStatus(jogo.tem_analise ? 'ready' : 'none') }, [jogo.tem_analise])
-
-  const handleAnalyze = async (e) => {
-    e.preventDefault(); e.stopPropagation()
-    if (loading || status === 'processing') return
-    setLoading(true); setStatus('processing')
-    try {
-      const r = await fetch(`/api/analisar/${jogo.fixture_id}`, { method: 'POST' })
-      const d = await r.json()
-      setStatus(d.status === 'ready' ? 'ready' : 'processing')
-    } catch { setStatus('none') } finally { setLoading(false) }
-  }
-
-  useEffect(() => {
-    if (status !== 'processing') return
-    const poll = setInterval(async () => {
-      try {
-        const r = await fetch(`/api/status/${jogo.fixture_id}`)
-        const d = await r.json()
-        if (d.status === 'ready') { setStatus('ready'); clearInterval(poll) }
-        if (d.status === 'error') { setStatus('none'); clearInterval(poll) }
-      } catch { clearInterval(poll) }
-    }, 3000)
-    return () => clearInterval(poll)
-  }, [status, jogo.fixture_id])
-
-  const isReady = status === 'ready'
-  const isProcessing = status === 'processing'
-  const isLast30 = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
-  const score = jogo.score_destaque || 0
-
-  return (
-    <Link to={isReady ? `/jogo/${jogo.fixture_id}` : '#'} onClick={isReady ? undefined : handleAnalyze}
-      style={{ textDecoration: 'none', display: 'block' }}>
-      <div className="card" style={{
-        padding: '15px 18px', marginBottom: 8, cursor: 'pointer',
-        borderColor: isLast30 ? 'rgba(239,68,68,0.28)' : 'rgba(99,102,241,0.20)',
-        background: isLast30 ? 'rgba(239,68,68,0.04)' : 'rgba(99,102,241,0.04)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-              {jogo.liga.logo && <img src={jogo.liga.logo} alt="" style={{ width: 15, height: 15, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
-              <span style={{ fontSize: 11, color: 'var(--accent-light)', fontWeight: 600 }}>{jogo.liga.nome}</span>
-              <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>·</span>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700 }}>{jogo.horario_brt}</span>
-              {countdown && <span style={{ fontSize: 10, color: isLast30 ? 'var(--red)' : 'var(--text-muted)' }}>({countdown})</span>}
-              {isLast30 && <span className="chip chip-red">🔴 Análise Final</span>}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={30} />
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{jogo.time_casa?.nome}</span>
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700, padding: '0 4px' }}>vs</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{jogo.time_fora?.nome}</span>
-                <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={30} />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7, flexShrink: 0 }}>
-            <span className="chip chip-amber">⭐ {score.toFixed(0)}</span>
-            {isReady && <span className="badge badge-green" style={{ fontSize: 11 }}>✓ Analisado</span>}
-            {isProcessing && (
-              <span className="badge badge-blue" style={{ fontSize: 11, gap: 5 }}>
-                <div className="spinner" style={{ width: 11, height: 11, borderWidth: 2 }} /> Analisando...
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={22} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+                {jogo.time_casa?.nome}
               </span>
-            )}
-            {!isReady && !isProcessing && (
-              <button onClick={handleAnalyze} className="pill pill-active" style={{ fontSize: 11, padding: '4px 11px' }}>
-                Analisar →
-              </button>
-            )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={22} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 110 }}>
+                {jogo.time_fora?.nome}
+              </span>
+            </div>
           </div>
         </div>
 
-        {isReady && jogo.best_palpites?.length > 0 && (
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {jogo.best_palpites.slice(0, 3).map((p, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'var(--accent-dim)', border: '1px solid rgba(99,102,241,0.13)',
-                borderRadius: 'var(--radius-sm)', padding: '4px 9px',
-              }}>
-                <span style={{ fontSize: 12 }}>{MERCADO_EMOJI[p.mercado] || '📊'}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: (p.confianca || 0) >= 7 ? 'var(--green-light)' : 'var(--amber-light)' }}>{p.tipo}</span>
-                {p.probabilidade != null && <span style={{ fontSize: 10, color: 'var(--accent-light)', fontWeight: 600 }}>{Number(p.probabilidade).toFixed(0)}%</span>}
-                {p.odd && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>@{Number(p.odd).toFixed(2)}</span>}
-              </div>
-            ))}
+        {(forma.length > 0 || formaFora.length > 0) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+            {forma.length > 0 && <FormDots forma={forma} />}
+            {formaFora.length > 0 && <FormDots forma={formaFora} />}
           </div>
         )}
-      </div>
-    </Link>
-  )
-}
 
-function LeagueSection({ liga, jogos }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <div style={{ marginBottom: 4 }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-        background: 'transparent', border: 'none',
-        borderRadius: 'var(--radius-sm)', padding: '7px 10px', cursor: 'pointer', marginBottom: open ? 4 : 0,
-      }}>
-        {liga.logo && <img src={liga.logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{liga.nome}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-faint)', fontWeight: 500 }}>
-          {jogos.length} jogo{jogos.length !== 1 ? 's' : ''} {open ? '▴' : '▾'}
-        </span>
-      </button>
-      {open && <div style={{ paddingLeft: 2 }}>{jogos.map(j => <MatchCard key={j.fixture_id} jogo={j} compact />)}</div>}
+        {isReady && jogo.best_palpites?.length > 0 && (
+          <div style={{ flexShrink: 0 }}>
+            <ProbBar palpites={jogo.best_palpites} />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          {isLiveSoon && isReady && <span className="chip chip-red" style={{ fontSize: 9 }}>🔴</span>}
+          {featured && !isLiveSoon && <span className="chip chip-amber" style={{ fontSize: 9 }}>⭐</span>}
+          {isReady && topPick && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
+              borderRadius: 'var(--radius-sm)', padding: '3px 7px', maxWidth: 100,
+            }}>
+              <span style={{ fontSize: 10 }}>{MERCADO_EMOJI[topPick.mercado] || '📊'}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 700,
+                color: (topPick.confianca || 0) >= 7 ? 'var(--green-light)' : 'var(--amber-light)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 60,
+              }}>{topPick.tipo}</span>
+              {topPick.probabilidade != null && (
+                <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{Number(topPick.probabilidade).toFixed(0)}%</span>
+              )}
+            </div>
+          )}
+          {isReady && <span className="badge badge-green" style={{ fontSize: 9, padding: '1px 6px' }}>✓</span>}
+          {!isReady && !isProcessing && (
+            <button onClick={handleAnalyze} className="pill" style={{ fontSize: 11, padding: '3px 9px', color: 'var(--accent-light)', background: 'var(--accent-dim)', borderColor: 'var(--accent-border)' }}>
+              Analisar →
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-function CountrySection({ pais, ligas }) {
+function LeagueSection({ liga, jogos, onOpen }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div style={{ marginBottom: 2 }}>
+      <button className="league-header" onClick={() => setOpen(o => !o)} style={{ marginBottom: open ? 2 : 0 }}>
+        {liga.logo && <img src={liga.logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }} onError={e => e.target.style.display='none'} />}
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{liga.nome}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-faint)', fontWeight: 500 }}>
+          {jogos.length} {open ? '▴' : '▾'}
+        </span>
+      </button>
+      {open && (
+        <div style={{ paddingLeft: 2 }}>
+          {jogos.map(j => <MatchRow key={j.fixture_id} jogo={j} onOpen={onOpen} compact />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CountrySection({ pais, ligas, onOpen }) {
   const [open, setOpen] = useState(true)
   const totalJogos = ligas.reduce((acc, l) => acc + l.jogos.length, 0)
   const bandeira = ligas[0]?.liga?.bandeira || ''
   return (
-    <div style={{ marginBottom: 10 }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 9,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)', padding: '9px 12px', cursor: 'pointer', marginBottom: open ? 8 : 0,
-        transition: 'var(--transition)',
-      }}>
-        {bandeira && <img src={bandeira} alt="" style={{ width: 18, height: 13, objectFit: 'cover', borderRadius: 2 }} onError={e => e.target.style.display = 'none'} />}
+    <div style={{ marginBottom: 8 }}>
+      <button className="country-header" onClick={() => setOpen(o => !o)} style={{ marginBottom: open ? 6 : 0 }}>
+        {bandeira && <img src={bandeira} alt="" style={{ width: 18, height: 13, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }} onError={e => e.target.style.display='none'} />}
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{pais}</span>
-        <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 4, fontWeight: 500 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 500 }}>
           {ligas.length} liga{ligas.length !== 1 ? 's' : ''} · {totalJogos} jogo{totalJogos !== 1 ? 's' : ''}
         </span>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>{open ? '▴' : '▾'}</span>
       </button>
-      {open && <div style={{ paddingLeft: 6 }}>{ligas.map(g => <LeagueSection key={g.liga.id} liga={g.liga} jogos={g.jogos} />)}</div>}
+      {open && (
+        <div style={{ paddingLeft: 6 }}>
+          {ligas.map(g => <LeagueSection key={g.liga.id} liga={g.liga} jogos={g.jogos} onOpen={onOpen} />)}
+        </div>
+      )}
     </div>
   )
 }
 
 function AutoRefreshTimer({ secondsLeft }) {
   const mins = Math.floor(secondsLeft / 60); const secs = secondsLeft % 60
-  return <span style={{ fontSize: 11, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>Atualiza em {mins}:{String(secs).padStart(2, '0')}</span>
+  return <span style={{ fontSize: 11, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
+    {mins}:{String(secs).padStart(2, '0')}
+  </span>
 }
 
 function FilterPanel({ filters, onChange, ligas }) {
@@ -337,29 +284,45 @@ function FilterPanel({ filters, onChange, ligas }) {
   const hasActive = filters.confiancaMin > 60 || filters.mercados.length > 0 || filters.ligaIds.length > 0 || filters.sort !== 'horario' || filters.apenasAnalisados
 
   return (
-    <div style={{ marginBottom: 18 }}>
-      <button onClick={() => setOpen(o => !o)} className={`pill${hasActive ? ' pill-active' : ''}`} style={{ gap: 7 }}>
-        <span>⚙️ Filtros</span>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={() => setOpen(o => !o)} className={`pill${hasActive ? ' pill-active' : ''}`} style={{ gap: 6 }}>
+          <span style={{ fontSize: 12 }}>⚙️</span>
+          <span>Filtros</span>
+          {hasActive && (
+            <span style={{
+              fontSize: 9, background: 'var(--accent)', color: '#fff',
+              borderRadius: '50%', width: 14, height: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800,
+            }}>!</span>
+          )}
+          <span style={{ fontSize: 10 }}>{open ? '▴' : '▾'}</span>
+        </button>
+        {[{ v: 'horario', l: 'Horário' }, { v: 'confianca', l: 'Confiança' }, { v: 'score', l: 'Relevância' }].map(({ v, l }) => (
+          <button key={v} onClick={() => onChange({ ...filters, sort: v })} className={`pill${filters.sort === v ? ' pill-active' : ''}`} style={{ fontSize: 11, padding: '4px 10px' }}>
+            {l}
+          </button>
+        ))}
+        <button onClick={() => onChange({ ...filters, apenasAnalisados: !filters.apenasAnalisados })}
+          className={`pill${filters.apenasAnalisados ? ' pill-active' : ''}`}
+          style={{ fontSize: 11, padding: '4px 10px' }}>
+          ✓ Analisados
+        </button>
         {hasActive && (
-          <span style={{
-            fontSize: 9, background: 'var(--accent)', color: '#fff',
-            borderRadius: '50%', width: 14, height: 14,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800,
-          }}>!</span>
+          <button onClick={() => onChange({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false })}
+            style={{ fontSize: 11, padding: '4px 10px', color: 'var(--red)', background: 'var(--red-dim)', border: '1px solid var(--red-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+            ✕ Limpar
+          </button>
         )}
-        <span style={{ fontSize: 10, marginLeft: 1 }}>{open ? '▴' : '▾'}</span>
-      </button>
+      </div>
 
       {open && (
-        <div className="panel" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="panel" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Confiança mínima <span style={{ color: 'var(--accent-light)', textTransform: 'none', letterSpacing: 0, fontWeight: 800 }}>{filters.confiancaMin}%</span>
             </div>
             <input type="range" min="60" max="95" step="5" value={filters.confiancaMin} onChange={e => onChange({ ...filters, confiancaMin: Number(e.target.value) })} style={{ width: '100%', accentColor: 'var(--accent)' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-faint)', marginTop: 3 }}>
-              <span>60%</span><span>70%</span><span>80%</span><span>95%</span>
-            </div>
           </div>
 
           <div>
@@ -386,38 +349,13 @@ function FilterPanel({ filters, onChange, ligas }) {
                   return (
                     <button key={l.id} onClick={() => onChange({ ...filters, ligaIds: on ? filters.ligaIds.filter(x => x !== l.id) : [...filters.ligaIds, l.id] })}
                       className={`pill${on ? ' pill-active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 8px' }}>
-                      {l.logo && <img src={l.logo} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
+                      {l.logo && <img src={l.logo} alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} onError={e => e.target.style.display='none'} />}
                       {l.nome}
                     </button>
                   )
                 })}
               </div>
             </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ordenar:</div>
-            {[{ v: 'horario', l: '⏰ Horário' }, { v: 'confianca', l: '📊 Confiança' }, { v: 'score', l: '⭐ Relevância' }].map(({ v, l }) => (
-              <button key={v} onClick={() => onChange({ ...filters, sort: v })} className={`pill${filters.sort === v ? ' pill-active' : ''}`} style={{ fontSize: 11, padding: '4px 10px' }}>
-                {l}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={() => onChange({ ...filters, apenasAnalisados: !filters.apenasAnalisados })}
-              className="toggle"
-              style={{ background: filters.apenasAnalisados ? 'var(--accent)' : 'rgba(255,255,255,0.10)' }}>
-              <div className="toggle-thumb" style={{ left: filters.apenasAnalisados ? 18 : 2 }} />
-            </button>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Apenas jogos já analisados</span>
-          </div>
-
-          {hasActive && (
-            <button onClick={() => onChange({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false })}
-              className="chip chip-red" style={{ alignSelf: 'flex-start', padding: '4px 12px', cursor: 'pointer' }}>
-              ✕ Limpar filtros
-            </button>
           )}
         </div>
       )}
@@ -456,6 +394,9 @@ export default function Home() {
   const [countdown, setCountdown] = useState(AUTO_REFRESH_SECS)
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false })
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerFixtureId, setDrawerFixtureId] = useState(null)
+  const [drawerJogo, setDrawerJogo] = useState(null)
   const timerRef = useRef(null); const countRef = useRef(AUTO_REFRESH_SECS)
 
   const fetchJogos = useCallback(async () => {
@@ -478,6 +419,16 @@ export default function Home() {
     return () => clearInterval(timerRef.current)
   }, [fetchJogos])
 
+  const openDrawer = useCallback((fixtureId, jogo) => {
+    setDrawerFixtureId(fixtureId)
+    setDrawerJogo(jogo)
+    setDrawerOpen(true)
+  }, [])
+
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false)
+  }, [])
+
   const allJogos = useMemo(() => {
     if (!data?.por_pais) return []
     return data.por_pais.flatMap(p => p.ligas.flatMap(l => l.jogos))
@@ -489,11 +440,6 @@ export default function Home() {
     data.por_pais.forEach(p => p.ligas.forEach(l => { if (!seen.has(l.liga.id)) { seen.add(l.liga.id); out.push(l.liga) } }))
     return out
   }, [data])
-
-  const filteredJogos = useMemo(() => {
-    const q = search.trim()
-    return sortJogos(allJogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)), filters.sort)
-  }, [allJogos, search, filters])
 
   const filteredPrincipais = useMemo(() => {
     if (!data?.principais) return []
@@ -509,6 +455,11 @@ export default function Home() {
       ligas: p.ligas.map(l => ({ ...l, jogos: sortJogos(l.jogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)), filters.sort) })).filter(l => l.jogos.length > 0),
     })).filter(p => p.ligas.length > 0)
   }, [data, search, filters])
+
+  const filteredJogos = useMemo(() => {
+    const q = search.trim()
+    return sortJogos(allJogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)), filters.sort)
+  }, [allJogos, search, filters])
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, gap: 14, paddingTop: 60 }}>
@@ -526,40 +477,44 @@ export default function Home() {
     </div>
   )
 
-  const total = data?.total || 0; const totalPaises = data?.por_pais?.length || 0
+  const total = data?.total || 0
+  const totalPaises = data?.por_pais?.length || 0
+  const totalAnalisados = allJogos.filter(j => j.tem_analise).length
   const totalFiltrados = filteredJogos.length
 
   const clearAll = () => { setSearch(''); setFilters({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false }) }
 
   return (
-    <div style={{ paddingTop: 28 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <div>
-          <h1 className="page-title">Jogos de Hoje</h1>
-          <p className="page-subtitle">
-            {totalFiltrados !== total
-              ? `${totalFiltrados} de ${total} partida${total !== 1 ? 's' : ''} (filtrado)`
-              : `${total} partida${total !== 1 ? 's' : ''} em ${totalPaises} pa${totalPaises !== 1 ? 'íses' : 'ís'}`
-            }
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <AutoRefreshTimer secondsLeft={countdown} />
-          <button onClick={handleRefresh} className="pill" style={{ fontSize: 12, padding: '6px 12px' }}>↻ Atualizar</button>
-        </div>
+    <div style={{ paddingTop: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 10, marginBottom: 20 }}>
+        {[
+          { label: 'Jogos Hoje', value: total, sub: `${totalPaises} países` },
+          { label: 'Analisados', value: totalAnalisados, sub: `${total > 0 ? ((totalAnalisados/total)*100).toFixed(0) : 0}% do total`, color: totalAnalisados > 0 ? 'var(--green-light)' : undefined },
+          { label: 'Em Exibição', value: totalFiltrados, sub: filters.sort === 'horario' ? 'ord. horário' : filters.sort === 'confianca' ? 'ord. confiança' : 'ord. relevância' },
+        ].map(({ label, value, sub, color }) => (
+          <div key={label} className="stat-box" style={{ padding: '10px 14px' }}>
+            <div className="stat-label">{label}</div>
+            <div className="stat-value" style={{ fontSize: 20, ...(color ? { color } : {}) }}>{value}</div>
+            <div className="stat-sub">{sub}</div>
+          </div>
+        ))}
       </div>
 
-      <div style={{ position: 'relative', marginBottom: 12 }}>
-        <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-faint)', pointerEvents: 'none' }}>🔍</span>
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-          className="token-input" placeholder="Buscar por time, competição ou país..."
-          style={{ paddingLeft: 38 }}
-          onFocus={e => e.target.style.borderColor = 'var(--border-accent)'}
-          onBlur={e => e.target.style.borderColor = 'var(--border)'}
-        />
-        {search && (
-          <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 2 }}>✕</button>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--text-faint)', pointerEvents: 'none' }}>🔍</span>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            className="token-input" placeholder="Buscar por time, liga ou país..."
+            style={{ paddingLeft: 36 }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 2 }}>✕</button>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <AutoRefreshTimer secondsLeft={countdown} />
+          <button onClick={handleRefresh} className="pill" style={{ fontSize: 11, padding: '5px 10px' }}>↻</button>
+        </div>
       </div>
 
       <FilterPanel filters={filters} onChange={setFilters} ligas={allLigas} />
@@ -580,24 +535,29 @@ export default function Home() {
       ) : (
         <>
           {filteredPrincipais.length > 0 && (
-            <section style={{ marginBottom: 32 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>⭐ Principais Jogos</span>
+            <section style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>⭐ Principais Jogos</span>
                 <span className="chip chip-amber">Top {filteredPrincipais.length}</span>
               </div>
-              {filteredPrincipais.map(j => <FeaturedMatchCard key={j.fixture_id} jogo={j} />)}
+              {filteredPrincipais.map(j => <MatchRow key={j.fixture_id} jogo={j} onOpen={openDrawer} featured />)}
             </section>
           )}
+
           {filteredPorPais.length > 0 && (
             <section>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>🌍 Todos os Jogos</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>🌍 Todos os Jogos</span>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>por país e liga</span>
               </div>
-              {filteredPorPais.map(({ pais, ligas }) => <CountrySection key={pais} pais={pais} ligas={ligas} />)}
+              {filteredPorPais.map(({ pais, ligas }) => <CountrySection key={pais} pais={pais} ligas={ligas} onOpen={openDrawer} />)}
             </section>
           )}
         </>
+      )}
+
+      {drawerOpen && drawerFixtureId && (
+        <MatchDrawer fixtureId={drawerFixtureId} jogo={drawerJogo} onClose={closeDrawer} />
       )}
     </div>
   )

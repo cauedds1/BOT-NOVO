@@ -47,7 +47,7 @@ function EvolucaoChart({ evolucao }) {
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, display: 'block' }}>
         <defs>
           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
             <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.01" />
           </linearGradient>
         </defs>
@@ -107,55 +107,53 @@ export default function Performance() {
   const porLigaFiltrado = ligaFiltro ? porLiga.filter(r => r.liga_nome === ligaFiltro) : porLiga
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', paddingTop: 32 }}>
-      <div style={{ marginBottom: 28 }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto', paddingTop: 28 }}>
+      <div style={{ marginBottom: 24 }}>
         <h1 className="page-title">Performance Histórica</h1>
         <p className="page-subtitle">Acurácia e ROI acumulado por mercado — atualizado nightly às 03:00 BRT</p>
       </div>
 
       {semDados ? (
-        <div className="card" style={{ textAlign: 'center', padding: '56px 24px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', textAlign: 'center', padding: '56px 24px' }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.02em' }}>Ainda sem dados de performance</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>
-            Os dados aparecem automaticamente após os primeiros jogos analisados e avaliados pelo job noturno (03:00 BRT). Analise alguns jogos e aguarde o encerramento deles.
+            Os dados aparecem após os primeiros jogos analisados e avaliados pelo job noturno (03:00 BRT).
           </div>
           <Link to="/" style={{
             display: 'inline-block', marginTop: 24, padding: '10px 22px',
             background: 'linear-gradient(135deg, var(--accent), #8b5cf6)',
             borderRadius: 'var(--radius)', color: '#fff', fontWeight: 700, fontSize: 14, textDecoration: 'none',
+            boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
           }}>
-            Ver Jogos de Hoje
+            Ver Jogos de Hoje →
           </Link>
         </div>
       ) : (
         <>
-          {/* ── Resumo Global ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 14, marginBottom: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
             {[
               { label: 'Palpites Avaliados', value: resumo.total_palpites_avaliados ?? 0 },
-              { label: 'Total de Acertos', value: resumo.total_acertos ?? 0 },
-              { label: 'Taxa de Acerto Geral', value: `${(resumo.taxa_acerto_geral ?? 0).toFixed(1)}%`, color: (resumo.taxa_acerto_geral ?? 0) >= 55 ? 'var(--green-light)' : 'var(--red)' },
-              { label: 'ROI Total', value: `${(resumo.roi_total ?? 0) >= 0 ? '+' : ''}${(resumo.roi_total ?? 0).toFixed(2)}u`, color: (resumo.roi_total ?? 0) >= 0 ? 'var(--green-light)' : 'var(--red)' },
+              { label: 'Total de Acertos',   value: resumo.total_acertos ?? 0 },
+              { label: 'Taxa de Acerto',     value: `${(resumo.taxa_acerto_geral ?? 0).toFixed(1)}%`, color: (resumo.taxa_acerto_geral ?? 0) >= 55 ? 'var(--green-light)' : 'var(--red)' },
+              { label: 'ROI Total',          value: `${(resumo.roi_total ?? 0) >= 0 ? '+' : ''}${(resumo.roi_total ?? 0).toFixed(2)}u`, color: (resumo.roi_total ?? 0) >= 0 ? 'var(--green-light)' : 'var(--red)' },
             ].map(({ label, value, color }) => (
               <div key={label} className="stat-box">
                 <div className="stat-label">{label}</div>
-                <div className="stat-value" style={color ? { color } : {}}>{value}</div>
+                <div className="stat-value" style={color ? { color, fontSize: 20 } : { fontSize: 20 }}>{value}</div>
               </div>
             ))}
           </div>
 
-          {/* ── Evolução ── */}
-          <div className="card" style={{ padding: '18px 22px', marginBottom: 28 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, letterSpacing: '-0.01em' }}>Evolução de Acerto — Últimos 30 Dias</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18 }}>Taxa de acerto diária dos palpites avaliados</div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px 22px', marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, letterSpacing: '-0.01em' }}>Evolução — Últimos 30 Dias</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Taxa de acerto diária dos palpites avaliados</div>
             <EvolucaoChart evolucao={evolucao} />
           </div>
 
-          {/* ── Por Mercado ── */}
           {mercados.length > 0 && (
-            <div className="card" style={{ padding: '18px 22px', marginBottom: 28 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 18, letterSpacing: '-0.01em' }}>Performance por Mercado</div>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px 22px', marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, letterSpacing: '-0.01em' }}>Performance por Mercado</div>
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table">
                   <thead>
@@ -182,10 +180,9 @@ export default function Performance() {
             </div>
           )}
 
-          {/* ── Por Liga ── */}
           {porLiga.length > 0 && (
-            <div className="card" style={{ padding: '18px 22px', marginBottom: 28 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px 22px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Performance por Liga</div>
                 <select value={ligaFiltro || ''} onChange={e => setLigaFiltro(e.target.value || null)} className="token-select" style={{ width: 'auto' }}>
                   <option value="">Todas as ligas</option>
@@ -223,16 +220,15 @@ export default function Performance() {
             </div>
           )}
 
-          {/* ── Últimos Palpites ── */}
           {ultimos.length > 0 && (
-            <div className="card" style={{ padding: '18px 22px' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, letterSpacing: '-0.01em' }}>Últimos Palpites Avaliados</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '18px 22px' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 14, letterSpacing: '-0.01em' }}>Últimos Palpites Avaliados</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {ultimos.map(p => (
                   <div key={p.id} style={{
-                    background: 'var(--surface)',
+                    background: 'var(--surface-2)',
                     border: `1px solid ${p.acertou ? 'var(--green-border)' : 'var(--red-border)'}`,
-                    borderRadius: 'var(--radius)', padding: '11px 14px',
+                    borderRadius: 'var(--radius)', padding: '10px 14px',
                     display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
                   }}>
                     <AcertouBadge acertou={p.acertou} />
