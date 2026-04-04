@@ -337,6 +337,58 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
         _processing_status[fixture_id] = "error"
 
 
+def _extrair_forma_recente(stats: Optional[dict]) -> list:
+    """Extrai últimos 5 resultados de forma da estrutura raw_data do master_analyzer."""
+    if not stats:
+        return []
+    forma = stats.get("forma_recente") or stats.get("recent_form") or []
+    if isinstance(forma, list):
+        return forma[:5]
+    if isinstance(forma, str):
+        return list(forma[:5])
+    return []
+
+
+def _extrair_h2h(stats_casa: Optional[dict]) -> list:
+    """Extrai histórico H2H se armazenado em stats_casa."""
+    if not stats_casa:
+        return []
+    h2h = stats_casa.get("h2h") or []
+    if isinstance(h2h, list):
+        return h2h[:5]
+    return []
+
+
+def _extrair_stats_comparativas(stats_casa: Optional[dict], stats_fora: Optional[dict]) -> dict:
+    """Extrai métricas comparativas (médias gols, cantos, etc.) dos stats raw."""
+    campos = [
+        ("media_gols_marcados", "avg_goals_scored", "media_gols_marcados_casa"),
+        ("media_gols_sofridos", "avg_goals_conceded", "media_gols_sofridos_casa"),
+        ("media_cantos", "avg_corners", "media_cantos_casa"),
+        ("media_cartoes", "avg_cards", "media_cartoes_casa"),
+    ]
+    resultado = {}
+    for c_home, c_alt, c_label in campos:
+        val_casa = (stats_casa or {}).get(c_home) or (stats_casa or {}).get(c_alt)
+        val_fora = (stats_fora or {}).get(c_home) or (stats_fora or {}).get(c_alt)
+        if val_casa is not None:
+            resultado[f"{c_home}_casa"] = round(float(val_casa), 2)
+        if val_fora is not None:
+            resultado[f"{c_home}_fora"] = round(float(val_fora), 2)
+
+    # Campos extras úteis
+    for campo in ["media_finalizacoes", "avg_shots", "posse_media", "avg_possession",
+                  "media_escanteios_casa", "media_escanteios_fora"]:
+        v_c = (stats_casa or {}).get(campo)
+        v_f = (stats_fora or {}).get(campo)
+        if v_c is not None:
+            resultado[f"{campo}_casa"] = round(float(v_c), 2)
+        if v_f is not None:
+            resultado[f"{campo}_fora"] = round(float(v_f), 2)
+
+    return resultado
+
+
 def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
     """Converte o resultado do db_manager para o formato JSON da API."""
     mercados = []
@@ -367,6 +419,51 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         for p in m["palpites"]:
             melhor_confianca = max(melhor_confianca, p.get("confianca", 0))
 
+    # Extrair dados enriquecidos dos JSONB stats
+    stats_casa = analise_db.get("stats_casa") or {}
+    stats_fora = analise_db.get("stats_fora") or {}
+    classificacao = analise_db.get("classificacao") or []
+
+    # Script tático vindo de analise_gols ou analise_resultado
+    script_tatico = None
+    for chave_analise in ["analise_gols", "analise_resultado", "analise_btts"]:
+        dados_script = analise_db.get(chave_analise) or {}
+        if isinstance(dados_script, dict):
+            script_tatico = (
+                dados_script.get("script_selecionado")
+                or dados_script.get("selected_script")
+                or dados_script.get("script")
+            )
+            if script_tatico:
+                break
+
+    # Posições na tabela
+    pos_casa = stats_casa.get("posicao_tabela") or stats_casa.get("home_position")
+    pos_fora = stats_fora.get("posicao_tabela") or stats_fora.get("away_position")
+
+    # QSC scores
+    qsc_home = stats_casa.get("qsc") or stats_casa.get("quality_score")
+    qsc_away = stats_fora.get("qsc") or stats_fora.get("quality_score")
+
+    # Forma recente
+    forma_casa = _extrair_forma_recente(stats_casa)
+    forma_fora = _extrair_forma_recente(stats_fora)
+
+    # H2H (armazenado em stats_casa pelo master_analyzer)
+    h2h = _extrair_h2h(stats_casa)
+
+    # Stats comparativas
+    stats_comparativas = _extrair_stats_comparativas(stats_casa, stats_fora)
+
+    # Data do jogo (ISO) a partir da DB
+    data_jogo_iso = ""
+    dj = analise_db.get("data_jogo")
+    if dj:
+        try:
+            data_jogo_iso = dj.isoformat() if hasattr(dj, "isoformat") else str(dj)
+        except Exception:
+            data_jogo_iso = str(dj)
+
     return {
         "fixture_id": fixture_id,
         "status": "ready",
@@ -374,9 +471,21 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "time_fora": analise_db.get("time_fora", ""),
         "liga": analise_db.get("liga", ""),
         "data_analise": str(analise_db.get("data_analise", "")),
+        "data_jogo_iso": data_jogo_iso,
         "total_palpites": total_palpites,
         "melhor_confianca": melhor_confianca,
         "mercados": mercados,
+        # Dados enriquecidos
+        "script_tatico": script_tatico,
+        "pos_casa": pos_casa,
+        "pos_fora": pos_fora,
+        "qsc_home": qsc_home,
+        "qsc_away": qsc_away,
+        "forma_recente_casa": forma_casa,
+        "forma_recente_fora": forma_fora,
+        "h2h": h2h,
+        "stats_comparativas": stats_comparativas,
+        "classificacao": classificacao[:20] if isinstance(classificacao, list) else [],
     }
 
 
@@ -706,6 +815,50 @@ async def status_analise(fixture_id: int):
         return {"fixture_id": fixture_id, "status": "ready"}
 
     return {"fixture_id": fixture_id, "status": "not_found"}
+
+
+@app.get("/api/jogadores/{fixture_id}")
+async def get_jogadores_fixture(fixture_id: int):
+    """
+    Retorna perfis de jogadores relacionados a um fixture específico.
+    Busca estatísticas individuais armazenadas em estatisticas_jogadores + perfis_jogadores.
+    """
+    try:
+        with db._get_connection() as conn:
+            if conn:
+                from psycopg2.extras import RealDictCursor
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
+                cursor.execute(
+                    """
+                    SELECT
+                        ej.jogador_id, ej.time_id, ej.minutos, ej.gols, ej.assistencias,
+                        ej.finalizacoes, ej.finalizacoes_no_gol, ej.cartao_amarelo, ej.cartao_vermelho,
+                        ej.eh_mandante, ej.foi_titular,
+                        pj.nome, pj.n_jogos_total, pj.media_gols, pj.media_assistencias,
+                        pj.media_finalizacoes, pj.stddev_gols, pj.stddev_finalizacoes
+                    FROM estatisticas_jogadores ej
+                    LEFT JOIN perfis_jogadores pj ON pj.jogador_id = ej.jogador_id
+                    WHERE ej.fixture_id = %s
+                    ORDER BY ej.eh_mandante DESC, ej.foi_titular DESC, ej.minutos DESC
+                    """,
+                    (fixture_id,),
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+
+                mandantes = [dict(r) for r in rows if r.get("eh_mandante")]
+                visitantes = [dict(r) for r in rows if not r.get("eh_mandante")]
+
+                return {
+                    "fixture_id": fixture_id,
+                    "mandantes": mandantes,
+                    "visitantes": visitantes,
+                    "total": len(rows),
+                }
+    except Exception as e:
+        print(f"[WebAPI] Erro ao buscar jogadores para fixture #{fixture_id}: {e}")
+
+    return {"fixture_id": fixture_id, "mandantes": [], "visitantes": [], "total": 0}
 
 
 @app.get("/api/ligas")
