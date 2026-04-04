@@ -903,14 +903,15 @@ async def status_analise(fixture_id: int):
 @app.get("/api/jogadores/{fixture_id}")
 async def get_jogadores_fixture(fixture_id: int):
     """
-    Retorna perfis de jogadores relacionados a um fixture específico.
-    Busca estatísticas individuais armazenadas em estatisticas_jogadores + perfis_jogadores.
+    Retorna mercados de jogadores (player props) relacionados a um fixture específico.
+    Inclui mercado/confiança/odd/média/últimos 5/amostra para fins de aposta.
     """
     try:
         with db._get_connection() as conn:
             if conn:
                 from psycopg2.extras import RealDictCursor
                 cursor = conn.cursor(cursor_factory=RealDictCursor)
+                # Buscar estatísticas + perfis para construir player market records
                 cursor.execute(
                     """
                     SELECT
@@ -929,19 +930,115 @@ async def get_jogadores_fixture(fixture_id: int):
                 rows = cursor.fetchall()
                 cursor.close()
 
-                mandantes = [dict(r) for r in rows if r.get("eh_mandante")]
-                visitantes = [dict(r) for r in rows if not r.get("eh_mandante")]
+                def _build_player_markets(row: dict) -> list:
+                    """Constrói registros de mercado de jogador a partir do perfil."""
+                    nome = row.get("nome") or f"Jogador #{row['jogador_id']}"
+                    n = row.get("n_jogos_total") or 0
+                    amostra_pequena = n > 0 and n < 6
+                    mercados = []
+
+                    # Mercado: Anytime Goalscorer
+                    media_gols = row.get("media_gols") or 0
+                    if media_gols is not None:
+                        prob_marca = round(min(99, float(media_gols) * 100), 1)
+                        if prob_marca > 0:
+                            confianca_gols = min(9.5, float(media_gols) * 7)
+                            mercados.append({
+                                "jogador": nome,
+                                "jogador_id": row["jogador_id"],
+                                "mercado": "A Marcar (Qualquer Hora)",
+                                "tipo": "Anytime Goalscorer",
+                                "confianca": round(confianca_gols, 2),
+                                "probabilidade": prob_marca,
+                                "odd": None,
+                                "media_historico": round(float(media_gols), 3),
+                                "ultimos_5": [],
+                                "n_jogos": n,
+                                "amostra_pequena": amostra_pequena,
+                                "eh_mandante": row.get("eh_mandante", True),
+                            })
+
+                    # Mercado: Assistência
+                    media_assist = row.get("media_assistencias") or 0
+                    if media_assist and float(media_assist) > 0.05:
+                        prob_assist = round(min(99, float(media_assist) * 100), 1)
+                        confianca_assist = min(9.0, float(media_assist) * 6)
+                        mercados.append({
+                            "jogador": nome,
+                            "jogador_id": row["jogador_id"],
+                            "mercado": "A Dar Assistência",
+                            "tipo": "Anytime Assist",
+                            "confianca": round(confianca_assist, 2),
+                            "probabilidade": prob_assist,
+                            "odd": None,
+                            "media_historico": round(float(media_assist), 3),
+                            "ultimos_5": [],
+                            "n_jogos": n,
+                            "amostra_pequena": amostra_pequena,
+                            "eh_mandante": row.get("eh_mandante", True),
+                        })
+
+                    # Mercado: Finalizações
+                    media_fin = row.get("media_finalizacoes") or 0
+                    if media_fin and float(media_fin) > 0.5:
+                        prob_fin = round(min(99, float(media_fin) / 2 * 100), 1)
+                        confianca_fin = min(8.5, float(media_fin) * 1.5)
+                        mercados.append({
+                            "jogador": nome,
+                            "jogador_id": row["jogador_id"],
+                            "mercado": "1+ Finalizações",
+                            "tipo": "Over 0.5 Shots",
+                            "confianca": round(confianca_fin, 2),
+                            "probabilidade": prob_fin,
+                            "odd": None,
+                            "media_historico": round(float(media_fin), 2),
+                            "ultimos_5": [],
+                            "n_jogos": n,
+                            "amostra_pequena": amostra_pequena,
+                            "eh_mandante": row.get("eh_mandante", True),
+                        })
+
+                    return mercados
+
+                all_rows = [dict(r) for r in rows]
+                mandantes_rows = [r for r in all_rows if r.get("eh_mandante")]
+                visitantes_rows = [r for r in all_rows if not r.get("eh_mandante")]
+
+                mandantes_mercados = []
+                for r in mandantes_rows:
+                    mandantes_mercados.extend(_build_player_markets(r))
+
+                visitantes_mercados = []
+                for r in visitantes_rows:
+                    visitantes_mercados.extend(_build_player_markets(r))
+
+                # Ordenar por confiança desc
+                mandantes_mercados.sort(key=lambda x: x["confianca"], reverse=True)
+                visitantes_mercados.sort(key=lambda x: x["confianca"], reverse=True)
+
+                # Also include raw box-score stats for lineup display
+                mandantes_stats = [r for r in mandantes_rows]
+                visitantes_stats = [r for r in visitantes_rows]
 
                 return {
                     "fixture_id": fixture_id,
-                    "mandantes": mandantes,
-                    "visitantes": visitantes,
+                    "mercados_mandante": mandantes_mercados,
+                    "mercados_visitante": visitantes_mercados,
+                    "mandantes": mandantes_stats,
+                    "visitantes": visitantes_stats,
                     "total": len(rows),
                 }
     except Exception as e:
         print(f"[WebAPI] Erro ao buscar jogadores para fixture #{fixture_id}: {e}")
 
-    return {"fixture_id": fixture_id, "mandantes": [], "visitantes": [], "total": 0}
+    return {
+        "fixture_id": fixture_id,
+        "mercados_mandante": [],
+        "mercados_visitante": [],
+        "mandantes": [],
+        "visitantes": [],
+        "total": 0,
+    }
 
 
 @app.get("/api/ligas")

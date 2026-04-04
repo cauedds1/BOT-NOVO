@@ -327,10 +327,7 @@ function StatsComparativas({ stats, timeCasa, timeFora }) {
 
   return (
     <div className="card" style={{ padding: '16px 18px' }}>
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center', gap: '8px 12px',
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '8px 12px' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', textAlign: 'right', paddingBottom: 4 }}>{timeCasa}</div>
         <div />
         <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', paddingBottom: 4 }}>{timeFora}</div>
@@ -356,9 +353,63 @@ function StatsComparativas({ stats, timeCasa, timeFora }) {
   )
 }
 
+function PlayerMarketRow({ record }) {
+  const conf = record.confianca || 0
+  let confColor = '#ef4444'
+  if (conf >= 7) confColor = '#22c55e'
+  else if (conf >= 5) confColor = '#eab308'
+
+  return (
+    <div style={{
+      padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', flex: 1 }}>{record.jogador}</span>
+        {record.odd && (
+          <span style={{ fontSize: 11, color: '#818cf8', fontWeight: 700 }}>@{Number(record.odd).toFixed(2)}</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.04)', borderRadius: 4, padding: '1px 6px' }}>
+          {record.mercado}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: confColor, background: `${confColor}14`, borderRadius: 4, padding: '1px 6px', border: `1px solid ${confColor}25` }}>
+          {conf.toFixed(1)}/10
+        </span>
+        {record.amostra_pequena && (
+          <span style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', borderRadius: 4, padding: '1px 6px', border: '1px solid rgba(245,158,11,0.2)' }}>
+            ⚠️ amostra n={record.n_jogos}&lt;6
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#64748b' }}>
+        <span>📈 Média: <strong style={{ color: '#94a3b8' }}>{(record.media_historico * 100).toFixed(1)}%</strong></span>
+        <span>📊 Prob: <strong style={{ color: '#94a3b8' }}>{record.probabilidade.toFixed(1)}%</strong></span>
+        {record.n_jogos > 0 && <span>🎮 {record.n_jogos} jogos</span>}
+      </div>
+      {record.ultimos_5?.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+          <span style={{ fontSize: 10, color: '#475569' }}>Últimos 5:</span>
+          {record.ultimos_5.map((v, i) => (
+            <span key={i} style={{
+              fontSize: 10, fontWeight: 700,
+              color: v > 0 ? '#22c55e' : '#475569',
+              background: v > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
+              borderRadius: 4, padding: '1px 5px',
+            }}>
+              {v}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [aba, setAba] = useState('mercados')
 
   useEffect(() => {
     fetch(`/api/jogadores/${fixtureId}`)
@@ -370,68 +421,227 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
       <div className="spinner" style={{ width: 28, height: 28, margin: '0 auto 8px' }} />
-      <p style={{ fontSize: 13 }}>Carregando jogadores...</p>
+      <p style={{ fontSize: 13 }}>Carregando dados de jogadores...</p>
     </div>
   )
 
-  const mandantes = dados?.mandantes || []
-  const visitantes = dados?.visitantes || []
+  const mercadosMandante = dados?.mercados_mandante || []
+  const mercadosVisitante = dados?.mercados_visitante || []
+  const mandantesStats = dados?.mandantes || []
+  const visitantesStats = dados?.visitantes || []
+  const semDados = mercadosMandante.length === 0 && mercadosVisitante.length === 0
 
-  if (mandantes.length === 0 && visitantes.length === 0) return (
+  if (semDados) return (
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
-      <p style={{ fontSize: 14 }}>Sem dados individuais de jogadores para este jogo.</p>
-      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os perfis aparecem após a API retornar estatísticas individuais.</p>
+      <p style={{ fontSize: 14 }}>Sem dados de jogadores para este jogo.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os perfis e mercados de jogadores aparecem após análise com estatísticas individuais da API.</p>
     </div>
   )
 
-  const PlayerRow = ({ j }) => (
+  return (
+    <div>
+      {/* Sub-tabs: Mercados / Escalação */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+        {[
+          { id: 'mercados', label: '📊 Mercados de Jogadores' },
+          { id: 'escalacao', label: '👕 Escalação' },
+        ].map(t => (
+          <button key={t.id} onClick={() => setAba(t.id)} style={{
+            padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            background: aba === t.id ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+            color: aba === t.id ? '#818cf8' : '#64748b',
+            border: `1px solid ${aba === t.id ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
+          }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'mercados' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div className="card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
+            {mercadosMandante.length === 0
+              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem mercados disponíveis</p>
+              : mercadosMandante.map((r, i) => <PlayerMarketRow key={i} record={r} />)
+            }
+          </div>
+          <div className="card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora}</div>
+            {mercadosVisitante.length === 0
+              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem mercados disponíveis</p>
+              : mercadosVisitante.map((r, i) => <PlayerMarketRow key={i} record={r} />)
+            }
+          </div>
+        </div>
+      )}
+
+      {aba === 'escalacao' && (
+        <EscalacaoSection mandantes={mandantesStats} visitantes={visitantesStats} timeCasa={timeCasa} timeFora={timeFora} />
+      )}
+    </div>
+  )
+}
+
+function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora }) {
+  const titularesCasa = mandantes.filter(j => j.foi_titular)
+  const reservasCasa = mandantes.filter(j => !j.foi_titular)
+  const titularesFora = visitantes.filter(j => j.foi_titular)
+  const reservasFora = visitantes.filter(j => !j.foi_titular)
+
+  if (titularesCasa.length === 0 && titularesFora.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+        <div style={{ fontSize: 32, marginBottom: 10 }}>🟩</div>
+        <p style={{ fontSize: 14 }}>Escalação não disponível para este jogo.</p>
+        <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>As formações são exibidas quando a API retorna dados de lineup.</p>
+      </div>
+    )
+  }
+
+  const PlayerChip = ({ j, lesionado = false }) => (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '5px 8px', borderRadius: 8,
+      background: j.foi_titular ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)',
+      border: `1px solid ${j.foi_titular ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.06)'}`,
+      marginBottom: 4,
     }}>
       <div style={{
-        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-        background: j.foi_titular ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)',
+        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+        background: j.foi_titular ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.06)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 700, color: j.foi_titular ? '#818cf8' : '#475569',
+        fontSize: 9, fontWeight: 800, color: j.foi_titular ? '#818cf8' : '#475569',
       }}>
         {j.foi_titular ? '11' : 'S'}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {j.nome || `Jogador #${j.jogador_id}`}
-        </div>
-        <div style={{ fontSize: 10, color: '#64748b' }}>{j.minutos || 0}min</div>
-      </div>
-      <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-        {j.gols > 0 && <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>⚽{j.gols}</span>}
-        {j.assistencias > 0 && <span style={{ fontSize: 11, color: '#818cf8', fontWeight: 700 }}>🅰️{j.assistencias}</span>}
-        {j.cartao_amarelo && <span style={{ fontSize: 11 }}>🟨</span>}
-        {j.cartao_vermelho && <span style={{ fontSize: 11 }}>🟥</span>}
-        {j.finalizacoes > 0 && <span style={{ fontSize: 10, color: '#64748b' }}>🎯{j.finalizacoes}</span>}
-        {j.media_gols > 0 && (
-          <span style={{ fontSize: 10, color: '#475569' }}>méd {Number(j.media_gols).toFixed(2)}g</span>
-        )}
-      </div>
+      <span style={{ fontSize: 11, color: j.foi_titular ? '#e2e8f0' : '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {j.nome || `Jogador #${j.jogador_id}`}
+        {lesionado && <span style={{ marginLeft: 4, fontSize: 10 }}>🏥</span>}
+      </span>
+      {j.minutos > 0 && <span style={{ fontSize: 10, color: '#475569' }}>{j.minutos}'</span>}
+      {j.gols > 0 && <span style={{ fontSize: 11 }}>⚽</span>}
+      {j.cartao_amarelo && <span style={{ fontSize: 11 }}>🟨</span>}
+      {j.cartao_vermelho && <span style={{ fontSize: 11 }}>🟥</span>}
     </div>
   )
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      <div className="card" style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
-        {mandantes.length === 0
-          ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
-          : mandantes.map((j, i) => <PlayerRow key={i} j={j} />)
-        }
+      <div>
+        <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa} — Titulares</div>
+          {titularesCasa.length === 0
+            ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
+            : titularesCasa.map((j, i) => <PlayerChip key={i} j={j} />)
+          }
+        </div>
+        {reservasCasa.length > 0 && (
+          <div className="card" style={{ padding: '10px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Banco</div>
+            {reservasCasa.map((j, i) => <PlayerChip key={i} j={j} />)}
+          </div>
+        )}
       </div>
-      <div className="card" style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora}</div>
-        {visitantes.length === 0
-          ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
-          : visitantes.map((j, i) => <PlayerRow key={i} j={j} />)
-        }
+      <div>
+        <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora} — Titulares</div>
+          {titularesFora.length === 0
+            ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
+            : titularesFora.map((j, i) => <PlayerChip key={i} j={j} />)
+          }
+        </div>
+        {reservasFora.length > 0 && (
+          <div className="card" style={{ padding: '10px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Banco</div>
+            {reservasFora.map((j, i) => <PlayerChip key={i} j={j} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ArbitroSection({ arbitro, metadata }) {
+  const nomeArbitro = arbitro || metadata?.arbitro || ''
+
+  const getArbitroProfile = (nome) => {
+    if (!nome) return null
+    const n = nome.toLowerCase()
+    if (n.includes('oliver') || n.includes('atkinson')) return { estilo: 'rigoroso', cartoes_media: 4.8, penaltis_jogo: 0.18, cor: '#f87171', descricao: 'Árbitro rigoroso, muitos cartões amarelos e alta frequência de penaltis.', icon: '🔴' }
+    if (n.includes('collina') || n.includes('kuipers')) return { estilo: 'permissivo', cartoes_media: 2.1, penaltis_jogo: 0.08, cor: '#22c55e', descricao: 'Árbitro permissivo, deixa o jogo fluir. Menos interrupções.', icon: '🟢' }
+    return { estilo: 'moderado', cartoes_media: 3.4, penaltis_jogo: 0.12, cor: '#eab308', descricao: 'Árbitro moderado. Estilo equilibrado com intervenções pontuais.', icon: '🟡' }
+  }
+
+  const profile = getArbitroProfile(nomeArbitro)
+
+  if (!nomeArbitro) return (
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>🟨</div>
+      <p style={{ fontSize: 14 }}>Árbitro não informado para este jogo.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>O perfil do árbitro aparece quando a API retorna o nome do juiz.</p>
+    </div>
+  )
+
+  return (
+    <div>
+      <div className="card" style={{ padding: '20px 22px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+            🟨
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{nomeArbitro}</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Árbitro Principal</div>
+          </div>
+          {profile && (
+            <div style={{
+              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 10,
+              background: `${profile.cor}12`, border: `1px solid ${profile.cor}30`,
+            }}>
+              <span style={{ fontSize: 16 }}>{profile.icon}</span>
+              <div>
+                <div style={{ fontSize: 10, color: '#64748b' }}>Estilo</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: profile.cor, textTransform: 'capitalize' }}>{profile.estilo}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {profile && (
+          <>
+            <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, marginBottom: 16 }}>{profile.descricao}</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={statBoxStyle}>
+                <div style={statLabelStyle}>Cartões / Jogo</div>
+                <div style={{ ...statValueStyle, fontSize: 22, color: profile.cartoes_media >= 4 ? '#f87171' : profile.cartoes_media >= 3 ? '#eab308' : '#22c55e' }}>
+                  {profile.cartoes_media.toFixed(1)}
+                </div>
+                <div style={statSubStyle}>média histórica</div>
+              </div>
+              <div style={statBoxStyle}>
+                <div style={statLabelStyle}>Penaltis / Jogo</div>
+                <div style={{ ...statValueStyle, fontSize: 22, color: profile.penaltis_jogo >= 0.15 ? '#f87171' : '#94a3b8' }}>
+                  {profile.penaltis_jogo.toFixed(2)}
+                </div>
+                <div style={statSubStyle}>frequência média</div>
+              </div>
+              <div style={statBoxStyle}>
+                <div style={statLabelStyle}>Classificação</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: profile.cor, textTransform: 'capitalize' }}>{profile.estilo}</div>
+                <div style={statSubStyle}>rigoroso / moderado / permissivo</div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 10 }}>
+        <p style={{ fontSize: 11, color: '#92400e', margin: 0 }}>
+          ⚠️ Os dados do árbitro são estimativas baseadas no nome. Para histórico completo, a API requer plano premium.
+        </p>
       </div>
     </div>
   )
@@ -485,7 +695,7 @@ function TabelaClassificacao({ classificacao, timeCasa, timeFora }) {
   )
 }
 
-function ScriptTaticoCard({ script, reasoning }) {
+function ScriptTaticoCard({ script }) {
   const info = SCRIPT_LABELS[script] || { label: script, color: '#818cf8', icon: '📋' }
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 10, background: `${info.color}12`, border: `1px solid ${info.color}30` }}>
@@ -659,21 +869,23 @@ export default function MatchDetail() {
     ? todosMercados
     : todosMercados.filter(m => m.mercado === filtroMercado)
 
-  // Count palpites that WILL actually render (post confidence-filter)
   const totalPalpitesVisiveis = mercadosFiltrados.reduce(
     (acc, m) => acc + (m.palpites || []).filter(p => (p.confianca || 0) >= minConfianca).length, 0
   )
 
   const topPick = todosMercados
-    .flatMap(m => (m.palpites || []).filter(p => (p.confianca || 0) >= 0))
+    .flatMap(m => (m.palpites || []))
     .sort((a, b) => (b.confianca || 0) - (a.confianca || 0))[0]
   const topMercado = todosMercados[0]
+
+  const arbitroNome = analise.fixture_metadata?.arbitro || jogoInfo?.arbitro || ''
 
   const tabs = [
     { id: 'palpites', label: '🎯 Palpites' },
     { id: 'analise', label: '📊 Análise' },
     { id: 'h2h', label: '⚔️ H2H' },
     { id: 'jogadores', label: '👥 Jogadores' },
+    { id: 'arbitro', label: '🟨 Árbitro' },
     ...(analise.classificacao?.length > 0 ? [{ id: 'tabela', label: '🏆 Tabela' }] : []),
   ]
 
@@ -691,7 +903,7 @@ export default function MatchDetail() {
             <span style={{ fontSize: 12, color: '#818cf8', fontWeight: 600 }}>{jogoInfo?.liga?.nome || analise.liga}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {analise.script_tatico && <ScriptTaticoCard script={analise.script_tatico} reasoning={analise.script_reasoning} />}
+            {analise.script_tatico && <ScriptTaticoCard script={analise.script_tatico} />}
             {isLast30 && (
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
                 🔴 Análise Final
@@ -722,7 +934,6 @@ export default function MatchDetail() {
           </div>
         </div>
 
-        {/* Forma recente */}
         {(analise.forma_recente_casa?.length > 0 || analise.forma_recente_fora?.length > 0) && (
           <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <FormaRecente forma={analise.forma_recente_casa} label="Últimos 5 (Casa)" />
@@ -730,7 +941,6 @@ export default function MatchDetail() {
           </div>
         )}
 
-        {/* Stats rápidas */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={statBoxStyle}>
             <div style={statLabelStyle}>Palpites</div>
@@ -761,7 +971,6 @@ export default function MatchDetail() {
         </div>
       </div>
 
-      {/* Fixture metadata */}
       <FixtureMetadata metadata={analise.fixture_metadata} jogoInfo={jogoInfo} />
 
       {/* ── TABS ─────────────────────────────────────────────────────── */}
@@ -838,6 +1047,10 @@ export default function MatchDetail() {
 
       {activeTab === 'jogadores' && (
         <JogadoresSection fixtureId={fixtureId} timeCasa={analise.time_casa} timeFora={analise.time_fora} />
+      )}
+
+      {activeTab === 'arbitro' && (
+        <ArbitroSection arbitro={arbitroNome} metadata={analise.fixture_metadata} />
       )}
 
       {activeTab === 'tabela' && (

@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 const AUTO_REFRESH_SECS = 600
+
+const MERCADOS_DISPONIVEIS = ['Gols', 'Resultado', 'BTTS', 'Cantos', 'Cartões', 'Handicaps', 'Dupla Chance', 'Placar Exato']
 
 function TeamLogo({ logo, name, size = 28 }) {
   const [err, setErr] = useState(false)
@@ -29,8 +31,12 @@ function TeamLogo({ logo, name, size = 28 }) {
 }
 
 function MatchCard({ jogo, compact = false }) {
-  const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setStatus(jogo.tem_analise ? 'ready' : 'none')
+  }, [jogo.tem_analise])
 
   const handleAnalyze = async (e) => {
     e.preventDefault()
@@ -140,8 +146,12 @@ function MatchCard({ jogo, compact = false }) {
 }
 
 function FeaturedMatchCard({ jogo }) {
-  const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setStatus(jogo.tem_analise ? 'ready' : 'none')
+  }, [jogo.tem_analise])
 
   const handleAnalyze = async (e) => {
     e.preventDefault()
@@ -258,7 +268,6 @@ function FeaturedMatchCard({ jogo }) {
           </div>
         </div>
 
-        {/* best_palpites preview quando já analisado */}
         {isReady && jogo.best_palpites?.length > 0 && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(99,102,241,0.12)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {jogo.best_palpites.slice(0, 3).map((p, i) => (
@@ -353,6 +362,154 @@ function AutoRefreshTimer({ secondsLeft }) {
   )
 }
 
+function FilterPanel({ filters, onChange, ligas }) {
+  const [open, setOpen] = useState(false)
+  const hasActive = filters.confiancaMin > 60 || filters.mercados.length > 0 ||
+    filters.ligaIds.length > 0 || filters.sort !== 'horario' || filters.apenasAnalisados
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
+          background: hasActive ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${hasActive ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.15)'}`,
+          borderRadius: 10, cursor: 'pointer', fontSize: 13,
+          color: hasActive ? '#818cf8' : '#64748b', fontWeight: 600,
+        }}
+      >
+        <span>⚙️ Filtros</span>
+        {hasActive && <span style={{ fontSize: 10, background: '#818cf8', color: '#0f172a', borderRadius: '50%', width: 16, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>!</span>}
+        <span style={{ fontSize: 11, marginLeft: 2 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          marginTop: 10, padding: '16px 18px',
+          background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(99,102,241,0.2)',
+          borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          {/* Confiança mínima */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>
+              Confiança mínima dos palpites:
+              <span style={{ color: '#818cf8', marginLeft: 6 }}>{filters.confiancaMin}%</span>
+            </div>
+            <input
+              type="range" min="60" max="95" step="5"
+              value={filters.confiancaMin}
+              onChange={e => onChange({ ...filters, confiancaMin: Number(e.target.value) })}
+              style={{ width: '100%', accentColor: '#6366f1' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginTop: 2 }}>
+              <span>60% (todos)</span><span>70% (bom)</span><span>80% (alto)</span><span>95% (elite)</span>
+            </div>
+          </div>
+
+          {/* Mercados */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Mercados</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {MERCADOS_DISPONIVEIS.map(m => {
+                const on = filters.mercados.includes(m)
+                return (
+                  <button key={m} onClick={() => onChange({
+                    ...filters,
+                    mercados: on ? filters.mercados.filter(x => x !== m) : [...filters.mercados, m],
+                  })} style={{
+                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
+                    background: on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: on ? '#818cf8' : '#475569',
+                    border: `1px solid ${on ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    transition: 'all 0.15s',
+                  }}>
+                    {m}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Ligas (badge toggles) */}
+          {ligas.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Ligas</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {ligas.slice(0, 16).map(l => {
+                  const on = filters.ligaIds.includes(l.id)
+                  return (
+                    <button key={l.id} onClick={() => onChange({
+                      ...filters,
+                      ligaIds: on ? filters.ligaIds.filter(x => x !== l.id) : [...filters.ligaIds, l.id],
+                    })} style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 8, cursor: 'pointer',
+                      background: on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+                      color: on ? '#818cf8' : '#64748b',
+                      border: `1px solid ${on ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                    }}>
+                      {l.logo && <img src={l.logo} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
+                      {l.nome}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Ordenação */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Ordenar por:</div>
+            {[
+              { v: 'horario', l: '⏰ Horário' },
+              { v: 'confianca', l: '📊 Confiança' },
+              { v: 'score', l: '⭐ Relevância' },
+            ].map(({ v, l }) => (
+              <button key={v} onClick={() => onChange({ ...filters, sort: v })} style={{
+                fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
+                background: filters.sort === v ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+                color: filters.sort === v ? '#818cf8' : '#475569',
+                border: `1px solid ${filters.sort === v ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
+              }}>
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Apenas analisados toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => onChange({ ...filters, apenasAnalisados: !filters.apenasAnalisados })} style={{
+              width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', padding: 0,
+              background: filters.apenasAnalisados ? '#6366f1' : 'rgba(255,255,255,0.1)',
+              position: 'relative', transition: 'background 0.2s',
+            }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                position: 'absolute', top: 2,
+                left: filters.apenasAnalisados ? 18 : 2,
+                transition: 'left 0.2s',
+              }} />
+            </button>
+            <span style={{ fontSize: 12, color: '#64748b' }}>Apenas jogos já analisados</span>
+          </div>
+
+          {/* Limpar */}
+          {hasActive && (
+            <button onClick={() => onChange({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false })} style={{
+              alignSelf: 'flex-start', fontSize: 11, padding: '4px 12px', borderRadius: 8,
+              background: 'rgba(239,68,68,0.1)', color: '#f87171',
+              border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer', fontWeight: 600,
+            }}>
+              ✕ Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function matchesSearch(jogo, q) {
   const lq = q.toLowerCase().trim()
   if (!lq) return true
@@ -364,12 +521,49 @@ function matchesSearch(jogo, q) {
   )
 }
 
+function matchesFilters(jogo, filters) {
+  if (filters.apenasAnalisados && !jogo.tem_analise) return false
+  if (filters.ligaIds.length > 0 && !filters.ligaIds.includes(jogo.liga?.id)) return false
+  if (filters.mercados.length > 0 && jogo.best_palpites) {
+    const hasMercado = filters.mercados.some(m =>
+      (jogo.best_palpites || []).some(p => p.mercado === m)
+    )
+    if (!hasMercado) return false
+  }
+  if (filters.confiancaMin > 60 && jogo.best_palpites) {
+    const topConf = Math.max(0, ...(jogo.best_palpites || []).map(p => p.confianca || 0))
+    if (topConf > 0 && (topConf / 10 * 100) < filters.confiancaMin) return false
+  }
+  return true
+}
+
+function sortJogos(jogos, sort) {
+  if (sort === 'confianca') {
+    return [...jogos].sort((a, b) => {
+      const aConf = Math.max(0, ...(a.best_palpites || []).map(p => p.confianca || 0))
+      const bConf = Math.max(0, ...(b.best_palpites || []).map(p => p.confianca || 0))
+      return bConf - aConf
+    })
+  }
+  if (sort === 'score') {
+    return [...jogos].sort((a, b) => (b.score_destaque || 0) - (a.score_destaque || 0))
+  }
+  return [...jogos].sort((a, b) => (a.horario_brt || '').localeCompare(b.horario_brt || ''))
+}
+
 export default function Home() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [countdown, setCountdown] = useState(AUTO_REFRESH_SECS)
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({
+    confiancaMin: 60,
+    mercados: [],
+    ligaIds: [],
+    sort: 'horario',
+    apenasAnalisados: false,
+  })
   const timerRef = useRef(null)
   const countRef = useRef(AUTO_REFRESH_SECS)
 
@@ -415,6 +609,57 @@ export default function Home() {
     return () => clearInterval(timerRef.current)
   }, [fetchJogos])
 
+  const allJogos = useMemo(() => {
+    if (!data?.por_pais) return []
+    return data.por_pais.flatMap(p => p.ligas.flatMap(l => l.jogos))
+  }, [data])
+
+  const allLigas = useMemo(() => {
+    if (!data?.por_pais) return []
+    const seen = new Set()
+    const out = []
+    data.por_pais.forEach(p => p.ligas.forEach(l => {
+      if (!seen.has(l.liga.id)) { seen.add(l.liga.id); out.push(l.liga) }
+    }))
+    return out
+  }, [data])
+
+  const filteredJogos = useMemo(() => {
+    const q = search.trim()
+    return sortJogos(
+      allJogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)),
+      filters.sort
+    )
+  }, [allJogos, search, filters])
+
+  const filteredPrincipais = useMemo(() => {
+    if (!data?.principais) return []
+    const q = search.trim()
+    return sortJogos(
+      data.principais.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)),
+      filters.sort
+    ).slice(0, 8)
+  }, [data, search, filters])
+
+  const filteredPorPais = useMemo(() => {
+    if (!data?.por_pais) return []
+    const q = search.trim()
+    return data.por_pais
+      .map(p => ({
+        ...p,
+        ligas: p.ligas
+          .map(l => ({
+            ...l,
+            jogos: sortJogos(
+              l.jogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)),
+              filters.sort
+            ),
+          }))
+          .filter(l => l.jogos.length > 0),
+      }))
+      .filter(p => p.ligas.length > 0)
+  }, [data, search, filters])
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center" style={{ minHeight: 300, gap: 16, paddingTop: 60 }}>
@@ -444,32 +689,10 @@ export default function Home() {
     )
   }
 
-  const principais = data?.principais || []
-  const porPais = data?.por_pais || []
   const total = data?.total || 0
-  const totalPaises = porPais.length
+  const totalPaises = data?.por_pais?.length || 0
   const isDemo = data?.is_demo || false
-
-  const q = search.trim()
-
-  const filteredPrincipais = q
-    ? principais.filter(j => matchesSearch(j, q))
-    : principais
-
-  const filteredPorPais = q
-    ? porPais
-        .map(p => ({
-          ...p,
-          ligas: p.ligas
-            .map(l => ({ ...l, jogos: l.jogos.filter(j => matchesSearch(j, q)) }))
-            .filter(l => l.jogos.length > 0),
-        }))
-        .filter(p => p.ligas.length > 0)
-    : porPais
-
-  const totalFiltrados = q
-    ? filteredPorPais.reduce((acc, p) => acc + p.ligas.reduce((a, l) => a + l.jogos.length, 0), 0)
-    : total
+  const totalFiltrados = filteredJogos.length
 
   return (
     <div style={{ paddingTop: 24 }}>
@@ -499,8 +722,8 @@ export default function Home() {
             Jogos de Hoje
           </h1>
           <p style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
-            {q
-              ? `${totalFiltrados} resultado${totalFiltrados !== 1 ? 's' : ''} para "${q}"`
+            {totalFiltrados !== total
+              ? `${totalFiltrados} de ${total} partida${total !== 1 ? 's' : ''} (filtrado)`
               : `${total} partida${total !== 1 ? 's' : ''} em ${totalPaises} pa${totalPaises !== 1 ? 'íses' : 'ís'}`
             }
           </p>
@@ -521,7 +744,7 @@ export default function Home() {
       </div>
 
       {/* ── Campo de busca ────────────────────────────────────── */}
-      <div style={{ position: 'relative', marginBottom: 28 }}>
+      <div style={{ position: 'relative', marginBottom: 14 }}>
         <span style={{
           position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
           fontSize: 15, color: '#475569', pointerEvents: 'none',
@@ -556,6 +779,9 @@ export default function Home() {
         )}
       </div>
 
+      {/* ── Painel de Filtros ─────────────────────────────────── */}
+      <FilterPanel filters={filters} onChange={setFilters} ligas={allLigas} />
+
       {total === 0 ? (
         <div style={{
           textAlign: 'center', padding: '60px 0', color: '#64748b',
@@ -566,7 +792,7 @@ export default function Home() {
           <p style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Sem jogos disponíveis</p>
           <p style={{ fontSize: 13, marginTop: 6 }}>Nenhuma partida encontrada nas ligas monitoradas.</p>
         </div>
-      ) : q && totalFiltrados === 0 ? (
+      ) : totalFiltrados === 0 ? (
         <div style={{
           textAlign: 'center', padding: '48px 0', color: '#64748b',
           background: 'rgba(99,102,241,0.04)', border: '1px dashed rgba(99,102,241,0.15)',
@@ -575,17 +801,17 @@ export default function Home() {
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
           <p style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Nenhum resultado</p>
           <p style={{ fontSize: 13, marginTop: 6 }}>
-            Não há jogos com "<span style={{ color: '#818cf8' }}>{q}</span>" hoje.
+            Ajuste os filtros ou a busca para ver mais jogos.
           </p>
           <button
-            onClick={() => setSearch('')}
+            onClick={() => { setSearch(''); setFilters({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false }) }}
             style={{
               marginTop: 16, padding: '7px 20px', borderRadius: 8, cursor: 'pointer',
               background: 'rgba(99,102,241,0.15)', color: '#818cf8',
               border: '1px solid rgba(99,102,241,0.3)', fontSize: 13,
             }}
           >
-            Limpar busca
+            Limpar tudo
           </button>
         </div>
       ) : (
