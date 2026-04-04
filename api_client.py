@@ -1140,6 +1140,20 @@ async def buscar_lesoes_jogo(fixture_id: int):
                     'position': player_position,
                 })
 
+        # Deduplicate by (name, team_id) — the /injuries endpoint can return
+        # each player more than once (e.g. one entry per status type).
+        # Keep the first occurrence so effective_weight is not inflated.
+        _seen: set = set()
+        deduped: list = []
+        for _p in result:
+            _key = (_p['name'], _p.get('team_id'))
+            if _key not in _seen:
+                _seen.add(_key)
+                deduped.append(_p)
+        if len(deduped) < len(result):
+            print(f"  🔧 LESÕES: {len(result) - len(deduped)} entrada(s) duplicada(s) removida(s)")
+        result = deduped
+
         print(f"  🏥 LESÕES: {len(result)} ausências encontradas para fixture {fixture_id}")
         cache_manager.set(cache_key, result, expiration_minutes=120)
 

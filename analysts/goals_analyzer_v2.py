@@ -15,6 +15,78 @@ from analysts.confidence_calculator import (
     calculate_statistical_probability_goals_over
 )
 import math
+import time as _time
+
+# --- Trivial market cache (TTL 1h) ---
+# Stores set of bet types (tipo strings) that appeared in >70% of games in the last 7 days.
+_trivial_market_cache: dict = {"ts": 0.0, "types": set()}
+_TRIVIAL_CACHE_TTL = 3600  # 1 hour
+_TRIVIAL_THRESHOLD = 0.70  # 70% frequency → trivial market
+_TRIVIAL_PENALTY = 0.7     # confidence penalty for trivial markets
+
+
+# Lazy singleton for trivial-market DB queries (avoids heavy import at module load)
+_trivial_db_instance = None
+
+
+def _get_trivial_db():
+    """Return a lightweight DatabaseManager instance (1-2 connections)."""
+    global _trivial_db_instance
+    if _trivial_db_instance is None:
+        import db_manager as _dbm
+        _trivial_db_instance = _dbm.DatabaseManager(min_conn=1, max_conn=2)
+    return _trivial_db_instance
+
+
+def _get_trivial_market_types() -> set:
+    """
+    Query palpites_historico to find bet types that appeared in >70% of analyzed
+    games in the last 7 days. Result is cached in memory for 1 hour.
+
+    Returns an empty set when there are insufficient samples (<5 distinct fixtures).
+    """
+    now = _time.time()
+    if now - _trivial_market_cache["ts"] < _TRIVIAL_CACHE_TTL:
+        return _trivial_market_cache["types"]
+
+    trivial: set = set()
+    try:
+        db = _get_trivial_db()
+        with db._get_connection() as conn:
+            if conn is None:
+                return trivial
+            with conn.cursor() as cur:
+                cur.execute("""
+                    WITH window_data AS (
+                        SELECT linha, fixture_id
+                        FROM palpites_historico
+                        WHERE criado_em >= NOW() - INTERVAL '7 days'
+                          AND mercado = 'Gols'
+                    ),
+                    total AS (
+                        SELECT COUNT(DISTINCT fixture_id) AS n FROM window_data
+                    ),
+                    per_market AS (
+                        SELECT linha,
+                               COUNT(DISTINCT fixture_id) AS cnt
+                        FROM window_data
+                        GROUP BY linha
+                    )
+                    SELECT p.linha
+                    FROM per_market p, total t
+                    WHERE t.n >= 5
+                      AND p.cnt::float / t.n > %s
+                """, (_TRIVIAL_THRESHOLD,))
+                rows = cur.fetchall()
+                trivial = {row[0] for row in rows}
+    except Exception:
+        pass
+
+    _trivial_market_cache["ts"] = now
+    _trivial_market_cache["types"] = trivial
+    if trivial:
+        print(f"  📊 [TRIVIAL] Mercados triviais (>{int(_TRIVIAL_THRESHOLD*100)}% dos jogos/7d): {trivial}")
+    return trivial
 
 
 def analisar_mercado_gols(analysis_packet, odds):
@@ -179,6 +251,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_over_1.5'),
         )
         if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
@@ -203,6 +276,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_under_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -227,6 +301,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_over_2.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -251,6 +326,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_under_2.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -275,6 +351,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_over_3.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -299,6 +376,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_under_3.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -323,6 +401,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_over_4.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -347,6 +426,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ft_under_4.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -373,6 +453,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ht_over_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -397,6 +478,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ht_under_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -421,6 +503,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ht_over_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -445,6 +528,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_ht_under_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -472,6 +556,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get(odd_key),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -497,6 +582,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get(odd_key),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -523,6 +609,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_casa_over_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -547,6 +634,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_casa_under_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -571,6 +659,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_casa_over_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -595,6 +684,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_casa_under_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -621,6 +711,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_fora_over_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -645,6 +736,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_fora_under_0.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -669,6 +761,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_fora_over_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -693,6 +786,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_severity_away=_sev_away,
             injury_role_home=_role_home,
             injury_role_away=_role_away,
+            odd=odds.get('gols_fora_under_1.5'),
         )
         if confianca >= 5.0:
             all_predictions.append({
@@ -706,6 +800,24 @@ def analisar_mercado_gols(analysis_packet, odds):
                 "confidence_breakdown": breakdown
             })
     
+    # Aplicar penalidade de mercados triviais (>70% dos jogos na última semana)
+    _trivial_types = _get_trivial_market_types()
+    if _trivial_types:
+        for _pred in all_predictions:
+            if _pred.get('tipo') in _trivial_types:
+                _pred['confianca'] = round(max(1.0, _pred['confianca'] - _TRIVIAL_PENALTY), 2)
+                if 'confidence_breakdown' in _pred:
+                    _pred['confidence_breakdown']['modificador_trivial'] = -_TRIVIAL_PENALTY
+                    _pred['confidence_breakdown']['confianca_final'] = _pred['confianca']
+        # Re-filter: drop predictions that fell below their market threshold after penalty
+        _thresholds = {
+            'Over 1.5': MIN_CONFIANCA_GOLS_OVER_1_5,
+        }
+        all_predictions = [
+            p for p in all_predictions
+            if p['confianca'] >= _thresholds.get(p.get('tipo'), 5.0)
+        ]
+
     # Ordenar por confiança (descendente)
     all_predictions.sort(key=lambda x: x['confianca'], reverse=True)
     

@@ -115,6 +115,7 @@ def analisar_mercado_cartoes(analysis_packet, odds):
                 statistical_probability_pct=prob_pct,
                 bet_type=bet_type,
                 tactical_script=script_name,
+                odd=odds.get(odd_key_over),
             )
             
             if conf_final >= MIN_CONFIANCA_CARTOES:
@@ -142,6 +143,7 @@ def analisar_mercado_cartoes(analysis_packet, odds):
                 statistical_probability_pct=prob_under,
                 bet_type=bet_type,
                 tactical_script=script_name,
+                odd=odds.get(odd_key_under),
             )
             
             if conf_final >= MIN_CONFIANCA_CARTOES:

@@ -145,7 +145,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
             bet_type=bet_type,
             tactical_script=script_name,
             injury_severity_home=_sev_home,
-            injury_severity_away=_sev_away
+            injury_severity_away=_sev_away,
+            odd=odds.get(odd_key),
         )
 
         if conf_final >= MIN_CONFIANCA_CANTOS:
@@ -177,7 +178,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS_UNDER:
@@ -211,7 +213,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_over),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS:
@@ -242,7 +245,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_under),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS_UNDER:
@@ -276,7 +280,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_over),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS:
@@ -307,7 +312,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_under),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS_UNDER:
@@ -341,7 +347,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_over),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS:
@@ -372,7 +379,8 @@ def analisar_mercado_cantos(analysis_packet, odds):
                 bet_type=bet_type,
                 tactical_script=script_name,
                 injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
+                injury_severity_away=_sev_away,
+                odd=odds.get(odd_key_under),
             )
             
             if conf_final >= MIN_CONFIANCA_CANTOS_UNDER:

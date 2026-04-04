@@ -401,8 +401,10 @@ def apply_injury_confidence_modifier(
             # Defensor lesionado → mais gols → Over ganha, Under perde
             return +magnitude * 0.7 if is_attack_favored else -magnitude
         else:
-            # Papel desconhecido: penalidade simétrica reduzida
-            return -magnitude * 0.5
+            # Papel desconhecido: penalidade simétrica reduzida.
+            # 0.3 (menor que 0.5 anterior) pois a falta de posição é ambiguidade,
+            # não evidência de impacto real em nenhuma direção.
+            return -magnitude * 0.3
 
     mod = 0.0
 
@@ -433,9 +435,10 @@ def calculate_final_confidence(
     injury_role_home: str = "mixed",
     injury_role_away: str = "mixed",
     market_history_adjustment: float = 0.0,
+    odd: Optional[float] = None,
 ) -> Tuple[float, Dict[str, float]]:
     """
-    PURE ANALYST PROTOCOL - STEP 4: Calcula Confiança Final (sem dependência de odds).
+    PURE ANALYST PROTOCOL - STEP 4: Calcula Confiança Final.
 
     PHOENIX V4.0: Modificador de desfalques DIRECIONAL — lesões ofensivas aumentam
     confiança em Under, lesões defensivas aumentam confiança em Over/BTTS.
@@ -443,6 +446,13 @@ def calculate_final_confidence(
     TASK #17 — Aprendizado: Aceita ajuste histórico por mercado (dampened via
     get_market_confidence_adjustment): 0.0 se amostras insuficientes, ±valor se
     o mercado tem histórico de acerto acima/abaixo do esperado.
+
+    TASK #16 — ODD_MINIMA_PENALIDADE reativada:
+      odd < 1.35          → confiança 0.0  (palpite não gerado pelo chamador)
+      1.35 ≤ odd < 1.50   → -1.5 na confiança
+      1.50 ≤ odd < 1.70   → -0.5 na confiança
+      odd ≥ 1.70          → sem penalidade
+      odd = None          → sem penalidade (mercado sem cobertura de odds)
 
     Args:
         statistical_probability_pct:  Probabilidade estatística base (0-100%)
@@ -454,10 +464,37 @@ def calculate_final_confidence(
         injury_role_away:             Papel dos lesionados do visitante
         market_history_adjustment:    Ajuste histórico dampened do mercado (de
                                       db.get_market_confidence_adjustment)
+        odd:                          Odd disponível para esta aposta (None = sem odds)
 
     Returns:
         tuple: (confianca_final, breakdown_dict)
+               confianca_final = 0.0 indica que o palpite deve ser descartado
+               (odd abaixo do mínimo aceitável)
     """
+    # STEP 0: Filtro de odd mínima — sem valor para o usuário abaixo de 1.35
+    _ODD_MINIMA_PALPITE = 1.35
+    _ODD_PENALIDADE_BAIXA_LIMITE = 1.50
+    _ODD_PENALIDADE_MEDIA_LIMITE = 1.70
+
+    mod_odd = 0.0
+    if odd is not None:
+        if odd < _ODD_MINIMA_PALPITE:
+            # Descartado imediatamente — sem valor real para o apostador
+            _bd = {
+                "probabilidade_base": statistical_probability_pct,
+                "confianca_base": 0.0,
+                "modificador_script": 0.0,
+                "modificador_lesoes": 0.0,
+                "modificador_historico": 0.0,
+                "modificador_odd": -99.0,
+                "confianca_final": 0.0,
+            }
+            return 0.0, _bd
+        elif odd < _ODD_PENALIDADE_BAIXA_LIMITE:
+            mod_odd = -1.5
+        elif odd < _ODD_PENALIDADE_MEDIA_LIMITE:
+            mod_odd = -0.5
+
     # STEP 2: Base confidence
     base_conf = convert_probability_to_base_confidence(statistical_probability_pct)
 
@@ -474,8 +511,8 @@ def calculate_final_confidence(
     # STEP 3c: Historical market adjustment (learning layer)
     mod_historico = float(market_history_adjustment)
 
-    # STEP 4: Final
-    final_conf = base_conf + mod_script + mod_injury + mod_historico
+    # STEP 4: Final (inclui penalidade de odd)
+    final_conf = base_conf + mod_script + mod_injury + mod_historico + mod_odd
 
     # Cap entre 1.0 e 10.0
     final_conf = max(1.0, min(10.0, final_conf))
@@ -486,6 +523,7 @@ def calculate_final_confidence(
         "modificador_script": mod_script,
         "modificador_lesoes": mod_injury,
         "modificador_historico": mod_historico,
+        "modificador_odd": mod_odd,
         "confianca_final": final_conf
     }
 

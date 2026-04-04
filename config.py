@@ -28,8 +28,15 @@ MIN_CONFIANCA_APOSTA_SIMPLES = 6.0  # Para aposta simples (principal pick)
 MIN_CONFIANCA_MULTIPLA = 5.5  # Para múltiplas
 MIN_CONFIANCA_BINGO = 5.5  # Para bingo (odd alta)
 
-# --- THRESHOLDS DE ODD ---
-ODD_MINIMA_PENALIDADE = 1.40  # Odds abaixo disso têm confiança penalizada
+# --- THRESHOLDS DE ODD (TASK #16 — reativados) ---
+# Filtro em cascata aplicado em calculate_final_confidence:
+#   odd < ODD_MINIMA_PALPITE          → palpite descartado (confiança=0)
+#   ODD_MINIMA_PALPITE ≤ odd < 1.50   → penalidade -1.5
+#   1.50 ≤ odd < 1.70                 → penalidade -0.5
+#   odd ≥ 1.70                        → sem penalidade
+#   odd = None                        → sem penalidade (mercado sem odds)
+ODD_MINIMA_PENALIDADE = 1.40  # legado — mantido para referência histórica
+ODD_MINIMA_PALPITE = 1.35     # novo mínimo: abaixo disso não gera palpite
 ODD_MINIMA_TACTICAL_TIP = 1.20  # Mínimo para considerar como tactical tip válido
 
 # --- THRESHOLDS DE PROBABILIDADES E MÉTRICAS ESTATÍSTICAS ---
