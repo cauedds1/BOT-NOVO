@@ -1,9 +1,18 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 
 export default function Header() {
   const location = useLocation()
   const isHome = location.pathname === '/'
   const isPerformance = location.pathname === '/performance'
+  const [isDemo, setIsDemo] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(d => setIsDemo(d.is_demo ?? false))
+      .catch(() => setIsDemo(false))
+  }, [])
 
   return (
     <header
@@ -69,22 +78,43 @@ export default function Header() {
           >
             Performance
           </Link>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 12,
-              color: '#64748b',
-              background: 'rgba(99,102,241,0.08)',
-              border: '1px solid rgba(99,102,241,0.15)',
-              borderRadius: 8,
-              padding: '4px 10px',
-            }}
-          >
-            <div className="pulse-dot" />
-            API Live
-          </div>
+
+          {isDemo === null ? null : isDemo ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: '#fb923c',
+                background: 'rgba(251,146,60,0.10)',
+                border: '1px solid rgba(251,146,60,0.30)',
+                borderRadius: 8,
+                padding: '4px 10px',
+                fontWeight: 600,
+              }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#fb923c', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+              Demo
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: '#64748b',
+                background: 'rgba(99,102,241,0.08)',
+                border: '1px solid rgba(99,102,241,0.15)',
+                borderRadius: 8,
+                padding: '4px 10px',
+              }}
+            >
+              <div className="pulse-dot" />
+              API Live
+            </div>
+          )}
         </nav>
       </div>
     </header>
