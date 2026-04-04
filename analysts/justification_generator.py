@@ -51,6 +51,12 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return _justificar_handicap_europeu_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     elif mercado == "Primeiro a Marcar":
         return _justificar_primeiro_marcador_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
+    elif mercado == "HT/FT":
+        return _justificar_htft_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
+    elif mercado == "Win to Nil":
+        return _justificar_win_to_nil_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
+    elif mercado == "Draw No Bet":
+        return _justificar_draw_no_bet_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     else:
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
@@ -766,3 +772,83 @@ def _justificar_primeiro_marcador_evidence_based(tipo, evidencias_home, evidenci
         justificativa += f"Edge de valor: +{edge:.1f}% acima da probabilidade implícita da odd."
 
     return justificativa
+
+
+def _justificar_htft_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para HT/FT baseada em evidências reais."""
+    gols_home = evidencias_home.get('gols', [])
+    gols_away = evidencias_away.get('gols', [])
+
+    media_home = (sum(g['team_goals'] for g in gols_home) / len(gols_home)) if gols_home else None
+    media_away = (sum(g['team_goals'] for g in gols_away) / len(gols_away)) if gols_away else None
+
+    extra = extra or {}
+    prob = extra.get('probabilidade', 0)
+
+    if 'Casa/Casa' in tipo or '1/1' in tipo:
+        base = f"{home_team_name} apresenta domínio consistente tanto no 1º quanto no 2º tempo"
+        if media_home:
+            base += f", marcando em média {media_home:.1f} gols por jogo"
+        return base + f". Probabilidade calculada de {prob:.1f}%."
+    elif 'Empate/Casa' in tipo or 'X/1' in tipo:
+        base = f"Jogo equilibrado no intervalo com {home_team_name} assumindo o controle no 2º tempo"
+        if media_home:
+            base += f" (média de {media_home:.1f} gols/jogo)"
+        return base + f". Probabilidade calculada de {prob:.1f}%."
+    elif 'Empate/Empate' in tipo or 'X/X' in tipo:
+        base = f"Partida tipicamente equilibrada entre {home_team_name} e {away_team_name}"
+        return base + f". Probabilidade calculada de {prob:.1f}%."
+    elif 'Fora/Fora' in tipo or '2/2' in tipo:
+        base = f"{away_team_name} demonstra capacidade de controlar o jogo desde o início"
+        if media_away:
+            base += f", marcando em média {media_away:.1f} gols por jogo fora"
+        return base + f". Probabilidade calculada de {prob:.1f}%."
+    elif 'Empate/Fora' in tipo or 'X/2' in tipo:
+        base = f"Jogo nivelado no intervalo com {away_team_name} assumindo vantagem no 2º tempo"
+        if media_away:
+            base += f" (média de {media_away:.1f} gols/jogo como visitante)"
+        return base + f". Probabilidade calculada de {prob:.1f}%."
+    else:
+        return f"Modelo Poisson bivariado indica {prob:.1f}% de probabilidade para o cenário {tipo}."
+
+
+def _justificar_win_to_nil_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para Win to Nil baseada em evidências reais."""
+    extra = extra or {}
+    prob = extra.get('probabilidade', 0)
+
+    if 'Casa' in tipo:
+        gols_away = evidencias_away.get('gols', [])
+        gols_fora_marcados = (sum(g.get('team_goals', 0) for g in gols_away) / len(gols_away)) if gols_away else None
+        base = f"{home_team_name} tem capacidade de vencer sem sofrer gols"
+        if gols_fora_marcados is not None:
+            base += f". {away_team_name} marca em média {gols_fora_marcados:.1f} gols por jogo fora de casa, facilitando o clean sheet"
+        return base + f". Probabilidade combinada (vitória + clean sheet): {prob:.1f}%."
+    else:
+        gols_home = evidencias_home.get('gols', [])
+        gols_casa_marcados = (sum(g.get('team_goals', 0) for g in gols_home) / len(gols_home)) if gols_home else None
+        base = f"{away_team_name} tem capacidade de vencer sem sofrer gols"
+        if gols_casa_marcados is not None:
+            base += f". {home_team_name} marca em média {gols_casa_marcados:.1f} gols por jogo em casa, facilitando o clean sheet"
+        return base + f". Probabilidade combinada (vitória + clean sheet): {prob:.1f}%."
+
+
+def _justificar_draw_no_bet_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
+    """Gera justificativa para Draw No Bet baseada em evidências reais."""
+    extra = extra or {}
+    prob = extra.get('probabilidade', 0)
+
+    if 'Casa' in tipo:
+        gols_home = evidencias_home.get('gols', [])
+        media_home = (sum(g['team_goals'] for g in gols_home) / len(gols_home)) if gols_home else None
+        base = f"{home_team_name} aparece como favorito quando o empate é excluído da equação"
+        if media_home:
+            base += f", com média de {media_home:.1f} gols marcados por jogo em casa"
+        return base + f". Probabilidade condicional (excluindo empate): {prob:.1f}%."
+    else:
+        gols_away = evidencias_away.get('gols', [])
+        media_away = (sum(g['team_goals'] for g in gols_away) / len(gols_away)) if gols_away else None
+        base = f"{away_team_name} aparece como favorito quando o empate é excluído da equação"
+        if media_away:
+            base += f", com média de {media_away:.1f} gols marcados por jogo fora de casa"
+        return base + f". Probabilidade condicional (excluindo empate): {prob:.1f}%."

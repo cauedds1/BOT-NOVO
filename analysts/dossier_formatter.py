@@ -53,7 +53,13 @@ def format_evidence_based_dossier(
     palpites_placar_exato = [p for p in todos_palpites if p.get('mercado') == 'Placar Exato']
     palpites_he = [p for p in todos_palpites if p.get('mercado') == 'Handicap Europeu']
     palpites_pm = [p for p in todos_palpites if p.get('mercado') == 'Primeiro a Marcar']
-    _MERCADOS_DEDICADOS = ('Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu', 'Primeiro a Marcar')
+    palpites_htft = [p for p in todos_palpites if p.get('mercado') == 'HT/FT']
+    palpites_wtn = [p for p in todos_palpites if p.get('mercado') == 'Win to Nil']
+    palpites_dnb = [p for p in todos_palpites if p.get('mercado') == 'Draw No Bet']
+    _MERCADOS_DEDICADOS = (
+        'Dupla Chance', 'Gols Ambos Tempos', 'Placar Exato', 'Handicap Europeu',
+        'Primeiro a Marcar', 'HT/FT', 'Win to Nil', 'Draw No Bet',
+    )
     palpites_outros = [p for p in todos_palpites if p.get('mercado') not in _MERCADOS_DEDICADOS]
 
     # === SECTION 2: ANÁLISE PRINCIPAL ===
@@ -130,7 +136,37 @@ def format_evidence_based_dossier(
             away_team_name
         )
 
-    # === SECTION 9: AVISOS (se houver) ===
+    # === SECTION 9: HT/FT (seção dedicada) ===
+    if palpites_htft:
+        msg += _format_htft_section(
+            palpites_htft,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 10: WIN TO NIL (seção dedicada) ===
+    if palpites_wtn:
+        msg += _format_win_to_nil_section(
+            palpites_wtn,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 11: DRAW NO BET (seção dedicada) ===
+    if palpites_dnb:
+        msg += _format_draw_no_bet_section(
+            palpites_dnb,
+            evidencias_home,
+            evidencias_away,
+            home_team_name,
+            away_team_name
+        )
+
+    # === SECTION 12: AVISOS (se houver) ===
     avisos = _collect_warnings(todos_palpites)
     if avisos:
         msg += _format_avisos(avisos)
@@ -220,6 +256,8 @@ def _format_evidence_section(
         msg += _format_handicap_europeu_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Primeiro a Marcar":
         msg += _format_primeiro_marcador_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    elif mercado in ("HT/FT", "Win to Nil", "Draw No Bet"):
+        msg += _format_gols_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
     else:
         msg += f"      (Evidências não disponíveis para este mercado)\n"
     
@@ -1102,6 +1140,129 @@ def format_confidence_debug_report(
     
     msg += "--- FIM DO RELATÓRIO ---\n"
     
+    return msg
+
+
+def _format_htft_section(
+    palpites_htft: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str,
+) -> str:
+    """Seção dedicada HT/FT — mostra as top combinações intervalo+final."""
+    msg = "⏱️ HALF-TIME / FULL-TIME\n\n"
+    msg += (
+        "   ℹ️  Resultado ao intervalo e ao final calculados via Poisson bivariado.\n"
+        "   Apenas combinações com probabilidade suficiente são exibidas.\n\n"
+    )
+
+    for palpite in palpites_htft:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        odd = palpite.get('odd')
+
+        msg += f"   Cenário: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.1f}%\n"
+        if odd:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += "   Odd: Não disponível\n"
+
+        justificativa = generate_evidence_based_justification(
+            'HT/FT', tipo, evidencias_home, evidencias_away,
+            home_team_name, away_team_name,
+            extra={'probabilidade': probabilidade},
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += "   📊 EVIDÊNCIAS (GOLS):\n"
+    msg += _format_gols_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += "\n---\n\n"
+    return msg
+
+
+def _format_win_to_nil_section(
+    palpites_wtn: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str,
+) -> str:
+    """Seção dedicada Win to Nil — vitória sem sofrer gol."""
+    msg = "🔒 WIN TO NIL\n\n"
+    msg += (
+        "   ℹ️  Probabilidade de vencer sem sofrer gol: P(vitória) × P(clean sheet).\n"
+        "   Calculado via Poisson: P(clean sheet) = e^(-λ_adversário).\n\n"
+    )
+
+    for palpite in palpites_wtn:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        odd = palpite.get('odd')
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Calculada: {probabilidade:.1f}%\n"
+        if odd:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += "   Odd: Não disponível\n"
+
+        justificativa = generate_evidence_based_justification(
+            'Win to Nil', tipo, evidencias_home, evidencias_away,
+            home_team_name, away_team_name,
+            extra={'probabilidade': probabilidade},
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += "   📊 EVIDÊNCIAS (GOLS):\n"
+    msg += _format_gols_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += "\n---\n\n"
+    return msg
+
+
+def _format_draw_no_bet_section(
+    palpites_dnb: List[Dict],
+    evidencias_home: Dict,
+    evidencias_away: Dict,
+    home_team_name: str,
+    away_team_name: str,
+) -> str:
+    """Seção dedicada Draw No Bet — exclui empate, aposta retornada se empatar."""
+    msg = "🔄 DRAW NO BET\n\n"
+    msg += (
+        "   ℹ️  Aposta excluindo o empate: se o jogo terminar empatado, a aposta é devolvida.\n"
+        "   P(DNB Casa) = P(Vitória Casa) / (P(V.Casa) + P(V.Fora))\n\n"
+    )
+
+    for palpite in palpites_dnb:
+        tipo = palpite.get('tipo', '')
+        confianca = palpite.get('confianca', 0)
+        probabilidade = palpite.get('probabilidade', 0)
+        odd = palpite.get('odd')
+
+        msg += f"   Análise: {tipo}\n"
+        msg += f"   Confiança: {confianca:.1f} / 10\n"
+        msg += f"   Probabilidade Condicional: {probabilidade:.1f}%\n"
+        if odd:
+            msg += f"   Odd Disponível: @{odd:.2f}\n"
+        else:
+            msg += "   Odd: Não disponível\n"
+
+        justificativa = generate_evidence_based_justification(
+            'Draw No Bet', tipo, evidencias_home, evidencias_away,
+            home_team_name, away_team_name,
+            extra={'probabilidade': probabilidade},
+        )
+        msg += f"   Justificativa: {justificativa}\n\n"
+
+    msg += "   📊 EVIDÊNCIAS (GOLS):\n"
+    msg += _format_gols_evidence(evidencias_home, evidencias_away, home_team_name, away_team_name)
+    msg += "\n---\n\n"
     return msg
 
 

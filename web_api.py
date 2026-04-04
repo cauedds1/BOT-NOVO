@@ -39,6 +39,9 @@ from analysts.gabt_analyzer import analisar_mercado_gabt
 from analysts.correct_score_analyzer import analisar_mercado_placar_exato
 from analysts.european_handicap_analyzer import analisar_mercado_handicap_europeu
 from analysts.first_goal_analyzer import analisar_mercado_primeiro_a_marcar
+from analysts.htft_analyzer import analisar_mercado_htft
+from analysts.win_to_nil_analyzer import analisar_mercado_win_to_nil
+from analysts.draw_no_bet_analyzer import analisar_mercado_draw_no_bet
 from config import LEAGUE_WEIGHTING_FACTOR, QUALITY_SCORES
 
 BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
@@ -303,6 +306,9 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
         analise_placar_exato = analisar_mercado_placar_exato(analysis_packet, odds)
         analise_handicap_europeu = analisar_mercado_handicap_europeu(analysis_packet, odds)
         analise_primeiro_marcador = analisar_mercado_primeiro_a_marcar(analysis_packet, odds)
+        analise_htft = analisar_mercado_htft(analysis_packet, odds)
+        analise_win_to_nil = analisar_mercado_win_to_nil(analysis_packet, odds)
+        analise_draw_no_bet = analisar_mercado_draw_no_bet(analysis_packet, odds)
 
         # 3b. Aplicar ajuste histórico de confiança por mercado (learning layer)
         # Mapeia nome de mercado → resultado do analyzer
@@ -319,6 +325,9 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
             "Placar Exato": analise_placar_exato,
             "Handicap Europeu": analise_handicap_europeu,
             "Primeiro a Marcar": analise_primeiro_marcador,
+            "HT/FT": analise_htft,
+            "Win to Nil": analise_win_to_nil,
+            "Draw No Bet": analise_draw_no_bet,
         }
         for _nome_mercado, _analise in _mercado_nome_map.items():
             if not _analise:
@@ -370,6 +379,9 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
             "placar_exato": analise_placar_exato,
             "handicap_europeu": analise_handicap_europeu,
             "primeiro_marcador": analise_primeiro_marcador,
+            "htft": analise_htft,
+            "win_to_nil": analise_win_to_nil,
+            "draw_no_bet": analise_draw_no_bet,
         }
         stats = {
             "stats_casa": stats_casa,
@@ -475,6 +487,9 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         ("Placar Exato", "analise_placar_exato"),
         ("Handicap Europeu", "analise_handicap_europeu"),
         ("Primeiro a Marcar", "analise_primeiro_marcador"),
+        ("HT/FT", "analise_htft"),
+        ("Win to Nil", "analise_win_to_nil"),
+        ("Draw No Bet", "analise_draw_no_bet"),
     ]
     mercados_vetados = []
     for nome, chave in mapa:
@@ -1052,10 +1067,17 @@ def _get_demo_analise(fixture_id: int) -> dict:
             {"mercado":"Gols Ambos Tempos","palpites":[
                 {"tipo":"Sim","confianca":6.5,"probabilidade":54.0,"odd":2.30,"periodo":"FT","mercado":"Gols Ambos Tempos","justificativa":"Perfil ofensivo de ambas equipes sugere gols em ambos os tempos.","confidence_breakdown":{}},
             ]},
+            {"mercado":"HT/FT","palpites":[
+                {"tipo":"Casa/Casa","confianca":6.2,"probabilidade":38.0,"odd":2.80,"periodo":"FT","mercado":"HT/FT","justificativa":f"{home} costuma liderar o placar desde o início e manter a vantagem ao intervalo e final.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"Win to Nil","palpites":[
+                {"tipo":f"{home} Sim","confianca":5.8,"probabilidade":32.0,"odd":3.10,"periodo":"FT","mercado":"Win to Nil","justificativa":f"Com {away} sem grande presença ofensiva fora, {home} tem chance de vencer sem sofrer.","confidence_breakdown":{}},
+            ]},
         ]
         mercados_vetados = [
             {"mercado":"Placar Exato","motivo":"Baixa confiança estatística — variância alta em jogos ofensivos dificulta previsão precisa de placar."},
             {"mercado":"Handicap Europeu","motivo":"Odds de mercado não refletem edge estatístico suficiente neste contexto."},
+            {"mercado":"Draw No Bet","motivo":"Alta probabilidade de gols mútuos torna a proteção de empate menos valiosa."},
         ]
     elif script == "home_dominant":
         mercados = [
@@ -1080,6 +1102,15 @@ def _get_demo_analise(fixture_id: int) -> dict:
             ]},
             {"mercado":"Cartões","palpites":[
                 {"tipo":"Under 3.5","confianca":6.5,"probabilidade":57.0,"odd":1.85,"periodo":"FT","mercado":"Cartões","justificativa":"Visitante sem motivação extra para faltas excessivas — jogo pode ser controlado pelo mandante.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"HT/FT","palpites":[
+                {"tipo":"Casa/Casa","confianca":7.0,"probabilidade":48.0,"odd":2.40,"periodo":"FT","mercado":"HT/FT","justificativa":f"{home} domina em casa e costuma liderar desde o início sem ceder vantagem.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"Win to Nil","palpites":[
+                {"tipo":f"{home} Sim","confianca":6.5,"probabilidade":42.0,"odd":2.60,"periodo":"FT","mercado":"Win to Nil","justificativa":f"{home} tem clean sheet em 45% dos jogos em casa. Defesa sólida com mandante em controle.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"Draw No Bet","palpites":[
+                {"tipo":f"{home} Vence","confianca":7.5,"probabilidade":68.0,"odd":1.45,"periodo":"FT","mercado":"Draw No Bet","justificativa":f"Protege o apostador em caso de empate. {home} tem vantagem clara — DNB reduz o risco.","confidence_breakdown":{}},
             ]},
         ]
         mercados_vetados = [
@@ -1111,10 +1142,15 @@ def _get_demo_analise(fixture_id: int) -> dict:
             {"mercado":"Gols Ambos Tempos","palpites":[
                 {"tipo":"Sim","confianca":5.8,"probabilidade":47.0,"odd":2.60,"periodo":"FT","mercado":"Gols Ambos Tempos","justificativa":"Probabilidade moderada de gols em ambos os tempos dado equilíbrio técnico.","confidence_breakdown":{}},
             ]},
+            {"mercado":"Draw No Bet","palpites":[
+                {"tipo":f"{home} Vence","confianca":5.5,"probabilidade":38.0,"odd":1.90,"periodo":"FT","mercado":"Draw No Bet","justificativa":f"Aposta com proteção de empate. {home} tem leve vantagem mas DNB mitiga a incerteza de 34% de empate.","confidence_breakdown":{}},
+            ]},
         ]
         mercados_vetados = [
             {"mercado":"Placar Exato","motivo":"Equilíbrio entre equipes dificulta previsão confiável de placar exato."},
             {"mercado":"Handicap Europeu","motivo":"Odd de mercado sem edge estatístico relevante."},
+            {"mercado":"HT/FT","motivo":"Jogo equilibrado: transições de resultado em ambas as metades tornam a previsão HT/FT de baixa confiança."},
+            {"mercado":"Win to Nil","motivo":"Alta probabilidade de BTTS — clean sheet improvável neste contexto ofensivo."},
         ]
     elif script == "defensive":
         mercados = [
@@ -1139,10 +1175,17 @@ def _get_demo_analise(fixture_id: int) -> dict:
             {"mercado":"Handicaps","palpites":[
                 {"tipo":"Casa 0","confianca":6.8,"probabilidade":58.0,"odd":1.88,"periodo":"FT","mercado":"Handicaps","justificativa":"Linha zero protege em caso de empate dado perfil defensivo do jogo.","confidence_breakdown":{}},
             ]},
+            {"mercado":"Win to Nil","palpites":[
+                {"tipo":f"{home} Sim","confianca":6.0,"probabilidade":38.0,"odd":2.90,"periodo":"FT","mercado":"Win to Nil","justificativa":f"Jogo defensivo com BTTS baixo — {home} pode vencer sem sofrer gol.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"Draw No Bet","palpites":[
+                {"tipo":f"{home} Vence","confianca":6.5,"probabilidade":52.0,"odd":1.75,"periodo":"FT","mercado":"Draw No Bet","justificativa":f"Mandante ligeiramente favorito com proteção de empate. Reduz risco no jogo defensivo.","confidence_breakdown":{}},
+            ]},
         ]
         mercados_vetados = [
             {"mercado":"Gols Ambos Tempos","motivo":"Baixa frequência de BTTS em jogos defensivos — confiança abaixo do limiar mínimo."},
             {"mercado":"Placar Exato","motivo":"Embora a tendência seja baixo placar, a previsão exata tem variância alta demais."},
+            {"mercado":"HT/FT","motivo":"Jogo defensivo com pouca movimentação de placar — previsão HT/FT de baixa confiança."},
         ]
     else:
         mercados = [
@@ -1167,10 +1210,17 @@ def _get_demo_analise(fixture_id: int) -> dict:
             {"mercado":"Cartões","palpites":[
                 {"tipo":"Over 3.5","confianca":6.8,"probabilidade":58.0,"odd":2.00,"periodo":"FT","mercado":"Cartões","justificativa":"Pressão do mandante em busca de gol tende a gerar mais faltas e cartões.","confidence_breakdown":{}},
             ]},
+            {"mercado":"HT/FT","palpites":[
+                {"tipo":"Fora/Fora","confianca":5.8,"probabilidade":32.0,"odd":4.20,"periodo":"FT","mercado":"HT/FT","justificativa":f"{away} em forma excelente pode sair na frente desde o início e manter o resultado.","confidence_breakdown":{}},
+            ]},
+            {"mercado":"Draw No Bet","palpites":[
+                {"tipo":f"{away} Vence","confianca":6.0,"probabilidade":45.0,"odd":2.50,"periodo":"FT","mercado":"Draw No Bet","justificativa":f"Visitante favorito neste contexto — DNB protege em caso de empate improvável.","confidence_breakdown":{}},
+            ]},
         ]
         mercados_vetados = [
             {"mercado":"Placar Exato","motivo":"Upset games têm alta imprevisibilidade de placar — confiança insuficiente."},
             {"mercado":"Primeiro a Marcar","motivo":"Dados históricos insuficientes para definir tendência de primeiro gol com confiança."},
+            {"mercado":"Win to Nil","motivo":"Confronto equilibrado com BTTS provável — clean sheet improvável para qualquer equipe."},
         ]
 
     total_palpites = sum(len(m["palpites"]) for m in mercados)
