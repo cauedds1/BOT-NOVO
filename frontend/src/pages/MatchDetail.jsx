@@ -97,12 +97,19 @@ function ConfidenceBreakdown({ bd }) {
 
 function PredictionRow({ palpite, rank }) {
   const conf = palpite.confianca || 0
+  const isValue = palpite.is_value === true
+  const edge = palpite.edge || 0
   return (
     <div style={{ padding: '13px 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 5 }}>
             {rank === 0 && <span className="chip chip-accent">#1</span>}
+            {isValue && (
+              <span className="chip chip-green" style={{ fontWeight: 800, letterSpacing: '0.04em', fontSize: 10, padding: '2px 7px', background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.4)' }}>
+                🔥 VALUE +{edge.toFixed(1)}%
+              </span>
+            )}
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{palpite.tipo}</span>
             {palpite.periodo && palpite.periodo !== 'FT' && (
               <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface)', borderRadius: 'var(--radius-xs)', padding: '1px 5px' }}>{palpite.periodo}</span>
@@ -136,9 +143,10 @@ function MarketCard({ mercado, minConfianca }) {
   const icon = MARKET_ICONS[mercado.mercado] || '📊'
   const filtrados = (mercado.palpites || []).filter(p => (p.confianca || 0) >= minConfianca)
   const topConf = filtrados[0]?.confianca || 0
+  const hasValueBet = filtrados.some(p => p.is_value === true)
   if (filtrados.length === 0) return null
   return (
-    <div className="card" style={{ marginBottom: 12, overflow: 'hidden' }}>
+    <div className="card" style={{ marginBottom: 12, overflow: 'hidden', border: hasValueBet ? '1px solid rgba(34,197,94,0.35)' : undefined }}>
       <button onClick={() => setOpen(o => !o)} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 16px', cursor: 'pointer', background: 'transparent', border: 'none',
@@ -152,6 +160,7 @@ function MarketCard({ mercado, minConfianca }) {
           <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{filtrados.length} palpite{filtrados.length !== 1 ? 's' : ''}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {hasValueBet && <span style={{ fontSize: 10, fontWeight: 800, color: 'rgb(34,197,94)', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 4, padding: '2px 6px' }}>🔥 VALUE</span>}
           {topConf >= 7 && <span className="badge badge-green" style={{ fontSize: 10 }}>⭐ Top</span>}
           <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{open ? '▴' : '▾'}</span>
         </div>

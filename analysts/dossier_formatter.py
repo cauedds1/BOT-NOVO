@@ -62,7 +62,12 @@ def format_evidence_based_dossier(
     )
     palpites_outros = [p for p in todos_palpites if p.get('mercado') not in _MERCADOS_DEDICADOS]
 
-    # === SECTION 2: ANÁLISE PRINCIPAL ===
+    # === SECTION 2: VALUE BETS (todos os mercados) ===
+    todos_value_bets = [p for p in todos_palpites if p.get('is_value')]
+    if todos_value_bets:
+        msg += _format_value_bets_section(todos_value_bets)
+
+    # === SECTION 3: ANÁLISE PRINCIPAL ===
     if palpites_outros:
         palpite_principal = palpites_outros[0]  # Maior confiança (excluindo DC)
         msg += _format_analise_principal_evidence_based(
@@ -73,7 +78,7 @@ def format_evidence_based_dossier(
             away_team_name
         )
 
-        # === SECTION 3: SUGESTÕES TÁTICAS (restante dos palpites, exceto DC) ===
+        # === SECTION 4: SUGESTÕES TÁTICAS (restante dos palpites, exceto DC) ===
         if len(palpites_outros) > 1:
             msg += _format_sugestoes_taticas_evidence_based(
                 palpites_outros[1:],
@@ -191,6 +196,28 @@ def _format_header_evidence_based(jogo: Dict) -> str:
     msg += f"⏰ {data_formatada} às {horario_formatado} (Brasília)\n"
     msg += f"---\n\n"
     
+    return msg
+
+
+def _format_value_bets_section(value_bets: List[Dict]) -> str:
+    """Formata seção de VALUE BETS detectados — palpites onde nossa probabilidade
+    supera a probabilidade implícita da odd em pelo menos 5%."""
+    if not value_bets:
+        return ""
+
+    msg = "🔥 VALUE BETS DETECTADOS\n"
+    for p in value_bets[:5]:  # Máximo 5 value bets na seção
+        mercado = p.get('mercado', '')
+        tipo = p.get('tipo', '')
+        odd = p.get('odd')
+        prob = p.get('probabilidade', 0)
+        edge = p.get('edge', 0)
+        confianca = p.get('confianca', 0)
+
+        odd_str = f"@{odd:.2f}" if odd else ""
+        msg += f"   ⚡ [{mercado}] {tipo} {odd_str}\n"
+        msg += f"      Prob. Modelo: {prob:.1f}% | Edge: +{edge:.1f}% | Confiança: {confianca:.1f}/10\n"
+    msg += "\n"
     return msg
 
 

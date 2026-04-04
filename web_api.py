@@ -229,28 +229,44 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False, analise_db: Optional[d
 
 def _estruturar_palpites(mercado_nome: str, analise: Optional[dict]) -> Optional[dict]:
     """Converte o resultado de um analyzer para o formato JSON da API."""
+    from analysts.confidence_calculator import detect_value_bet
+
     if not analise or not analise.get("palpites"):
         return None
     palpites = analise["palpites"]
     if not palpites:
         return None
+
+    resultado_palpites = []
+    for p in palpites:
+        prob = p.get("probabilidade", 0) or 0
+        odd = p.get("odd")
+        # Usar valor pre-computado pelo analyzer se disponível, caso contrário calcular
+        if p.get("is_value") is not None and p.get("edge") is not None:
+            is_value = p["is_value"]
+            edge = p["edge"]
+            prob_implicita = p.get("prob_implicita", 0)
+        else:
+            is_value, edge, prob_implicita = detect_value_bet(prob, odd) if odd else (False, 0.0, 0.0)
+
+        resultado_palpites.append({
+            "tipo": p.get("tipo", ""),
+            "confianca": p.get("confianca", 0),
+            "probabilidade": prob,
+            "prob_implicita": prob_implicita,
+            "edge": edge,
+            "is_value": is_value,
+            "odd": odd,
+            "periodo": p.get("periodo", "FT"),
+            "time": p.get("time", ""),
+            "mercado": p.get("mercado", mercado_nome),
+            "justificativa": p.get("justificativa", ""),
+            "confidence_breakdown": p.get("confidence_breakdown", {}),
+        })
+
     return {
         "mercado": mercado_nome,
-        "palpites": [
-            {
-                "tipo": p.get("tipo", ""),
-                "confianca": p.get("confianca", 0),
-                "probabilidade": p.get("probabilidade", 0),
-                "odd": p.get("odd"),
-                "edge": p.get("edge"),
-                "periodo": p.get("periodo", "FT"),
-                "time": p.get("time", ""),
-                "mercado": p.get("mercado", mercado_nome),
-                "justificativa": p.get("justificativa", ""),
-                "confidence_breakdown": p.get("confidence_breakdown", {}),
-            }
-            for p in palpites
-        ],
+        "palpites": resultado_palpites,
     }
 
 
@@ -1222,6 +1238,18 @@ def _get_demo_analise(fixture_id: int) -> dict:
             {"mercado":"Primeiro a Marcar","motivo":"Dados históricos insuficientes para definir tendência de primeiro gol com confiança."},
             {"mercado":"Win to Nil","motivo":"Confronto equilibrado com BTTS provável — clean sheet improvável para qualquer equipe."},
         ]
+
+    # Enriquecer palpites demo com is_value / edge / prob_implicita usando detect_value_bet
+    from analysts.confidence_calculator import detect_value_bet as _dvb
+    for m in mercados:
+        for p in m.get("palpites", []):
+            if p.get("is_value") is None:
+                prob = p.get("probabilidade", 0) or 0
+                odd = p.get("odd")
+                is_val, edge_v, prob_imp = _dvb(prob, odd) if odd else (False, 0.0, 0.0)
+                p["is_value"] = is_val
+                p["edge"] = edge_v
+                p["prob_implicita"] = prob_imp
 
     total_palpites = sum(len(m["palpites"]) for m in mercados)
     melhor_confianca = max((p["confianca"] for m in mercados for p in m["palpites"]), default=0)

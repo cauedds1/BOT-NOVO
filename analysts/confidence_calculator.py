@@ -490,3 +490,31 @@ def calculate_final_confidence(
     }
 
     return final_conf, breakdown
+
+
+def detect_value_bet(probabilidade_pct: float, odd: float, threshold_pct: float = 5.0) -> tuple:
+    """
+    VALUE BET DETECTOR: Compara probabilidade do modelo com a probabilidade implícita da odd.
+
+    A aposta tem "value" quando nossa probabilidade calculada supera a probabilidade implícita
+    da odd de mercado em pelo menos `threshold_pct` pontos percentuais.
+
+    Args:
+        probabilidade_pct: Probabilidade calculada pelo modelo (0-100%).
+        odd: Odd de mercado decimal (ex: 1.90).
+        threshold_pct: Mínimo de edge para sinalizar value (padrão: 5%).
+
+    Returns:
+        tuple: (is_value: bool, edge_pct: float, prob_implicita_pct: float)
+            is_value      — True se edge >= threshold_pct
+            edge_pct      — Diferença signed: nossa prob − prob implícita (pode ser negativo)
+            prob_implicita_pct — Probabilidade implícita da odd (1/odd * 100)
+    """
+    if not odd or odd <= 1.0:
+        return False, 0.0, 0.0
+
+    prob_implicita = (1.0 / odd) * 100.0
+    edge = probabilidade_pct - prob_implicita
+    is_value = edge >= threshold_pct
+
+    return is_value, round(edge, 2), round(prob_implicita, 2)
