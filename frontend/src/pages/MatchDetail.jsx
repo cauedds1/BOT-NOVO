@@ -650,7 +650,7 @@ export default function MatchDetail() {
     setProcessing(true)
     try {
       const r = await fetch(`/api/analisar/${fixtureId}`, { method: 'POST' })
-      if (r.status === 404) { setProcessing(false); setError('Este jogo é de demonstração e não pode ser analisado.'); return }
+      if (r.status === 404) { setProcessing(false); setError('Jogo não encontrado. Verifique se o fixture é válido.'); return }
       const d = await r.json()
       if (d.status === 'ready') await checkStatus()
       else if (d.status === 'error') { setError(d.message || 'Erro na análise'); setProcessing(false) }

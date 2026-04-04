@@ -1,18 +1,9 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
 
 export default function Header() {
   const location = useLocation()
   const isHome = location.pathname === '/'
   const isPerformance = location.pathname === '/performance'
-  const [isDemo, setIsDemo] = useState(null)
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then(r => r.json())
-      .then(d => setIsDemo(d.is_demo ?? false))
-      .catch(() => setIsDemo(false))
-  }, [])
 
   return (
     <header style={{
@@ -50,32 +41,15 @@ export default function Header() {
 
           <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 8px' }} />
 
-          {isDemo === null ? null : isDemo ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: 'var(--orange)',
-              background: 'var(--orange-dim)', border: '1px solid var(--orange-border)',
-              borderRadius: 'var(--radius-sm)', padding: '4px 10px',
-              fontWeight: 600, letterSpacing: '0.02em',
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'var(--orange)', display: 'inline-block',
-                animation: 'pulseDot 2s infinite', flexShrink: 0,
-              }} />
-              Demo
-            </div>
-          ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: 'var(--green-light)',
-              background: 'var(--green-dim)', border: '1px solid var(--green-border)',
-              borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontWeight: 600,
-            }}>
-              <div className="pulse-dot" />
-              Live
-            </div>
-          )}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 11, color: 'var(--green-light)',
+            background: 'var(--green-dim)', border: '1px solid var(--green-border)',
+            borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontWeight: 600,
+          }}>
+            <div className="pulse-dot" />
+            Live
+          </div>
         </nav>
       </div>
     </header>

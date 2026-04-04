@@ -527,26 +527,12 @@ export default function Home() {
   )
 
   const total = data?.total || 0; const totalPaises = data?.por_pais?.length || 0
-  const isDemo = data?.is_demo || false; const totalFiltrados = filteredJogos.length
+  const totalFiltrados = filteredJogos.length
 
   const clearAll = () => { setSearch(''); setFilters({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false }) }
 
   return (
     <div style={{ paddingTop: 28 }}>
-      {isDemo && (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 10,
-          background: 'var(--amber-dim)', border: '1px solid var(--amber-border)',
-          borderRadius: 'var(--radius)', padding: '11px 15px', marginBottom: 20,
-        }}>
-          <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>🧪</span>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--amber-light)', margin: 0, letterSpacing: '-0.01em' }}>Modo Demonstração</p>
-            <p style={{ fontSize: 12, color: '#92400e', margin: '3px 0 0', lineHeight: 1.4 }}>A API não retornou jogos reais. Os dados abaixo são fictícios para demonstrar a interface.</p>
-          </div>
-        </div>
-      )}
-
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
           <h1 className="page-title">Jogos de Hoje</h1>
