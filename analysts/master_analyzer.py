@@ -15,6 +15,36 @@ from api_client import (
 
 HIGH_ALTITUDE_CITIES = ['La Paz', 'Quito', 'Bogotá', 'Cusco', 'Sucre', 'Cochabamba']
 
+# ─── MODO LEVE: singleton DB para cache de perfis de times ────────────────────
+_master_db_instance = None
+
+def _get_master_db():
+    global _master_db_instance
+    if _master_db_instance is None:
+        from db_manager import DatabaseManager
+        _master_db_instance = DatabaseManager(min_conn=1, max_conn=3)
+    return _master_db_instance
+
+
+def _load_team_profile_from_db(team_id: int, league_id: int):
+    """
+    Retorna o perfil computado salvo no DB se ainda fresco (< 48h).
+    Resultado: dict com 'sos_data', 'weighted_metrics', 'age_hours' ou None.
+    """
+    try:
+        return _get_master_db().get_cache_team_profile(team_id, league_id)
+    except Exception:
+        return None
+
+
+def _persist_team_profile(team_id: int, league_id: int, sos_data: dict, weighted_metrics: dict):
+    """Salva SoS + Weighted Metrics no DB após análise completa."""
+    try:
+        _get_master_db().set_cache_team_profile(team_id, league_id, sos_data, weighted_metrics)
+    except Exception as e:
+        print(f"⚠️ Falha ao salvar team_profile no DB: {e}")
+# ──────────────────────────────────────────────────────────────────────────────
+
 
 def _calculate_moment_score(team_stats):
     """
@@ -1641,9 +1671,42 @@ async def generate_match_analysis(jogo):
         print(f"  ✅ Sem desfalques confirmados ou endpoint indisponível")
     # ───────────────────────────────────────────────────────────────────────────
 
-    print("📅 TASK 2: Analisando Strength of Schedule (SoS)...")
-    sos_home = await _analyze_strength_of_schedule(home_team_id, league_id)
-    sos_away = await _analyze_strength_of_schedule(away_team_id, league_id)
+    # ─── MODO LEVE vs MODO COMPLETO ───────────────────────────────────────────
+    # Para cada time: verificar se há perfil computado fresco no DB (< 48h).
+    # Se sim → MODO LEVE: pular SoS deep dive + weighted metrics (economiza ~10
+    # chamadas de API por time). Se não → MODO COMPLETO: análise profunda e salva
+    # o perfil no DB para que a PRÓXIMA análise deste time use o modo leve.
+    # Partidas ao vivo sempre usam modo completo (dados em tempo real).
+    _is_live = jogo.get('fixture', {}).get('status', {}).get('short', '') in ('1H', 'HT', '2H', 'ET', 'P')
+
+    print("📅 TASK 2: Analisando Strength of Schedule (SoS) + Weighted Metrics...")
+
+    # ── TIME DA CASA ─────────────────────────────────────────────────────────
+    _profile_home = _load_team_profile_from_db(home_team_id, league_id) if not _is_live else None
+    if _profile_home:
+        print(f"  ⚡ MODO LEVE: {home_team_name} (dados há {_profile_home['age_hours']:.1f}h) — usando perfil em cache")
+        sos_home = _profile_home['sos_data']
+        weighted_home = _profile_home['weighted_metrics']
+    else:
+        print(f"  🔍 MODO COMPLETO: {home_team_name} ({'ao vivo' if _is_live else 'novo time'}) — análise profunda ativada")
+        sos_home = await _analyze_strength_of_schedule(home_team_id, league_id)
+        weighted_home = await _calculate_weighted_metrics(home_team_id, league_id, sos_home, home_stats)
+        if sos_home and weighted_home:
+            _persist_team_profile(home_team_id, league_id, sos_home, weighted_home)
+
+    # ── TIME VISITANTE ────────────────────────────────────────────────────────
+    _profile_away = _load_team_profile_from_db(away_team_id, league_id) if not _is_live else None
+    if _profile_away:
+        print(f"  ⚡ MODO LEVE: {away_team_name} (dados há {_profile_away['age_hours']:.1f}h) — usando perfil em cache")
+        sos_away = _profile_away['sos_data']
+        weighted_away = _profile_away['weighted_metrics']
+    else:
+        print(f"  🔍 MODO COMPLETO: {away_team_name} ({'ao vivo' if _is_live else 'novo time'}) — análise profunda ativada")
+        sos_away = await _analyze_strength_of_schedule(away_team_id, league_id)
+        weighted_away = await _calculate_weighted_metrics(away_team_id, league_id, sos_away, away_stats)
+        if sos_away and weighted_away:
+            _persist_team_profile(away_team_id, league_id, sos_away, weighted_away)
+    # ─────────────────────────────────────────────────────────────────────────
 
     # TASK 14: Ajuste de Momento ponderado pela força do calendário (SoS)
     # Vitórias contra times fortes valem mais; vitórias contra times fracos valem menos
@@ -1662,10 +1725,6 @@ async def generate_match_analysis(jogo):
         moment_away = max(0, moment_away - 5)
         print(f"  ⚖️ SoS PENALTY FORA: SoS baixo ({_sos_score_a:.0f}) → momento ajustado: {moment_away}")
 
-    print("⚖️ TASK 2: Calculando Weighted Metrics (Métricas Ponderadas)...")
-    weighted_home = await _calculate_weighted_metrics(home_team_id, league_id, sos_home, home_stats)
-    weighted_away = await _calculate_weighted_metrics(away_team_id, league_id, sos_away, away_stats)
-    
     # 🔥 PHOENIX V4.0: VERIFICAR SE WEIGHTED METRICS FORAM CALCULADOS COM SUCESSO
     if weighted_home is None or weighted_away is None:
         print(f"  ❌ WEIGHTED METRICS INDISPONÍVEIS")
@@ -1679,7 +1738,7 @@ async def generate_match_analysis(jogo):
                 'away': weighted_away is None
             }
         }
-    
+
     print(f"  📊 Casa: {weighted_home['weighted_corners_for']:.1f} cantos | {weighted_home['weighted_shots_for']:.1f} finalizações (ponderado)")
     print(f"  📊 Fora: {weighted_away['weighted_corners_for']:.1f} cantos | {weighted_away['weighted_shots_for']:.1f} finalizações (ponderado)")
     

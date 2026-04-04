@@ -197,6 +197,19 @@ class DatabaseManager:
         );
         CREATE INDEX IF NOT EXISTS idx_cache_h2h_fetched ON cache_h2h(fetched_at);
 
+        -- Perfil computado de time: SoS + Weighted Metrics (resultado do modo completo).
+        -- TTL: 48 horas — sincronizado com cache_stats_time, já que ambos derivam
+        -- das mesmas partidas disputadas. Permite modo leve em análises futuras.
+        CREATE TABLE IF NOT EXISTS cache_team_profile (
+            team_id INTEGER NOT NULL,
+            league_id INTEGER NOT NULL,
+            sos_data JSONB NOT NULL,
+            weighted_metrics JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (team_id, league_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_team_profile_fetched ON cache_team_profile(fetched_at);
+
         -- Nova tabela para sistema de fila de análises diárias
         CREATE TABLE IF NOT EXISTS daily_analyses (
             id SERIAL PRIMARY KEY,
@@ -427,7 +440,7 @@ class DatabaseManager:
                 
                 print("✅ Database schema inicializado com sucesso!")
                 print("   📋 Tabelas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados, estatisticas_jogadores, perfis_jogadores")
-                print("   📦 Cache persistente: cache_fixtures_dia, cache_stats_time, cache_ultimos_jogos, cache_h2h")
+                print("   📦 Cache persistente: cache_fixtures_dia, cache_stats_time, cache_ultimos_jogos, cache_h2h, cache_team_profile")
                 return True
                 
         except Exception as e:
@@ -550,6 +563,60 @@ class DatabaseManager:
                 print(f"💾 DB CACHE SAVE: stats time {team_id} liga {league_id}")
         except Exception as e:
             print(f"⚠️ DB cache_stats_time set erro: {e}")
+
+    def get_cache_team_profile(self, team_id: int, league_id: int) -> Optional[dict]:
+        """Busca perfil computado de time (SoS + Weighted Metrics) no DB. TTL: 48h."""
+        if not self.enabled:
+            return None
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT sos_data, weighted_metrics, fetched_at FROM cache_team_profile WHERE team_id = %s AND league_id = %s",
+                    (team_id, league_id)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[2]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_hours = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 3600
+                    if age_hours < 48:
+                        return {'sos_data': row[0], 'weighted_metrics': row[1], 'age_hours': age_hours}
+                    print(f"⏰ DB CACHE EXPIRADO: team_profile {team_id} ({age_hours:.1f}h > 48h)")
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_team_profile get erro: {e}")
+            return None
+
+    def set_cache_team_profile(self, team_id: int, league_id: int, sos_data: dict, weighted_metrics: dict) -> None:
+        """Salva perfil computado de time (SoS + Weighted Metrics) no DB."""
+        if not self.enabled:
+            return
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_team_profile (team_id, league_id, sos_data, weighted_metrics, fetched_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (team_id, league_id) DO UPDATE
+                        SET sos_data = EXCLUDED.sos_data,
+                            weighted_metrics = EXCLUDED.weighted_metrics,
+                            fetched_at = NOW()
+                    """,
+                    (team_id, league_id, Json(sos_data), Json(weighted_metrics))
+                )
+                conn.commit()
+                cur.close()
+                print(f"💾 DB CACHE SAVE: team_profile {team_id} liga {league_id}")
+        except Exception as e:
+            print(f"⚠️ DB cache_team_profile set erro: {e}")
 
     def get_cache_ultimos_jogos(self, team_id: int, limite: int) -> Optional[list]:
         """Busca últimos jogos de um time no DB. TTL: 24 horas. Retorna None em caso de miss."""
