@@ -428,6 +428,27 @@ def _extrair_stats_comparativas(stats_casa: Optional[dict], stats_fora: Optional
         if v_f is not None:
             resultado[f"{campo}_fora"] = round(float(v_f), 2)
 
+    # BTTS% e Over 2.5 (frequências das últimas partidas)
+    for campo_src, campo_dst in [
+        ("btts_percent", "btts_percent"),
+        ("btts_freq", "btts_percent"),
+        ("over25_percent", "over25_percent"),
+        ("over25_freq", "over25_percent"),
+        ("over25_rate", "over25_percent"),
+    ]:
+        v_c = (stats_casa or {}).get(campo_src)
+        v_f = (stats_fora or {}).get(campo_src)
+        if v_c is not None and f"{campo_dst}_casa" not in resultado:
+            try:
+                resultado[f"{campo_dst}_casa"] = round(float(v_c), 1)
+            except (TypeError, ValueError):
+                pass
+        if v_f is not None and f"{campo_dst}_fora" not in resultado:
+            try:
+                resultado[f"{campo_dst}_fora"] = round(float(v_f), 1)
+            except (TypeError, ValueError):
+                pass
+
     return resultado
 
 
@@ -448,12 +469,16 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         ("Handicap Europeu", "analise_handicap_europeu"),
         ("Primeiro a Marcar", "analise_primeiro_marcador"),
     ]
+    mercados_vetados = []
     for nome, chave in mapa:
         dados = analise_db.get(chave)
         if dados:
             estruturado = _estruturar_palpites(nome, dados)
             if estruturado:
                 mercados.append(estruturado)
+            else:
+                motivo = dados.get("motivo_veto") or dados.get("justificativa_veto") or dados.get("razao") or "Dados insuficientes ou confiança abaixo do limiar"
+                mercados_vetados.append({"mercado": nome, "motivo": motivo})
 
     total_palpites = sum(len(m["palpites"]) for m in mercados)
     melhor_confianca = 0.0
@@ -574,6 +599,7 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "h2h_summary": h2h_summary,
         "stats_comparativas": stats_comparativas,
         "classificacao": classificacao[:20] if isinstance(classificacao, list) else [],
+        "mercados_vetados": mercados_vetados,
     }
 
 
@@ -711,6 +737,7 @@ async def jogos_hoje():
         for jogo in jogos_raw:
             fid = jogo.get("fixture", {}).get("id")
             tem_analise = False
+            cached = None
             if fid:
                 # Extrair data do kickoff para TTL inteligente
                 data_utc_str = jogo.get("fixture", {}).get("date", "")

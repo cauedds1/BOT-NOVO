@@ -110,6 +110,34 @@ function MatchCard({ jogo, compact = false }) {
   const isLast30 = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
   const topPicks = jogo.best_palpites?.slice(0, 2) || []
 
+  if (isProcessing) {
+    return (
+      <div className="card skeleton-card" style={{ padding: compact ? '10px 12px' : '12px 14px', marginBottom: 6 }}>
+        <div className="flex items-center gap-3">
+          <div style={{ width: 44, flexShrink: 0 }}>
+            <div style={{ height: 14, borderRadius: 4, background: 'rgba(99,102,241,0.12)', marginBottom: 4 }} />
+            <div style={{ height: 9, borderRadius: 3, background: 'rgba(99,102,241,0.08)', width: 32 }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', flexShrink: 0 }} />
+            <div style={{ height: 13, borderRadius: 4, background: 'rgba(99,102,241,0.12)', flex: 1, maxWidth: 90 }} />
+            <div style={{ height: 11, width: 18, borderRadius: 3, background: 'rgba(255,255,255,0.04)' }} />
+            <div style={{ height: 13, borderRadius: 4, background: 'rgba(99,102,241,0.12)', flex: 1, maxWidth: 90 }} />
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(99,102,241,0.1)', flexShrink: 0 }} />
+          </div>
+          <div className="flex items-center gap-3" style={{ marginLeft: 'auto' }}>
+            <div style={{ height: 12, width: 70, borderRadius: 4, background: 'rgba(99,102,241,0.1)' }} />
+            <div style={{ height: 22, width: 22, borderRadius: 6, background: 'rgba(99,102,241,0.12)' }} />
+          </div>
+        </div>
+        <div style={{ marginTop: 6, fontSize: 10, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div className="spinner" style={{ width: 10, height: 10, borderWidth: 2, flexShrink: 0 }} />
+          Analisando...
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Link
       to={isReady ? `/jogo/${jogo.fixture_id}` : '#'}

@@ -312,6 +312,8 @@ function StatsComparativas({ stats, timeCasa, timeFora }) {
   const rows = [
     { key: 'media_gols_marcados', label: 'Gols Marcados (méd.)' },
     { key: 'media_gols_sofridos', label: 'Gols Sofridos (méd.)' },
+    { key: 'btts_percent', label: 'BTTS % (recente)' },
+    { key: 'over25_percent', label: 'Over 2.5 % (recente)' },
     { key: 'media_cantos', label: 'Escanteios (méd.)' },
     { key: 'media_finalizacoes', label: 'Finalizações (méd.)' },
     { key: 'avg_shots', label: 'Chutes (méd.)' },
@@ -1074,21 +1076,45 @@ export default function MatchDetail() {
 
       {/* ── CONTEÚDO POR TAB ──────────────────────────────────────────── */}
       {activeTab === 'palpites' && (
-        totalPalpitesVisiveis === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
-            <p style={{ fontSize: 14 }}>Nenhum palpite com confiança ≥ {minConfianca.toFixed(1)}</p>
-            <button onClick={() => { setMinConfianca(0); setFiltroMercado('Todos') }} style={{
-              marginTop: 12, fontSize: 12, padding: '6px 16px', borderRadius: 8,
-              background: 'rgba(99,102,241,0.12)', color: '#818cf8',
-              border: '1px solid rgba(99,102,241,0.25)', cursor: 'pointer',
-            }}>
-              Limpar filtros
-            </button>
-          </div>
-        ) : (
-          mercadosFiltrados.map((m, i) => <MarketCard key={i} mercado={m} minConfianca={minConfianca} />)
-        )
+        <>
+          {totalPalpitesVisiveis === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
+              <p style={{ fontSize: 14 }}>Nenhum palpite com confiança ≥ {minConfianca.toFixed(1)}</p>
+              <button onClick={() => { setMinConfianca(0); setFiltroMercado('Todos') }} style={{
+                marginTop: 12, fontSize: 12, padding: '6px 16px', borderRadius: 8,
+                background: 'rgba(99,102,241,0.12)', color: '#818cf8',
+                border: '1px solid rgba(99,102,241,0.25)', cursor: 'pointer',
+              }}>
+                Limpar filtros
+              </button>
+            </div>
+          ) : (
+            mercadosFiltrados.map((m, i) => <MarketCard key={i} mercado={m} minConfianca={minConfianca} />)
+          )}
+          {analise.mercados_vetados?.length > 0 && (
+            <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.12)', borderRadius: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 10 }}>
+                ⛔ Mercados sem palpite (baixa confiança / dados insuficientes)
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {analise.mercados_vetados.map((v, i) => (
+                  <div key={i} title={v.motivo} style={{
+                    fontSize: 11, padding: '3px 10px', borderRadius: 6,
+                    background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                    color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6, cursor: 'default',
+                  }}>
+                    <span style={{ color: '#64748b' }}>⛔</span>
+                    <span>{v.mercado}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: '#475569', marginTop: 8, marginBottom: 0 }}>
+                Passe o mouse sobre cada mercado para ver o motivo.
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {activeTab === 'analise' && (
