@@ -1681,12 +1681,33 @@ async def generate_match_analysis(jogo):
 
     print("📅 TASK 2: Analisando Strength of Schedule (SoS) + Weighted Metrics...")
 
+    def _last_game_moment_refresh(moment: int, recent_fixtures: list, team_id: int, team_name: str) -> int:
+        """Atualiza momento com base no ÚLTIMO jogo finalizado (usado apenas em MODO LEVE)."""
+        if not recent_fixtures:
+            return moment
+        last = recent_fixtures[0]
+        teams_data = last.get('teams', {})
+        is_home = (teams_data.get('home', {}).get('id') == team_id)
+        goals_for = int(last.get('home_goals') or 0) if is_home else int(last.get('away_goals') or 0)
+        goals_against = int(last.get('away_goals') or 0) if is_home else int(last.get('home_goals') or 0)
+        if goals_for > goals_against:
+            new_moment = min(100, moment + 5)
+            print(f"    📈 [{team_name}] Último jogo: VITÓRIA ({goals_for}-{goals_against}) → Momento +5 → {new_moment}")
+        elif goals_for < goals_against:
+            new_moment = max(0, moment - 5)
+            print(f"    📉 [{team_name}] Último jogo: DERROTA ({goals_for}-{goals_against}) → Momento -5 → {new_moment}")
+        else:
+            new_moment = moment
+            print(f"    ➡️ [{team_name}] Último jogo: EMPATE ({goals_for}-{goals_against}) → Momento inalterado ({moment})")
+        return new_moment
+
     # ── TIME DA CASA ─────────────────────────────────────────────────────────
     _profile_home = _load_team_profile_from_db(home_team_id, league_id) if not _is_live else None
     if _profile_home:
-        print(f"  ⚡ MODO LEVE: {home_team_name} (dados há {_profile_home['age_hours']:.1f}h) — usando perfil em cache")
+        print(f"  ⚡ MODO LEVE: {home_team_name} (dados há {_profile_home['age_hours']:.1f}h) — buscando só último jogo")
         sos_home = _profile_home['sos_data']
         weighted_home = _profile_home['weighted_metrics']
+        moment_home = _last_game_moment_refresh(moment_home, _home_recent_fixtures_raw, home_team_id, home_team_name)
     else:
         print(f"  🔍 MODO COMPLETO: {home_team_name} ({'ao vivo' if _is_live else 'novo time'}) — análise profunda ativada")
         sos_home = await _analyze_strength_of_schedule(home_team_id, league_id)
@@ -1697,9 +1718,10 @@ async def generate_match_analysis(jogo):
     # ── TIME VISITANTE ────────────────────────────────────────────────────────
     _profile_away = _load_team_profile_from_db(away_team_id, league_id) if not _is_live else None
     if _profile_away:
-        print(f"  ⚡ MODO LEVE: {away_team_name} (dados há {_profile_away['age_hours']:.1f}h) — usando perfil em cache")
+        print(f"  ⚡ MODO LEVE: {away_team_name} (dados há {_profile_away['age_hours']:.1f}h) — buscando só último jogo")
         sos_away = _profile_away['sos_data']
         weighted_away = _profile_away['weighted_metrics']
+        moment_away = _last_game_moment_refresh(moment_away, _away_recent_fixtures_raw, away_team_id, away_team_name)
     else:
         print(f"  🔍 MODO COMPLETO: {away_team_name} ({'ao vivo' if _is_live else 'novo time'}) — análise profunda ativada")
         sos_away = await _analyze_strength_of_schedule(away_team_id, league_id)
