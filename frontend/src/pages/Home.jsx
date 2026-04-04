@@ -5,6 +5,21 @@ const AUTO_REFRESH_SECS = 600
 
 const MERCADOS_DISPONIVEIS = ['Gols', 'Resultado', 'BTTS', 'Cantos', 'Cartões', 'Handicaps', 'Dupla Chance', 'Placar Exato']
 
+const MERCADO_EMOJI = {
+  'Gols': '⚽',
+  'Resultado': '🏁',
+  'BTTS': '🎲',
+  'Cantos': '🚩',
+  'Cartões': '🟨',
+  'Finalizações': '🎯',
+  'Handicaps': '⚖️',
+  'Dupla Chance': '🔀',
+  'Gols Ambos Tempos': '⏱️',
+  'Placar Exato': '🔢',
+  'Handicap Europeu': '🏷️',
+  'Primeiro a Marcar': '🥇',
+}
+
 function useCountdown(dataIso) {
   const [label, setLabel] = useState('')
   const [minsLeft, setMinsLeft] = useState(null)
@@ -200,12 +215,9 @@ function MatchCard({ jogo, compact = false }) {
                     background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.18)',
                     borderRadius: 6, padding: '2px 6px',
                   }}>
-                    <span style={{ fontSize: 9, color: '#64748b' }}>{p.mercado}:</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308', whiteSpace: 'nowrap', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.tipo}
-                    </span>
+                    <span style={{ fontSize: 11 }}>{MERCADO_EMOJI[p.mercado] || '📊'}</span>
                     {p.probabilidade != null && (
-                      <span style={{ fontSize: 9, color: '#818cf8' }}>{Number(p.probabilidade).toFixed(0)}%</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308' }}>{Number(p.probabilidade).toFixed(0)}%</span>
                     )}
                   </div>
                 ))}
@@ -385,7 +397,7 @@ function FeaturedMatchCard({ jogo }) {
                 background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)',
                 borderRadius: 8, padding: '4px 9px',
               }}>
-                <span style={{ fontSize: 10, color: '#64748b' }}>{p.mercado}:</span>
+                <span style={{ fontSize: 13 }}>{MERCADO_EMOJI[p.mercado] || '📊'}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308' }}>{p.tipo}</span>
                 {p.probabilidade != null && (
                   <span style={{ fontSize: 10, color: '#818cf8', fontWeight: 600 }}>{Number(p.probabilidade).toFixed(0)}%</span>

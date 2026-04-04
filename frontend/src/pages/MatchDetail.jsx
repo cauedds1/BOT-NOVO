@@ -329,6 +329,7 @@ function StatsComparativas({ stats, timeCasa, timeFora }) {
     { key: 'btts_percent', label: 'BTTS % (recente)' },
     { key: 'over25_percent', label: 'Over 2.5 % (recente)' },
     { key: 'media_cantos', label: 'Escanteios (méd.)' },
+    { key: 'media_cartoes', label: 'Cartões (méd.)' },
     { key: 'media_finalizacoes', label: 'Finalizações (méd.)' },
     { key: 'avg_shots', label: 'Chutes (méd.)' },
     { key: 'posse_media', label: 'Posse de Bola (%)' },
@@ -490,24 +491,37 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
         <EscalacaoSection mandantes={mandantes} visitantes={visitantes} timeCasa={timeCasa} timeFora={timeFora} lineupConfirmado={lineupConfirmado} />
       )}
 
-      {aba === 'stats' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-          <div className="card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
-            {mandantes.length === 0
-              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados históricos de jogadores casa</p>
-              : mandantes.map((r, i) => <PlayerStatRow key={i} record={r} color="#818cf8" />)
-            }
+      {aba === 'stats' && (() => {
+        const titularesCasaStats = mandantes.filter(r => r.foi_titular)
+        const titularesForaStats = visitantes.filter(r => r.foi_titular)
+        if (titularesCasaStats.length === 0 && titularesForaStats.length === 0) {
+          return (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>👕</div>
+              <p style={{ fontSize: 14 }}>Aguardando escalação confirmada para exibir estatísticas dos titulares.</p>
+              <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>As estatísticas individuais aparecem após a escalação ser confirmada pela API.</p>
+            </div>
+          )
+        }
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
+              {titularesCasaStats.length === 0
+                ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem titulares confirmados</p>
+                : titularesCasaStats.map((r, i) => <PlayerStatRow key={i} record={r} color="#818cf8" />)
+              }
+            </div>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 10 }}>✈️ {timeFora}</div>
+              {titularesForaStats.length === 0
+                ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem titulares confirmados</p>
+                : titularesForaStats.map((r, i) => <PlayerStatRow key={i} record={r} color="#34d399" />)
+              }
+            </div>
           </div>
-          <div className="card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 10 }}>✈️ {timeFora}</div>
-            {visitantes.length === 0
-              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados históricos de jogadores fora</p>
-              : visitantes.map((r, i) => <PlayerStatRow key={i} record={r} color="#34d399" />)
-            }
-          </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -1037,6 +1051,11 @@ export default function MatchDetail() {
             <TeamLogo logo={jogoInfo?.time_casa?.logo} name={analise.time_casa} />
             <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120 }}>{analise.time_casa}</span>
             {analise.pos_casa && <span style={{ fontSize: 11, color: '#64748b' }}>#{analise.pos_casa} na tabela</span>}
+            {analise.qsc_home != null && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 5, padding: '1px 7px' }}>
+                QSC {Number(analise.qsc_home).toFixed(0)}
+              </span>
+            )}
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.1em' }}>VS</div>
@@ -1051,6 +1070,11 @@ export default function MatchDetail() {
             <TeamLogo logo={jogoInfo?.time_fora?.logo} name={analise.time_fora} />
             <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120 }}>{analise.time_fora}</span>
             {analise.pos_fora && <span style={{ fontSize: 11, color: '#64748b' }}>#{analise.pos_fora} na tabela</span>}
+            {analise.qsc_away != null && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 5, padding: '1px 7px' }}>
+                QSC {Number(analise.qsc_away).toFixed(0)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1089,13 +1113,6 @@ export default function MatchDetail() {
               <div style={statLabelStyle}>Top Pick</div>
               <div style={{ ...statValueStyle, fontSize: 14 }}>{topPick.tipo}</div>
               <div style={statSubStyle}>{topMercado?.mercado} · {topPick.confianca?.toFixed(1)}</div>
-            </div>
-          )}
-          {analise.qsc_home !== undefined && analise.qsc_home !== null && (
-            <div style={statBoxStyle}>
-              <div style={statLabelStyle}>QSC</div>
-              <div style={statValueStyle}>{Number(analise.qsc_home).toFixed(1)} × {Number(analise.qsc_away || 0).toFixed(1)}</div>
-              <div style={statSubStyle}>qualidade das equipes</div>
             </div>
           )}
         </div>
