@@ -272,9 +272,13 @@ def _linha_label(linha: float, team: str) -> str:
     return f"AH {team} {sign}{linha:g}"
 
 
-def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None, pos_casa="N/A", pos_fora="N/A", script_name=None):
+def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None, pos_casa="N/A", pos_fora="N/A", script_name=None, analysis_packet=None):
     """
     Analisa handicaps asiáticos usando probabilidades Poisson reais com suporte a linhas fracionadas.
+
+    TASK 7: Quando analysis_packet está disponível, usa lambdas já ajustados por desfalques
+    confirmados do Master Analyzer, garantindo que o Handicap Asiático reflita ausências
+    de jogadores-chave (e.g., artilheiro suspenso → menor superioridade de lambda).
 
     Args:
         stats_casa: Estatísticas do time da casa
@@ -284,6 +288,7 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
         pos_casa: Posição do time da casa
         pos_fora: Posição do time visitante
         script_name: Nome do script tático
+        analysis_packet: Pacote completo do Master Analyzer (com lambdas ajustados)
 
     Returns:
         dict: Análise de handicaps com palpites ou None
@@ -291,7 +296,33 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
     if not stats_casa or not stats_fora:
         return None
 
-    # 1. Calcular lambdas para Poisson
+    lambda_adj_source = "estatísticas brutas"
+
+    # TASK 7: Usar lambdas ajustados por desfalques quando disponíveis no analysis_packet
+    if analysis_packet:
+        lambda_data = analysis_packet.get('calculated_probabilities', {}).get('lambda_goals', {})
+        lambda_home_adj = lambda_data.get('lambda_home')
+        lambda_away_adj = lambda_data.get('lambda_away')
+        adj_meta = lambda_data.get('lambda_adjustments', {})
+        if lambda_home_adj and lambda_away_adj and lambda_home_adj > 0 and lambda_away_adj > 0:
+            lambda_home = max(0.3, min(4.0, lambda_home_adj))
+            lambda_away = max(0.3, min(4.0, lambda_away_adj))
+            if adj_meta.get('adjusted'):
+                lambda_adj_source = "master (ajustado por desfalques)"
+            else:
+                lambda_adj_source = "master (sem ajuste)"
+            print(f"\n  🔗 HANDICAP: Usando lambdas do Master ({lambda_home:.2f}/{lambda_away:.2f}) — {lambda_adj_source}")
+
+            superioridade = calcular_superioridade(stats_casa, stats_fora, pos_casa, pos_fora)
+            dist = calcular_distribuicao_margem(lambda_home, lambda_away)
+            print(f"  🎯 ASIAN HANDICAP — λ_casa={lambda_home:.2f} λ_fora={lambda_away:.2f} sup={superioridade:+.1f}")
+
+            return _build_handicap_palpites(
+                odds, script_name, lambda_home, lambda_away, superioridade, dist,
+                adj_notes=adj_meta.get('notes', []) if adj_meta.get('adjusted') else []
+            )
+
+    # Fallback: cálculo clássico via estatísticas brutas
     lambda_home = stats_casa['casa'].get('gols_marcados', 1.2)
     lambda_away = stats_fora['fora'].get('gols_marcados', 1.0)
 
@@ -310,10 +341,15 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
 
     print(f"\n  🎯 ASIAN HANDICAP — λ_casa={lambda_home:.2f} λ_fora={lambda_away:.2f} sup={superioridade:+.1f}")
 
-    palpites = []
+    return _build_handicap_palpites(odds, script_name, lambda_home, lambda_away, superioridade, dist)
 
-    # 4. Definir linhas a analisar baseadas na superioridade
-    # Formato: (odd_key, linha_handicap, team_label, min_conf)
+
+def _build_handicap_palpites(odds, script_name, lambda_home, lambda_away, superioridade, dist, adj_notes=None):
+    """
+    Constrói a lista de palpites de handicap asiático a partir dos lambdas e distribuição Poisson.
+    Reutilizado tanto pelo caminho com lambdas ajustados (Task 7) quanto pelo fallback clássico.
+    """
+    palpites = []
     linhas_candidatas = []
 
     if superioridade >= 5.0:
@@ -338,7 +374,6 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
             ("handicap_asia_casa_0.0",    0.0,  "Casa", 5.0),
         ]
     elif superioridade >= -1.0:
-        # Equilibrado — verificar ambos os lados
         linhas_candidatas = [
             ("handicap_asia_casa_0.0",    0.0,  "Casa", 5.0),
             ("handicap_asia_casa_+0.25", +0.25, "Casa", 5.0),
@@ -361,19 +396,13 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
     for odd_key, linha, team, min_conf in linhas_candidatas:
         odd_value = odds.get(odd_key) if odds else None
 
-        # Calcular probabilidade via Poisson
         if team == "Casa":
             prob_pct = prob_asian_handicap_casa(linha, dist)
         else:
-            # Para Fora: inverter a perspectiva
             prob_pct = prob_asian_handicap_casa(-linha, _inverter_dist(dist))
 
         prob_pct = max(1.0, min(99.0, prob_pct))
-
-        # Label da aposta
         bet_label = _linha_label(linha, team)
-
-        # Detectar value bet
         is_value, edge_pct, prob_implicita = detect_value_bet(prob_pct, odd_value) if odd_value else (False, 0.0, 0.0)
 
         conf_final, breakdown = calculate_final_confidence(
@@ -387,7 +416,7 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
               f"{' ★VALUE edge=+'+str(edge_pct)+'%' if is_value else ''})")
 
         if conf_final >= min_conf:
-            palpite = {
+            palpites.append({
                 "tipo": bet_label,
                 "confianca": conf_final,
                 "odd": odd_value,
@@ -402,25 +431,22 @@ def analisar_mercado_handicaps(stats_casa, stats_fora, odds, classificacao=None,
                 "breakdown": breakdown,
                 "confidence_breakdown": breakdown,
                 "superioridade": superioridade,
-            }
-            palpites.append(palpite)
+            })
 
-    # Limitar a 3 palpites — os de maior confiança
     palpites.sort(key=lambda x: (x.get('is_value', False), x['confianca']), reverse=True)
     palpites = palpites[:3]
-
     print(f"  ✅ ASIAN HANDICAP: {len(palpites)} palpites gerados")
 
     if palpites:
         value_count = sum(1 for p in palpites if p.get('is_value'))
-        gols_casa_marcados = stats_casa['casa'].get('gols_marcados', 0)
-        gols_fora_marcados = stats_fora['fora'].get('gols_marcados', 0)
-
+        adj_line = ""
+        if adj_notes:
+            adj_line = "   - ⚠️ " + " | ".join(adj_notes[:2]) + "\n"
         suporte = (
             f"   - <b>λ Casa:</b> {lambda_home:.2f} | <b>λ Fora:</b> {lambda_away:.2f}\n"
             f"   - <b>Superioridade Casa:</b> {superioridade:+.1f}/10\n"
-            f"   - <b>Gols Casa:</b> {gols_casa_marcados:.1f}/jogo | <b>Gols Fora:</b> {gols_fora_marcados:.1f}/jogo\n"
             f"   - <b>Value bets detectados:</b> {value_count}/{len(palpites)}\n"
+            f"{adj_line}"
             f"   - <i>💡 Probabilidades calculadas via distribuição de Poisson com regras AH reais</i>\n"
         )
         return {"mercado": "Handicaps", "palpites": palpites, "dados_suporte": suporte}

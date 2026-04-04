@@ -694,6 +694,8 @@ async def buscar_jogos_do_dia():
                 if data := response.json():
                     # ⚡ Bail-out rápido: plano gratuito não tem acesso
                     erros = data.get('errors', {})
+                    if not isinstance(erros, dict):
+                        erros = {}
                     if erros.get('plan') or erros.get('season'):
                         print(f"⛔ [PLANO BLOQUEADO] Erro de plano detectado na primeira liga: {erros}")
                         print(f"   → Pulando todas as {len(LIGAS_DE_INTERESSE)} ligas — modo DEMO será ativado")
@@ -1782,3 +1784,72 @@ async def buscar_players_stats_jogo(fixture_id: int):
     except Exception as e:
         print(f"  ⚠️ [buscar_players_stats_jogo] fixture #{fixture_id}: {e}")
         return []
+
+
+async def buscar_contribuicao_gols_jogador(player_name: str, team_id: int, league_id: int, season: int = None) -> dict:
+    """
+    Busca contribuição histórica de gols+assistências de um jogador na temporada atual.
+    Usado por TASK 7 para ponderar ajuste de lambda por desfalques confirmados.
+
+    Endpoint: GET /players?search={name}&league={id}&season={ano}
+
+    Returns:
+        dict com goal_contribution_pct (float 0-1) e raw stats, ou {} em caso de erro.
+    """
+    import datetime
+    if season is None:
+        season = datetime.date.today().year
+        if datetime.date.today().month < 7:
+            season -= 1  # temporadas europeias: 2024/25 → season=2024
+
+    cache_key = f"player_contrib_{team_id}_{player_name[:10].replace(' ', '_')}_{league_id}_{season}"
+    cached = cache_manager.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        await asyncio.sleep(1.2)
+        response = await api_request_with_retry(
+            "GET",
+            API_URL + "players",
+            params={"search": player_name, "league": str(league_id), "season": str(season)},
+        )
+        if response.status_code in (403, 429):
+            cache_manager.set(cache_key, {}, expiration_minutes=60)
+            return {}
+        response.raise_for_status()
+        data = response.json().get("response", [])
+
+        # Filtrar pelo time correto
+        for entry in data:
+            p = entry.get("player", {})
+            stats_list = entry.get("statistics", [])
+            for s in stats_list:
+                s_team_id = s.get("team", {}).get("id")
+                if s_team_id != team_id:
+                    continue
+                goals_obj = s.get("goals", {}) or {}
+                games_obj = s.get("games", {}) or {}
+                goals = int(goals_obj.get("total") or 0)
+                assists = int(goals_obj.get("assists") or 0)
+                apps = int(games_obj.get("appearences") or 0)
+                minutes = int(games_obj.get("minutes") or 0)
+                result = {
+                    "goals": goals,
+                    "assists": assists,
+                    "apps": apps,
+                    "minutes": minutes,
+                    "goals_per_game": goals / apps if apps > 0 else 0.0,
+                    "assists_per_game": assists / apps if apps > 0 else 0.0,
+                    "goal_contribution_pct": None,  # calulado no master_analyzer após somar equipe
+                }
+                cache_manager.set(cache_key, result, expiration_minutes=120)
+                return result
+
+        cache_manager.set(cache_key, {}, expiration_minutes=60)
+        return {}
+
+    except Exception as e:
+        print(f"  ⚠️ [buscar_contribuicao_gols_jogador] {player_name}: {e}")
+        cache_manager.set(cache_key, {}, expiration_minutes=30)
+        return {}

@@ -7,7 +7,8 @@ from api_client import (
     buscar_estatisticas_gerais_time,
     buscar_estatisticas_jogo,
     buscar_h2h,
-    buscar_lesoes_jogo
+    buscar_lesoes_jogo,
+    buscar_contribuicao_gols_jogador,
 )
 
 
@@ -217,53 +218,58 @@ def _get_injury_severity_label(injuries):
     return "none"
 
 
-def _calcular_ajuste_lambda_por_desfalques(injuries: list) -> tuple:
+def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = None) -> tuple:
     """
-    TASK 7: Calcula fatores de ajuste do lambda baseados nos desfalques confirmados.
+    TASK 7: Calcula fatores de ajuste do lambda baseados nos desfalques CONFIRMADOS.
 
-    Para cada ausência, infere se o jogador é ofensivo ou defensivo e acumula o peso
-    conforme _injury_weight(). Aplica um fator multiplicativo diretamente sobre o lambda
-    de ataque/defesa do time — assim o impacto propaga-se em cascata para TODOS os
-    mercados (Over/Under, BTTS, Placar Exato, Handicaps, etc.).
+    Só processa ausências com _injury_weight() >= 1.0 (suspensões, lesões graves
+    confirmadas), garantindo que ausências questionáveis não alterem o modelo.
 
-    Pesos por tipo de ausência (de _injury_weight):
-      Suspenso / "Missing Fixture" = 2.0
-      Lesão grave (ACL, hamstring…) = 1.0
-      Questionável / razão leve    = 0.5
+    Quando disponível, usa 'goal_contribution_pct' (fração dos gols da equipe que
+    o jogador contribuiu na temporada) para dimensionar o impacto no lambda — derivado
+    de dados reais via /players. Caso contrário, recorre a heurística por posição.
 
-    Fórmulas:
-      attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)   → cap em -25%
-      defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)   → cap em +15%
+    Método com contribuição real:
+      attack_reduction  = sum(goal_contribution_pct * w / 2.0)  capped at 25%
+      defense_reduction = sum(defensive_contribution_pct * w / 2.0) capped at 15%
+
+    Método heurístico por posição:
+      attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)   → cap -25%
+      defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)   → cap +15%
 
     Args:
-        injuries: lista de dicts {name, type, reason, team_id, position}
+        injuries: lista de dicts {name, type, reason, team_id, position,
+                                  goal_contribution_pct (optional)}
+        lambda_pre: lambda do time antes do ajuste (para exibir no note "X.xx → Y.yy")
 
     Returns:
         tuple: (attack_factor, defense_factor, notes)
-          attack_factor  — multiplicador < 1.0 para o lambda de ataque do time
-          defense_factor — multiplicador > 1.0 para o lambda do adversário (defesa fraca)
-          notes          — lista de strings descrevendo ajustes (para justificativa)
     """
     if not injuries:
         return 1.0, 1.0, []
 
-    _GK_KW      = frozenset({'goalkeeper', 'keeper', 'portero', 'goleiro', 'gk'})
-    _FWD_KW     = frozenset({'forward', 'striker', 'attacker', 'winger', 'atacante',
-                             'centroavante', 'ponta', 'delantero'})
-    _DEF_KW     = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
-                             'back', 'defensor', 'zagueiro', 'lateral'})
+    _GK_KW  = frozenset({'goalkeeper', 'keeper', 'portero', 'goleiro', 'gk'})
+    _FWD_KW = frozenset({'forward', 'striker', 'attacker', 'winger', 'atacante',
+                         'centroavante', 'ponta', 'delantero'})
+    _DEF_KW = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
+                         'back', 'defensor', 'zagueiro', 'lateral'})
 
     offensive_weight = 0.0
     defensive_weight = 0.0
     offensive_names  = []
     defensive_names  = []
 
+    attack_reduction_sum  = 0.0
+    defense_reduction_sum = 0.0
+    used_real_contribution = False
+
     for p in injuries:
         w = _injury_weight(p)
-        # Só considerar ausências confirmadas (peso ≥ 1.0) para ajuste de lambda
+        # Só ajustar lambda para ausências confirmadas (suspensão/lesão grave)
         if w < 1.0:
             continue
 
+        name = p.get('name', '?')
         combined = (
             (p.get('name') or '') + ' ' +
             (p.get('reason') or '') + ' ' +
@@ -273,32 +279,62 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list) -> tuple:
         is_fwd = any(kw in combined for kw in _FWD_KW)
         is_def = any(kw in combined for kw in _GK_KW | _DEF_KW)
 
-        if is_fwd and not is_def:
-            offensive_weight += w
-            offensive_names.append(p.get('name', '?'))
-        elif is_def and not is_fwd:
-            defensive_weight += w
-            defensive_names.append(p.get('name', '?'))
-        else:
-            # Meio-campo / posição não identificada: impacto dividido 50/50
-            offensive_weight += w * 0.5
-            defensive_weight += w * 0.5
+        # Verificar se há dados reais de contribuição de gols
+        contrib_pct = p.get('goal_contribution_pct')
 
-    attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)
-    defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)
+        if contrib_pct is not None and contrib_pct > 0:
+            used_real_contribution = True
+            if is_fwd and not is_def:
+                attack_reduction_sum += contrib_pct * w / 2.0
+                offensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
+            elif is_def and not is_fwd:
+                defense_reduction_sum += contrib_pct * w / 2.0
+                defensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
+            else:
+                attack_reduction_sum += contrib_pct * w / 4.0
+                defense_reduction_sum += contrib_pct * w / 4.0
+        else:
+            # Heurística por posição — fallback quando sem dados da API
+            if is_fwd and not is_def:
+                offensive_weight += w
+                offensive_names.append(name)
+            elif is_def and not is_fwd:
+                defensive_weight += w
+                defensive_names.append(name)
+            else:
+                offensive_weight += w * 0.5
+                defensive_weight += w * 0.5
+
+    if used_real_contribution:
+        # Derivado de contribuição real: redução direta proporcional (cap 25%/15%)
+        attack_factor  = max(0.75, 1.0 - min(attack_reduction_sum, 0.25))
+        defense_factor = min(1.15, 1.0 + min(defense_reduction_sum, 0.15))
+    else:
+        # Fallback heurístico
+        attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)
+        defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)
 
     notes = []
-    if offensive_weight >= 1.0:
+    if attack_factor < 1.0:
         reduction_pct = round((1.0 - attack_factor) * 100, 1)
-        notes.append(
-            f"Desfalques ofensivos ({', '.join(offensive_names) if offensive_names else 'não-identificados'}) "
-            f"→ λ ataque -{reduction_pct}%"
-        )
-    if defensive_weight >= 1.0:
+        source = "contribuição real" if used_real_contribution else "posição estimada"
+        players_str = ", ".join(offensive_names) if offensive_names else "jogadores ofensivos"
+        if lambda_pre is not None:
+            lambda_post = round(lambda_pre * attack_factor, 2)
+            notes.append(
+                f"{players_str} ausente(s) → λ ataque de {lambda_pre:.2f} para {lambda_post:.2f} "
+                f"(-{reduction_pct}% via {source})"
+            )
+        else:
+            notes.append(
+                f"{players_str} ausente(s) → λ ataque -{reduction_pct}% ({source})"
+            )
+    if defense_factor > 1.0:
         increase_pct = round((defense_factor - 1.0) * 100, 1)
+        source = "contribuição real" if used_real_contribution else "posição estimada"
+        players_str = ", ".join(defensive_names) if defensive_names else "jogadores defensivos"
         notes.append(
-            f"Desfalques defensivos ({', '.join(defensive_names) if defensive_names else 'não-identificados'}) "
-            f"→ adversário +{increase_pct}% de gols esperados"
+            f"{players_str} ausente(s) → adversário +{increase_pct}% gols esperados ({source})"
         )
 
     return attack_factor, defense_factor, notes
@@ -1492,6 +1528,39 @@ async def generate_match_analysis(jogo):
     home_injuries = [p for p in injuries_raw if p.get('team_id') == home_team_id]
     away_injuries = [p for p in injuries_raw if p.get('team_id') == away_team_id]
 
+    # TASK 7: Enriquecer ausências confirmadas com contribuição real de gols via /players
+    # Só busca para ausências com peso >= 1.0 (suspensões/lesões graves) para não desperdiçar rate limits
+    _home_total_goals_season = float(
+        home_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0) or 0
+    ) * float(home_stats.get('fixtures', {}).get('played', {}).get('total', 30) or 30)
+    _away_total_goals_season = float(
+        away_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0) or 0
+    ) * float(away_stats.get('fixtures', {}).get('played', {}).get('total', 30) or 30)
+
+    async def _enrich_injuries_with_contribution(injuries, team_id, total_goals):
+        """Busca gols da temporada para jogadores ausentes confirmados e calcula goal_contribution_pct."""
+        if not injuries or total_goals <= 0:
+            return injuries
+        enriched = []
+        for p in injuries:
+            p = dict(p)  # cópia para não mutar original
+            if _injury_weight(p) >= 1.0 and not p.get('goal_contribution_pct'):
+                player_stats = await buscar_contribuicao_gols_jogador(
+                    p['name'], team_id, league_id
+                )
+                if player_stats:
+                    player_goals_assists = player_stats.get('goals', 0) + player_stats.get('assists', 0)
+                    p['goal_contribution_pct'] = min(0.5, player_goals_assists / total_goals) if total_goals > 0 else 0.0
+                    p['player_season_goals'] = player_stats.get('goals', 0)
+                    p['player_season_assists'] = player_stats.get('assists', 0)
+                    if player_stats.get('goals', 0) > 0 or player_stats.get('assists', 0) > 0:
+                        print(f"  📊 [CONTRIB] {p['name']}: {player_stats.get('goals',0)}G + {player_stats.get('assists',0)}A → {p['goal_contribution_pct']*100:.0f}% da equipe")
+            enriched.append(p)
+        return enriched
+
+    home_injuries = await _enrich_injuries_with_contribution(home_injuries, home_team_id, _home_total_goals_season)
+    away_injuries = await _enrich_injuries_with_contribution(away_injuries, away_team_id, _away_total_goals_season)
+
     injury_penalty_home = _calculate_injury_impact(home_injuries)
     injury_penalty_away = _calculate_injury_impact(away_injuries)
 
@@ -1622,8 +1691,13 @@ async def generate_match_analysis(jogo):
     # Aplica fatores multiplicativos baseados no papel (ofensivo/defensivo) e
     # importância (peso) dos jogadores ausentes. O ajuste ocorre APÓS o xG blend
     # para que propague em cascata a TODOS os mercados Poisson downstream.
-    home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(home_injuries)
-    away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(away_injuries)
+    # Só são processadas ausências com _injury_weight() >= 1.0 (confirmadas).
+    home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
+        home_injuries, lambda_pre=lambda_effective_home
+    )
+    away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
+        away_injuries, lambda_pre=lambda_effective_away
+    )
 
     lambda_effective_home_pre = lambda_effective_home
     lambda_effective_away_pre = lambda_effective_away
