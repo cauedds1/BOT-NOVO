@@ -34,7 +34,7 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
     """
     
     if mercado == "Gols":
-        return _justificar_gols_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
+        return _justificar_gols_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra)
     elif mercado == "Cantos":
         return _justificar_cantos_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name)
     elif mercado == "Cartões":
@@ -61,41 +61,55 @@ def generate_evidence_based_justification(mercado, tipo, evidencias_home, eviden
         return f"Análise baseada nos dados recentes favorece {tipo}."
 
 
-def _justificar_gols_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name):
+def _justificar_gols_evidence_based(tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=None):
     """Gera justificativa para Gols baseada em evidências reais"""
     gols_home = evidencias_home.get('gols', [])
     gols_away = evidencias_away.get('gols', [])
-    
+
+    # TASK 7: Extrair notas de ajuste de lambda por desfalques para contextualizar a justificativa
+    _extra = extra or {}
+    _lambda_adj_notes = _extra.get('lambda_adj_notes', [])
+    _lambda_home = _extra.get('lambda_home')
+    _lambda_away = _extra.get('lambda_away')
+
     if not gols_home or not gols_away:
-        return f"Análise estatística favorece {tipo} baseado no perfil das equipes."
-    
+        base = f"Análise estatística favorece {tipo} baseado no perfil das equipes."
+        if _lambda_adj_notes:
+            base += " " + " | ".join(_lambda_adj_notes[:2])
+        return base
+
     # Calcular média de gols totais nos últimos jogos
     media_total_home = sum(g['total_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
     media_total_away = sum(g['total_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
     media_combinada = (media_total_home + media_total_away) / 2
-    
+
     # Calcular média de gols marcados
     media_marcados_home = sum(g['team_goals'] for g in gols_home) / len(gols_home) if gols_home else 0
     media_marcados_away = sum(g['team_goals'] for g in gols_away) / len(gols_away) if gols_away else 0
-    
+
+    # Nota de ajuste de desfalques (TASK 7)
+    _adj_suffix = ""
+    if _lambda_adj_notes:
+        _adj_suffix = " ⚠️ " + " | ".join(_lambda_adj_notes[:2]) + "."
+
     if "Over" in tipo or "Mais" in tipo:
         return (
             f"A média de gols totais nos jogos do {home_team_name} em casa é de {media_total_home:.1f}, "
             f"enquanto a do {away_team_name} como visitante é de {media_total_away:.1f}, "
             f"resultando em uma média combinada de {media_combinada:.1f} gols, "
-            f"favorecendo {tipo}."
+            f"favorecendo {tipo}.{_adj_suffix}"
         )
     elif "Under" in tipo or "Menos" in tipo:
         return (
             f"A média de gols nos jogos do {home_team_name} em casa é de apenas {media_total_home:.1f}, "
             f"enquanto a do {away_team_name} como visitante é de {media_total_away:.1f}, "
-            f"reforçando a tendência de um jogo com poucos gols."
+            f"reforçando a tendência de um jogo com poucos gols.{_adj_suffix}"
         )
     else:
         return (
             f"{home_team_name} marca {media_marcados_home:.1f} gols em casa, "
             f"enquanto {away_team_name} marca {media_marcados_away:.1f} fora, "
-            f"favorecendo {tipo}."
+            f"favorecendo {tipo}.{_adj_suffix}"
         )
 
 

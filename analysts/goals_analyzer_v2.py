@@ -57,6 +57,11 @@ def analisar_mercado_gols(analysis_packet, odds):
     clean_sheet_home_def = lambda_data.get('clean_sheet_rate_home_def', None)
     clean_sheet_away_def = lambda_data.get('clean_sheet_rate_away_def', None)
 
+    # TASK 7: Ler ajustes de lambda por desfalques para incluir nas justificativas
+    lambda_adjustments = lambda_data.get('lambda_adjustments', {})
+    _lambda_adjusted = lambda_adjustments.get('adjusted', False)
+    _lambda_adj_notes = lambda_adjustments.get('notes', [])
+
     # Fallback: se não há lambdas reais, usar over_2_5 do script como âncora
     _over_2_5_script = probabilities['goals_over_under_2_5']['over_2_5_prob']
     _has_real_lambdas = lambda_total > 0
@@ -685,13 +690,18 @@ def analisar_mercado_gols(analysis_packet, odds):
     
     # Retornar no formato compatível (wrapping lista em dict para compatibilidade)
     if all_predictions:
+        # TASK 7: Adicionar notas de ajuste de lambda por desfalques ao suporte
+        _suporte = f"💡 {reasoning}"
+        if _lambda_adjusted and _lambda_adj_notes:
+            _suporte += "\n\n⚠️ AJUSTE DE LAMBDA POR DESFALQUES:\n" + "\n".join(f"   • {n}" for n in _lambda_adj_notes)
+            _suporte += f"\n   λ_casa={lambda_home:.2f} | λ_fora={lambda_away:.2f} (pós-ajuste)"
         return {
             "mercado": "Gols",
             "palpites": all_predictions,
-            "dados_suporte": f"💡 {reasoning}",
+            "dados_suporte": _suporte,
             "script": script
         }
-    
+
     return None
 
 

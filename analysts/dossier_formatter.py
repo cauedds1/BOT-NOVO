@@ -43,6 +43,18 @@ def format_evidence_based_dossier(
     evidencias_away = evidence.get('away', {})
     home_team_name = evidence.get('home_team_name', time_casa)
     away_team_name = evidence.get('away_team_name', time_fora)
+
+    # TASK 7: Extrair ajustes de lambda por desfalques para contexto das justificativas
+    _lambda_data = master_analysis.get('calculated_probabilities', {}).get('lambda_goals', {})
+    _lambda_adj = _lambda_data.get('lambda_adjustments', {})
+    _lambda_adj_notes = _lambda_adj.get('notes', []) if _lambda_adj.get('adjusted') else []
+    _lambda_home = _lambda_data.get('lambda_home')
+    _lambda_away = _lambda_data.get('lambda_away')
+    _extra_gols = {
+        'lambda_adj_notes': _lambda_adj_notes,
+        'lambda_home': _lambda_home,
+        'lambda_away': _lambda_away,
+    }
     
     # === SECTION 1: HEADER ===
     msg = _format_header_evidence_based(jogo)
@@ -70,12 +82,14 @@ def format_evidence_based_dossier(
     # === SECTION 3: ANÁLISE PRINCIPAL ===
     if palpites_outros:
         palpite_principal = palpites_outros[0]  # Maior confiança (excluindo DC)
+        _extra_principal = _extra_gols if palpite_principal.get('mercado') == 'Gols' else None
         msg += _format_analise_principal_evidence_based(
             palpite_principal,
             evidencias_home,
             evidencias_away,
             home_team_name,
-            away_team_name
+            away_team_name,
+            extra=_extra_principal
         )
 
         # === SECTION 4: SUGESTÕES TÁTICAS (restante dos palpites, exceto DC) ===
@@ -226,24 +240,25 @@ def _format_analise_principal_evidence_based(
     evidencias_home: Dict,
     evidencias_away: Dict,
     home_team_name: str,
-    away_team_name: str
+    away_team_name: str,
+    extra: Dict = None
 ) -> str:
     """Formata ANÁLISE PRINCIPAL com evidências dos últimos 4 jogos"""
     mercado = palpite.get('mercado', 'Gols')
     tipo = palpite.get('tipo', '')
     confianca = palpite.get('confianca', 0)
-    
+
     msg = f"💎 ANÁLISE PRINCIPAL\n"
     msg += f"   Mercado: {mercado}\n"
-    
+
     # PHOENIX V4.0 - ALVO #3: PURE ANALYST PROTOCOL - Sem exibição de odds
     msg += f"   Palpite: {tipo}\n"
     msg += f"   Confiança: {confianca:.1f} / 10\n"
-    
+
     # Justificativa baseada em evidências
     msg += f"   Justificativa: "
     justificativa = generate_evidence_based_justification(
-        mercado, tipo, evidencias_home, evidencias_away, home_team_name, away_team_name
+        mercado, tipo, evidencias_home, evidencias_away, home_team_name, away_team_name, extra=extra
     )
     msg += justificativa + "\n\n"
     

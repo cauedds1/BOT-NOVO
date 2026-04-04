@@ -217,6 +217,93 @@ def _get_injury_severity_label(injuries):
     return "none"
 
 
+def _calcular_ajuste_lambda_por_desfalques(injuries: list) -> tuple:
+    """
+    TASK 7: Calcula fatores de ajuste do lambda baseados nos desfalques confirmados.
+
+    Para cada ausência, infere se o jogador é ofensivo ou defensivo e acumula o peso
+    conforme _injury_weight(). Aplica um fator multiplicativo diretamente sobre o lambda
+    de ataque/defesa do time — assim o impacto propaga-se em cascata para TODOS os
+    mercados (Over/Under, BTTS, Placar Exato, Handicaps, etc.).
+
+    Pesos por tipo de ausência (de _injury_weight):
+      Suspenso / "Missing Fixture" = 2.0
+      Lesão grave (ACL, hamstring…) = 1.0
+      Questionável / razão leve    = 0.5
+
+    Fórmulas:
+      attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)   → cap em -25%
+      defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)   → cap em +15%
+
+    Args:
+        injuries: lista de dicts {name, type, reason, team_id, position}
+
+    Returns:
+        tuple: (attack_factor, defense_factor, notes)
+          attack_factor  — multiplicador < 1.0 para o lambda de ataque do time
+          defense_factor — multiplicador > 1.0 para o lambda do adversário (defesa fraca)
+          notes          — lista de strings descrevendo ajustes (para justificativa)
+    """
+    if not injuries:
+        return 1.0, 1.0, []
+
+    _GK_KW      = frozenset({'goalkeeper', 'keeper', 'portero', 'goleiro', 'gk'})
+    _FWD_KW     = frozenset({'forward', 'striker', 'attacker', 'winger', 'atacante',
+                             'centroavante', 'ponta', 'delantero'})
+    _DEF_KW     = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
+                             'back', 'defensor', 'zagueiro', 'lateral'})
+
+    offensive_weight = 0.0
+    defensive_weight = 0.0
+    offensive_names  = []
+    defensive_names  = []
+
+    for p in injuries:
+        w = _injury_weight(p)
+        # Só considerar ausências confirmadas (peso ≥ 1.0) para ajuste de lambda
+        if w < 1.0:
+            continue
+
+        combined = (
+            (p.get('name') or '') + ' ' +
+            (p.get('reason') or '') + ' ' +
+            (p.get('position') or '')
+        ).lower()
+
+        is_fwd = any(kw in combined for kw in _FWD_KW)
+        is_def = any(kw in combined for kw in _GK_KW | _DEF_KW)
+
+        if is_fwd and not is_def:
+            offensive_weight += w
+            offensive_names.append(p.get('name', '?'))
+        elif is_def and not is_fwd:
+            defensive_weight += w
+            defensive_names.append(p.get('name', '?'))
+        else:
+            # Meio-campo / posição não identificada: impacto dividido 50/50
+            offensive_weight += w * 0.5
+            defensive_weight += w * 0.5
+
+    attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)
+    defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)
+
+    notes = []
+    if offensive_weight >= 1.0:
+        reduction_pct = round((1.0 - attack_factor) * 100, 1)
+        notes.append(
+            f"Desfalques ofensivos ({', '.join(offensive_names) if offensive_names else 'não-identificados'}) "
+            f"→ λ ataque -{reduction_pct}%"
+        )
+    if defensive_weight >= 1.0:
+        increase_pct = round((defense_factor - 1.0) * 100, 1)
+        notes.append(
+            f"Desfalques defensivos ({', '.join(defensive_names) if defensive_names else 'não-identificados'}) "
+            f"→ adversário +{increase_pct}% de gols esperados"
+        )
+
+    return attack_factor, defense_factor, notes
+
+
 def _calculate_power_score(team_stats):
     """
     Calcula Power Score HISTÓRICO (0-100) baseado em win rate e saldo de gols da temporada.
@@ -1531,6 +1618,46 @@ async def generate_match_analysis(jogo):
         print(f"  ℹ️ xG: Dados de finalizações insuficientes → usando lambda por médias de gols")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ─── TASK 7: AJUSTE DE LAMBDA POR DESFALQUES CONFIRMADOS ──────────────────
+    # Aplica fatores multiplicativos baseados no papel (ofensivo/defensivo) e
+    # importância (peso) dos jogadores ausentes. O ajuste ocorre APÓS o xG blend
+    # para que propague em cascata a TODOS os mercados Poisson downstream.
+    home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(home_injuries)
+    away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(away_injuries)
+
+    lambda_effective_home_pre = lambda_effective_home
+    lambda_effective_away_pre = lambda_effective_away
+
+    # Desfalques ofensivos do time da casa → casa marca menos
+    lambda_effective_home *= home_attack_factor
+    # Desfalques ofensivos do time visitante → visitante marca menos
+    lambda_effective_away *= away_attack_factor
+    # Desfalques defensivos do time da casa → visitante marca mais (defesa caseira enfraquecida)
+    lambda_effective_away *= home_defense_factor
+    # Desfalques defensivos do visitante → casa marca mais (defesa visitante enfraquecida)
+    lambda_effective_home *= away_defense_factor
+
+    # Garantir mínimos realistas após ajuste
+    lambda_effective_home = max(0.25, lambda_effective_home)
+    lambda_effective_away = max(0.20, lambda_effective_away)
+    lambda_total_effective = lambda_effective_home + lambda_effective_away
+
+    _all_lambda_notes = (
+        [f"[{home_team_name}] {n}" for n in home_lambda_notes] +
+        [f"[{away_team_name}] {n}" for n in away_lambda_notes]
+    )
+    _lambda_adjusted = (home_attack_factor < 1.0 or home_defense_factor > 1.0 or
+                        away_attack_factor < 1.0 or away_defense_factor > 1.0)
+
+    if _lambda_adjusted:
+        print(f"  ⚠️ TASK 7 — Lambdas pré-ajuste: Casa={lambda_effective_home_pre:.2f} | Fora={lambda_effective_away_pre:.2f}")
+        print(f"  ✅ TASK 7 — Lambdas pós-desfalques: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f}")
+        for note in (home_lambda_notes + away_lambda_notes):
+            print(f"     • {note}")
+    else:
+        print(f"  ✅ TASK 7 — Sem desfalques confiramados com impacto positional → lambda inalterado")
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Taxa de clean sheet defensiva:
     # Preferir dados empíricos da API quando disponíveis, caso contrário usar aproximação Poisson.
     # clean_sheet_rate_home_def = prob do mandante guardar CS em casa (baseada em jogos reais)
@@ -1686,7 +1813,15 @@ async def generate_match_analysis(jogo):
                 'lambda_total': lambda_total_effective,
                 'ht_ratio': ht_ratio,
                 'clean_sheet_rate_home_def': clean_sheet_rate_home_def,
-                'clean_sheet_rate_away_def': clean_sheet_rate_away_def
+                'clean_sheet_rate_away_def': clean_sheet_rate_away_def,
+                'lambda_adjustments': {
+                    'home_attack_factor': home_attack_factor,
+                    'home_defense_factor': home_defense_factor,
+                    'away_attack_factor': away_attack_factor,
+                    'away_defense_factor': away_defense_factor,
+                    'adjusted': _lambda_adjusted,
+                    'notes': _all_lambda_notes,
+                }
             }
         },
         'evidence': {
