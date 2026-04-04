@@ -216,8 +216,11 @@ function MatchCard({ jogo, compact = false }) {
                     borderRadius: 6, padding: '2px 6px',
                   }}>
                     <span style={{ fontSize: 11 }}>{MERCADO_EMOJI[p.mercado] || '📊'}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308', whiteSpace: 'nowrap', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.tipo}
+                    </span>
                     {p.probabilidade != null && (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308' }}>{Number(p.probabilidade).toFixed(0)}%</span>
+                      <span style={{ fontSize: 9, color: '#818cf8' }}>{Number(p.probabilidade).toFixed(0)}%</span>
                     )}
                   </div>
                 ))}
