@@ -1006,115 +1006,45 @@ async def get_jogadores_fixture(fixture_id: int):
 
                 cursor.close()
 
-                def _build_player_markets(row: dict) -> list:
-                    """Constrói registros de mercado de jogador a partir do perfil + histórico."""
+                def _formatar_perfil_jogador(row: dict) -> dict:
+                    """Serializa o perfil histórico de um jogador (sem previsões sintéticas)."""
                     pid = row.get("jogador_id")
-                    nome = row.get("nome") or f"Jogador #{pid}"
                     n = row.get("n_jogos_total") or 0
                     n_casa = row.get("n_jogos_casa") or 0
                     n_fora = row.get("n_jogos_fora") or 0
-                    amostra_pequena = n > 0 and n < 6
-                    mercados = []
-
-                    u5_gols = last5_gols.get(pid, [])
-                    u5_assist = last5_assist.get(pid, [])
-                    u5_fins = last5_fins.get(pid, [])
-                    mc = media_casa.get(pid)
-                    mf = media_fora.get(pid)
-
-                    # Mercado: Anytime Goalscorer
-                    media_gols = row.get("media_gols") or 0
-                    if media_gols is not None and float(media_gols) > 0:
-                        prob_marca = round(min(99, float(media_gols) * 100), 1)
-                        confianca_gols = min(9.5, float(media_gols) * 7)
-                        mercados.append({
-                            "jogador": nome,
-                            "jogador_id": pid,
-                            "mercado": "A Marcar (Qualquer Hora)",
-                            "tipo": "Anytime Goalscorer",
-                            "confianca": round(confianca_gols, 2),
-                            "probabilidade": prob_marca,
-                            "odd": None,
-                            "media_historico": round(float(media_gols), 3),
-                            "media_casa": mc,
-                            "media_fora": mf,
-                            "n_jogos": n,
-                            "n_casa": n_casa,
-                            "n_fora": n_fora,
-                            "ultimos_5": u5_gols,
-                            "amostra_pequena": amostra_pequena,
-                            "eh_mandante": row.get("eh_mandante", True),
-                        })
-
-                    # Mercado: Assistência
-                    media_assist = row.get("media_assistencias") or 0
-                    if media_assist and float(media_assist) > 0.05:
-                        prob_assist = round(min(99, float(media_assist) * 100), 1)
-                        confianca_assist = min(9.0, float(media_assist) * 6)
-                        mercados.append({
-                            "jogador": nome,
-                            "jogador_id": pid,
-                            "mercado": "A Dar Assistência",
-                            "tipo": "Anytime Assist",
-                            "confianca": round(confianca_assist, 2),
-                            "probabilidade": prob_assist,
-                            "odd": None,
-                            "media_historico": round(float(media_assist), 3),
-                            "media_casa": None,
-                            "media_fora": None,
-                            "n_jogos": n,
-                            "n_casa": n_casa,
-                            "n_fora": n_fora,
-                            "ultimos_5": u5_assist,
-                            "amostra_pequena": amostra_pequena,
-                            "eh_mandante": row.get("eh_mandante", True),
-                        })
-
-                    # Mercado: Finalizações
-                    media_fin = row.get("media_finalizacoes") or 0
-                    if media_fin and float(media_fin) > 0.5:
-                        prob_fin = round(min(99, float(media_fin) / 2 * 100), 1)
-                        confianca_fin = min(8.5, float(media_fin) * 1.5)
-                        mercados.append({
-                            "jogador": nome,
-                            "jogador_id": pid,
-                            "mercado": "1+ Finalizações",
-                            "tipo": "Over 0.5 Shots",
-                            "confianca": round(confianca_fin, 2),
-                            "probabilidade": prob_fin,
-                            "odd": None,
-                            "media_historico": round(float(media_fin), 2),
-                            "media_casa": None,
-                            "media_fora": None,
-                            "n_jogos": n,
-                            "n_casa": n_casa,
-                            "n_fora": n_fora,
-                            "ultimos_5": u5_fins,
-                            "amostra_pequena": amostra_pequena,
-                            "eh_mandante": row.get("eh_mandante", True),
-                        })
-
-                    return mercados
+                    return {
+                        "jogador_id": pid,
+                        "nome": row.get("nome") or f"Jogador #{pid}",
+                        "foi_titular": row.get("foi_titular", False),
+                        "minutos": row.get("minutos") or 0,
+                        "gols": row.get("gols") or 0,
+                        "assistencias": row.get("assistencias") or 0,
+                        "finalizacoes": row.get("finalizacoes") or 0,
+                        "cartao_amarelo": bool(row.get("cartao_amarelo")),
+                        "cartao_vermelho": bool(row.get("cartao_vermelho")),
+                        "eh_mandante": row.get("eh_mandante", True),
+                        "n_jogos": n,
+                        "n_jogos_casa": n_casa,
+                        "n_jogos_fora": n_fora,
+                        "media_gols": row.get("media_gols"),
+                        "media_assistencias": row.get("media_assistencias"),
+                        "media_finalizacoes": row.get("media_finalizacoes"),
+                        "media_gols_casa": media_casa.get(pid),
+                        "media_gols_fora": media_fora.get(pid),
+                        "ultimos_5_gols": last5_gols.get(pid, []),
+                        "ultimos_5_assistencias": last5_assist.get(pid, []),
+                        "ultimos_5_finalizacoes": last5_fins.get(pid, []),
+                        "amostra_pequena": n > 0 and n < 6,
+                        "lesionado": bool(row.get("lesionado")),
+                        "suspenso": bool(row.get("suspenso")),
+                    }
 
                 all_rows = [dict(r) for r in rows]
-                mandantes_rows = [r for r in all_rows if r.get("eh_mandante")]
-                visitantes_rows = [r for r in all_rows if not r.get("eh_mandante")]
-
-                mandantes_mercados = []
-                for r in mandantes_rows:
-                    mandantes_mercados.extend(_build_player_markets(r))
-
-                visitantes_mercados = []
-                for r in visitantes_rows:
-                    visitantes_mercados.extend(_build_player_markets(r))
-
-                mandantes_mercados.sort(key=lambda x: x["confianca"], reverse=True)
-                visitantes_mercados.sort(key=lambda x: x["confianca"], reverse=True)
+                mandantes_rows = [_formatar_perfil_jogador(r) for r in all_rows if r.get("eh_mandante")]
+                visitantes_rows = [_formatar_perfil_jogador(r) for r in all_rows if not r.get("eh_mandante")]
 
                 return {
                     "fixture_id": fixture_id,
-                    "mercados_mandante": mandantes_mercados,
-                    "mercados_visitante": visitantes_mercados,
                     "mandantes": mandantes_rows,
                     "visitantes": visitantes_rows,
                     "total": len(rows),
@@ -1126,8 +1056,6 @@ async def get_jogadores_fixture(fixture_id: int):
 
     return {
         "fixture_id": fixture_id,
-        "mercados_mandante": [],
-        "mercados_visitante": [],
         "mandantes": [],
         "visitantes": [],
         "total": 0,

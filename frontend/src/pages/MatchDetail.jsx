@@ -369,64 +369,66 @@ function StatsComparativas({ stats, timeCasa, timeFora }) {
   )
 }
 
-function PlayerMarketRow({ record }) {
-  const conf = record.confianca || 0
-  let confColor = '#ef4444'
-  if (conf >= 7) confColor = '#22c55e'
-  else if (conf >= 5) confColor = '#eab308'
-
-  const mediaHistorico = record.media_historico != null ? record.media_historico : null
-  const mediaCasa = record.media_casa != null ? record.media_casa : null
-  const mediaFora = record.media_fora != null ? record.media_fora : null
-  const isHome = record.eh_mandante
+function PlayerStatRow({ record, color }) {
+  const u5g = record.ultimos_5_gols || []
+  const u5a = record.ultimos_5_assistencias || []
 
   return (
-    <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', flex: 1 }}>{record.jogador}</span>
-        {record.odd && (
-          <span style={{ fontSize: 11, color: '#818cf8', fontWeight: 700 }}>@{Number(record.odd).toFixed(2)}</span>
-        )}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.04)', borderRadius: 4, padding: '1px 6px' }}>
-          {record.mercado}
+    <div style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: '50%', border: `1.5px solid ${color}44`,
+          background: `${color}10`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 8, fontWeight: 700, color, flexShrink: 0,
+        }}>
+          {record.nome?.split(' ').pop()?.slice(0, 3).toUpperCase() || '?'}
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#e2e8f0', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {record.nome?.split(' ').pop() || `#${record.jogador_id}`}
         </span>
-        <span style={{ fontSize: 10, fontWeight: 700, color: confColor, background: `${confColor}14`, borderRadius: 4, padding: '1px 6px', border: `1px solid ${confColor}25` }}>
-          {conf.toFixed(1)}/10
-        </span>
-        {record.amostra_pequena && (
-          <span style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', borderRadius: 4, padding: '1px 6px', border: '1px solid rgba(245,158,11,0.2)' }}>
-            ⚠️ amostra n={record.n_jogos}&lt;6
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {record.gols > 0 && <span style={{ fontSize: 9 }}>⚽{record.gols > 1 ? record.gols : ''}</span>}
+          {record.cartao_amarelo && <span style={{ fontSize: 9 }}>🟨</span>}
+          {record.cartao_vermelho && <span style={{ fontSize: 9 }}>🟥</span>}
+          {record.lesionado && <span style={{ fontSize: 9 }}>🏥</span>}
+          {record.suspenso && <span style={{ fontSize: 9 }}>🚫</span>}
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
-        {mediaHistorico !== null && (
-          <span>📈 Média geral: <strong style={{ color: '#94a3b8' }}>{(mediaHistorico * 100).toFixed(1)}%</strong></span>
-        )}
-        {isHome && mediaCasa !== null && (
-          <span>🏠 Casa: <strong style={{ color: '#818cf8' }}>{(mediaCasa * 100).toFixed(1)}%</strong></span>
-        )}
-        {!isHome && mediaFora !== null && (
-          <span>✈️ Fora: <strong style={{ color: '#34d399' }}>{(mediaFora * 100).toFixed(1)}%</strong></span>
-        )}
-        <span>📊 Prob: <strong style={{ color: '#94a3b8' }}>{record.probabilidade.toFixed(1)}%</strong></span>
-        {record.n_jogos > 0 && <span>🎮 {record.n_jogos} jogos</span>}
+      <div style={{ display: 'flex', gap: 10, fontSize: 10, color: '#64748b', flexWrap: 'wrap', paddingLeft: 30 }}>
+        {record.media_gols != null && <span>⚽ Méd: <strong style={{ color: '#94a3b8' }}>{Number(record.media_gols).toFixed(2)}</strong></span>}
+        {record.media_gols_casa != null && <span>🏠 <strong style={{ color: '#818cf8' }}>{Number(record.media_gols_casa).toFixed(2)}</strong></span>}
+        {record.media_gols_fora != null && <span>✈️ <strong style={{ color: '#34d399' }}>{Number(record.media_gols_fora).toFixed(2)}</strong></span>}
+        {record.n_jogos > 0 && <span>🎮 {record.n_jogos}j</span>}
+        {record.amostra_pequena && <span style={{ color: '#f59e0b' }}>⚠️ n&lt;6</span>}
       </div>
-      {record.ultimos_5?.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: '#475569' }}>Últimos {record.ultimos_5.length}:</span>
-          {record.ultimos_5.map((v, i) => (
+      {u5g.length > 0 && (
+        <div style={{ display: 'flex', gap: 3, marginTop: 4, alignItems: 'center', paddingLeft: 30 }}>
+          <span style={{ fontSize: 9, color: '#475569' }}>Gols ult.{u5g.length}:</span>
+          {u5g.map((v, i) => (
             <span key={i} style={{
-              fontSize: 10, fontWeight: 700,
+              fontSize: 9, fontWeight: 700,
               color: v > 0 ? '#22c55e' : '#475569',
               background: v > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
-              borderRadius: 4, padding: '1px 5px',
+              borderRadius: 3, padding: '0 4px',
             }}>
               {v}
             </span>
           ))}
+          {u5a.length > 0 && (
+            <>
+              <span style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>Ast:</span>
+              {u5a.map((v, i) => (
+                <span key={i} style={{
+                  fontSize: 9, fontWeight: 700,
+                  color: v > 0 ? '#818cf8' : '#475569',
+                  background: v > 0 ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)',
+                  borderRadius: 3, padding: '0 4px',
+                }}>
+                  {v}
+                </span>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -452,30 +454,26 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
     </div>
   )
 
-  const mercadosMandante = dados?.mercados_mandante || []
-  const mercadosVisitante = dados?.mercados_visitante || []
-  const mandantesStats = dados?.mandantes || []
-  const visitantesStats = dados?.visitantes || []
+  const mandantes = dados?.mandantes || []
+  const visitantes = dados?.visitantes || []
   const lineupConfirmado = dados?.lineup_confirmado ?? false
 
-  const semMercados = mercadosMandante.length === 0 && mercadosVisitante.length === 0
-  const semLineup = mandantesStats.length === 0 && visitantesStats.length === 0
+  const semDados = mandantes.length === 0 && visitantes.length === 0
 
-  if (semMercados && semLineup) return (
+  if (semDados) return (
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
       <p style={{ fontSize: 14 }}>Sem dados de jogadores para este jogo.</p>
-      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os perfis e mercados de jogadores aparecem após análise com estatísticas individuais da API.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os perfis de jogadores aparecem após análise com estatísticas individuais da API.</p>
     </div>
   )
 
   return (
     <div>
-      {/* Sub-tabs: Escalação / Mercados de Jogadores */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
         {[
           { id: 'escalacao', label: '👕 Escalação' },
-          { id: 'mercados', label: '📊 Mercados de Jogadores' },
+          { id: 'stats', label: '📊 Estatísticas' },
         ].map(t => (
           <button key={t.id} onClick={() => setAba(t.id)} style={{
             padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
@@ -489,28 +487,26 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
       </div>
 
       {aba === 'escalacao' && (
-        <EscalacaoSection mandantes={mandantesStats} visitantes={visitantesStats} timeCasa={timeCasa} timeFora={timeFora} lineupConfirmado={lineupConfirmado} />
+        <EscalacaoSection mandantes={mandantes} visitantes={visitantes} timeCasa={timeCasa} timeFora={timeFora} lineupConfirmado={lineupConfirmado} />
       )}
 
-      {aba === 'mercados' && (
-        semMercados ? (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
-            <p style={{ fontSize: 14 }}>Mercados de jogadores não disponíveis.</p>
-            <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os mercados individuais aparecem quando a API retorna estatísticas de desempenho dos jogadores.</p>
+      {aba === 'stats' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+          <div className="card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
+            {mandantes.length === 0
+              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados históricos de jogadores casa</p>
+              : mandantes.map((r, i) => <PlayerStatRow key={i} record={r} color="#818cf8" />)
+            }
           </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-            <div className="card" style={{ padding: '14px 16px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
-              {mercadosMandante.map((r, i) => <PlayerMarketRow key={i} record={r} />)}
-            </div>
-            <div className="card" style={{ padding: '14px 16px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora}</div>
-              {mercadosVisitante.map((r, i) => <PlayerMarketRow key={i} record={r} />)}
-            </div>
+          <div className="card" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 10 }}>✈️ {timeFora}</div>
+            {visitantes.length === 0
+              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados históricos de jogadores fora</p>
+              : visitantes.map((r, i) => <PlayerStatRow key={i} record={r} color="#34d399" />)
+            }
           </div>
-        )
+        </div>
       )}
     </div>
   )
@@ -536,49 +532,97 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
     )
   }
 
-  const PlayerRow = ({ j, color }) => (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px',
-      borderRadius: 6, background: 'rgba(255,255,255,0.02)',
-    }}>
-      <div style={{
-        width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${color}44`,
-        background: `${color}10`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 9, fontWeight: 700, color, flexShrink: 0,
-      }}>
-        {j.nome ? j.nome.split(' ').pop()?.slice(0, 3).toUpperCase() : `J${j.jogador_id}`}
+  const toFormationRows = (players) => {
+    if (players.length === 0) return []
+    const n = players.length
+    if (n <= 1) return [players]
+    if (n <= 4) return [[players[0]], players.slice(1)]
+    if (n <= 7) return [[players[0]], players.slice(1, 4), players.slice(4)]
+    if (n <= 9) return [[players[0]], players.slice(1, 5), players.slice(5, 8), players.slice(8)]
+    return [[players[0]], players.slice(1, 5), players.slice(5, 8), players.slice(8, 11)]
+  }
+
+  const PitchPlayer = ({ j, color, x, y, W, H }) => {
+    const label = j.nome ? j.nome.split(' ').pop()?.slice(0, 6) : `#${j.jogador_id}`
+    const hasYellow = j.cartao_amarelo
+    const hasRed = j.cartao_vermelho
+    const hasGoal = j.gols > 0
+    const isInjured = j.lesionado
+    const isSusp = j.suspenso
+    const dotColor = isInjured ? '#ef4444' : isSusp ? '#f59e0b' : color
+    return (
+      <g key={`p-${j.jogador_id}-${x}`}>
+        <circle cx={x} cy={y} r={16} fill={`${dotColor}18`} stroke={dotColor} strokeWidth={1.5} />
+        <text x={x} y={y + 4} textAnchor="middle" fontSize={9} fontWeight="bold" fill={dotColor}
+          style={{ fontFamily: 'system-ui, sans-serif', pointerEvents: 'none' }}>
+          {label.slice(0, 4)}
+        </text>
+        <text x={x} y={y + 26} textAnchor="middle" fontSize={8} fill="#94a3b8"
+          style={{ fontFamily: 'system-ui, sans-serif', pointerEvents: 'none' }}>
+          {label}
+        </text>
+        {hasGoal && <text x={x + 12} y={y - 8} fontSize={10} textAnchor="middle">⚽</text>}
+        {hasYellow && !hasRed && <text x={x - 12} y={y - 8} fontSize={10} textAnchor="middle">🟨</text>}
+        {hasRed && <text x={x - 12} y={y - 8} fontSize={10} textAnchor="middle">🟥</text>}
+        {isInjured && <text x={x + 12} y={y + 10} fontSize={9} textAnchor="middle">🏥</text>}
+        {isSusp && !isInjured && <text x={x + 12} y={y + 10} fontSize={9} textAnchor="middle">🚫</text>}
+      </g>
+    )
+  }
+
+  const PitchSVG = ({ players, teamName, color, flipped = false }) => {
+    const W = 260
+    const H = 340
+    const rows = toFormationRows(players)
+    const rowsOrdered = flipped ? [...rows].reverse() : rows
+    const formation = rows.map(r => r.length).slice(1).join('-')
+    return (
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color }}>
+            {flipped ? '✈️' : '🏠'} {teamName}
+          </span>
+          {formation && (
+            <span style={{ fontSize: 11, color: '#475569', fontWeight: 600, background: 'rgba(255,255,255,0.04)', padding: '1px 8px', borderRadius: 6 }}>
+              {formation}
+            </span>
+          )}
+        </div>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', borderRadius: 10, overflow: 'hidden' }}>
+          <rect x={0} y={0} width={W} height={H} rx={8} fill="rgba(34,197,94,0.04)" stroke="rgba(34,197,94,0.15)" strokeWidth={1} />
+          <line x1={W/2} y1={0} x2={W/2} y2={H} stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
+          <line x1={0} y1={H/2} x2={W} y2={H/2} stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
+          <ellipse cx={W/2} cy={H/2} rx={40} ry={28} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
+          <rect x={W/2-36} y={0} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
+          <rect x={W/2-36} y={H-44} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
+          {rowsOrdered.map((row, ri) => {
+            const totalRows = rowsOrdered.length
+            const yPct = (ri + 0.5) / totalRows
+            const y = 24 + yPct * (H - 48)
+            return row.map((j, pi) => {
+              const xPct = (pi + 0.5) / row.length
+              const x = 20 + xPct * (W - 40)
+              return <PitchPlayer key={`${ri}-${pi}`} j={j} color={color} x={x} y={y} W={W} H={H} />
+            })
+          })}
+        </svg>
       </div>
-      <span style={{ fontSize: 11, color: '#e2e8f0', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    )
+  }
+
+  const BenchRow = ({ j, color }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px', borderRadius: 5, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ width: 20, height: 20, borderRadius: '50%', border: `1px dashed ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#475569', flexShrink: 0 }}>S</div>
+      <span style={{ fontSize: 10, color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {j.nome?.split(' ').pop() || `#${j.jogador_id}`}
       </span>
-      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-        {j.gols > 0 && <span style={{ fontSize: 9 }}>⚽{j.gols > 1 ? j.gols : ''}</span>}
-        {j.cartao_amarelo && <span style={{ fontSize: 9 }}>🟨</span>}
-        {j.cartao_vermelho && <span style={{ fontSize: 9 }}>🟥</span>}
-        {j.lesionado && <span style={{ fontSize: 9 }}>🏥</span>}
-        {j.suspenso && <span style={{ fontSize: 9 }}>🚫</span>}
-        {j.minutos > 0 && <span style={{ fontSize: 9, color: '#475569' }}>{j.minutos}'</span>}
+      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+        {j.gols > 0 && <span style={{ fontSize: 8 }}>⚽</span>}
+        {j.cartao_amarelo && <span style={{ fontSize: 8 }}>🟨</span>}
+        {j.cartao_vermelho && <span style={{ fontSize: 8 }}>🟥</span>}
+        {j.lesionado && <span style={{ fontSize: 8 }}>🏥</span>}
+        {j.suspenso && <span style={{ fontSize: 8 }}>🚫</span>}
       </div>
-    </div>
-  )
-
-  const TeamList = ({ titulares, reservas, teamName, color }) => (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 8, paddingBottom: 4, borderBottom: `1px solid ${color}20` }}>
-        {color === '#818cf8' ? '🏠' : '✈️'} {teamName}
-      </div>
-      {titulares.length > 0 && (
-        <>
-          <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Titulares</div>
-          {titulares.map((j, i) => <PlayerRow key={i} j={j} color={color} />)}
-        </>
-      )}
-      {reservas.length > 0 && (
-        <>
-          <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 8, marginBottom: 4 }}>Banco</div>
-          {reservas.map((j, i) => <PlayerRow key={i} j={j} color={color} />)}
-        </>
-      )}
     </div>
   )
 
@@ -590,13 +634,36 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
         </div>
       ) : (
         <div style={{ padding: '6px 12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 10, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
-          ⏳ Escalação não confirmada — dados históricos dos últimos jogos. Lesionados 🏥 e suspensos 🚫 marcados quando disponíveis pela API.
+          ⏳ Escalação não confirmada — provável lineup baseado em dados históricos. 🏥 Lesionado · 🚫 Suspenso · 🟨 Amarelo · ⚽ Gol
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        <TeamList titulares={titularesCasa} reservas={reservasCasa} teamName={timeCasa} color="#818cf8" />
-        <TeamList titulares={titularesFora} reservas={reservasFora} teamName={timeFora} color="#34d399" />
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {titularesCasa.length > 0 && (
+          <PitchSVG players={titularesCasa} teamName={timeCasa} color="#818cf8" flipped={false} />
+        )}
+        {titularesFora.length > 0 && (
+          <PitchSVG players={titularesFora} teamName={timeFora} color="#34d399" flipped={true} />
+        )}
       </div>
+      {(reservasCasa.length > 0 || reservasFora.length > 0) && (
+        <div className="card" style={{ marginTop: 12, padding: '10px 14px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Banco de Reservas</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 4 }}>
+            {reservasCasa.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, marginBottom: 3 }}>{timeCasa}</div>
+                {reservasCasa.map((j, i) => <BenchRow key={i} j={j} color="#818cf8" />)}
+              </div>
+            )}
+            {reservasFora.length > 0 && (
+              <div>
+                <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, marginBottom: 3 }}>{timeFora}</div>
+                {reservasFora.map((j, i) => <BenchRow key={i} j={j} color="#34d399" />)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
