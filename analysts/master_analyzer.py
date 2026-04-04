@@ -254,18 +254,21 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
     _DEF_KW = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
                          'back', 'defensor', 'zagueiro', 'lateral'})
 
-    offensive_weight = 0.0
-    defensive_weight = 0.0
-    offensive_names  = []
-    defensive_names  = []
-
-    attack_reduction_sum  = 0.0
-    defense_reduction_sum = 0.0
-    used_real_contribution = False
+    # Per-player accumulators — each player uses real data OR heuristic independently.
+    # Both paths are summed together so mixed scenarios (some with API data, some without)
+    # are fully accounted for (fixes the silent-drop bug of the global flag approach).
+    attack_reduction_sum  = 0.0   # fractional reduction from real contribution data
+    defense_reduction_sum = 0.0   # fractional increase from real contribution data
+    offensive_weight      = 0.0   # heuristic offensive weight (when no real data)
+    defensive_weight      = 0.0   # heuristic defensive weight (when no real data)
+    offensive_names       = []
+    defensive_names       = []
+    has_any_real          = False  # purely for note labeling
 
     for p in injuries:
         w = _injury_weight(p)
-        # Só ajustar lambda para ausências confirmadas (suspensão/lesão grave)
+        # Only adjust for confirmed absences: suspensions/serious injuries (weight >= 1.0).
+        # Questionable players (weight 0.5) do not alter the statistical model.
         if w < 1.0:
             continue
 
@@ -279,11 +282,13 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
         is_fwd = any(kw in combined for kw in _FWD_KW)
         is_def = any(kw in combined for kw in _GK_KW | _DEF_KW)
 
-        # Verificar se há dados reais de contribuição de gols
         contrib_pct = p.get('goal_contribution_pct')
 
         if contrib_pct is not None and contrib_pct > 0:
-            used_real_contribution = True
+            # Real contribution path: proportion of team goals this player accounts for.
+            # Divide by 2 because lambda = 50% own attack + 50% opponent defense,
+            # so player's share of team attack scales lambda by contrib_pct * w / 2.
+            has_any_real = True
             if is_fwd and not is_def:
                 attack_reduction_sum += contrib_pct * w / 2.0
                 offensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
@@ -291,10 +296,12 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
                 defense_reduction_sum += contrib_pct * w / 2.0
                 defensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
             else:
+                # Midfield / unknown: split 50/50 between attack and defense impact
                 attack_reduction_sum += contrib_pct * w / 4.0
                 defense_reduction_sum += contrib_pct * w / 4.0
         else:
-            # Heurística por posição — fallback quando sem dados da API
+            # Heuristic path (no API data available for this player).
+            # Accumulates independently; combined with real-data accumulator below.
             if is_fwd and not is_def:
                 offensive_weight += w
                 offensive_names.append(name)
@@ -305,19 +312,18 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
                 offensive_weight += w * 0.5
                 defensive_weight += w * 0.5
 
-    if used_real_contribution:
-        # Derivado de contribuição real: redução direta proporcional (cap 25%/15%)
-        attack_factor  = max(0.75, 1.0 - min(attack_reduction_sum, 0.25))
-        defense_factor = min(1.15, 1.0 + min(defense_reduction_sum, 0.15))
-    else:
-        # Fallback heurístico
-        attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)
-        defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)
+    # Merge both paths: real-data reduction + heuristic-derived reduction, then apply caps.
+    # attack_reduction_sum and offensive_weight * 0.05 are in the same "fractional" space.
+    total_attack_reduction  = attack_reduction_sum + offensive_weight * 0.05
+    total_defense_reduction = defense_reduction_sum + defensive_weight * 0.04
+
+    attack_factor  = max(0.75, 1.0 - min(total_attack_reduction, 0.25))
+    defense_factor = min(1.15, 1.0 + min(total_defense_reduction, 0.15))
 
     notes = []
     if attack_factor < 1.0:
         reduction_pct = round((1.0 - attack_factor) * 100, 1)
-        source = "contribuição real" if used_real_contribution else "posição estimada"
+        source = "contribuição real" if has_any_real else "posição estimada"
         players_str = ", ".join(offensive_names) if offensive_names else "jogadores ofensivos"
         if lambda_pre is not None:
             lambda_post = round(lambda_pre * attack_factor, 2)
@@ -331,7 +337,7 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
             )
     if defense_factor > 1.0:
         increase_pct = round((defense_factor - 1.0) * 100, 1)
-        source = "contribuição real" if used_real_contribution else "posição estimada"
+        source = "contribuição real" if has_any_real else "posição estimada"
         players_str = ", ".join(defensive_names) if defensive_names else "jogadores defensivos"
         notes.append(
             f"{players_str} ausente(s) → adversário +{increase_pct}% gols esperados ({source})"
