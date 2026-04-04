@@ -1168,9 +1168,15 @@ async def _analyze_strength_of_schedule(team_id, league_id):
             opponent_qsc = calculate_dynamic_qsc(opponent_stats, opponent_id, None, opponent_name, league_id, 0)
             opponents_qsc.append(opponent_qsc)
         else:
-            # Opponent not in cache — use neutral default instead of firing a fresh API call
-            print(f"    ⚠️ [SoS] Adversário {opponent_id} ({opponent_name}) não está em cache → QSC=50 (neutro)")
-            opponents_qsc.append(50.0)
+            # Opponent not in cache — check QUALITY_SCORES before falling back to neutral 50
+            from config import QUALITY_SCORES as _QS
+            if opponent_id in _QS:
+                _static_qsc = float(_QS[opponent_id])
+                print(f"    📋 [SoS] Adversário {opponent_id} ({opponent_name}) não está em cache → QSC={_static_qsc:.0f} (config)")
+                opponents_qsc.append(_static_qsc)
+            else:
+                print(f"    ⚠️ [SoS] Adversário {opponent_id} ({opponent_name}) não está em cache nem no config → QSC=50 (neutro)")
+                opponents_qsc.append(50.0)
     
     if not opponents_qsc:
         return {
@@ -1651,6 +1657,12 @@ async def generate_match_analysis(jogo):
 
     injury_penalty_home = _calculate_injury_impact(home_injuries)
     injury_penalty_away = _calculate_injury_impact(away_injuries)
+
+    # Times com elenco profundo (QSC > 85) sofrem menos com ausências — cap em 10
+    if qsc_home > 85 and injury_penalty_home > 10:
+        injury_penalty_home = 10
+    if qsc_away > 85 and injury_penalty_away > 10:
+        injury_penalty_away = 10
 
     if injury_penalty_home > 0:
         moment_home = max(0, moment_home - injury_penalty_home)

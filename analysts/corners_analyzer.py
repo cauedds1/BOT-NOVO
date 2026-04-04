@@ -126,41 +126,39 @@ def analisar_mercado_cantos(analysis_packet, odds):
     all_predictions = []
 
     if not odds:
-        print(f"  ⚠️ CANTOS: Sem odds disponíveis")
-        return None
+        odds = {}
 
     # ========== 1. TOTAL CORNERS FULL TIME ==========
-    
+    # Linhas padrão sempre avaliadas; odds opcionais (None quando indisponíveis)
     linhas_ft_over = [8.5, 9.5, 10.5, 11.5]
     for linha in linhas_ft_over:
         odd_key = f"cantos_ft_over_{linha}"
-        if odd_key in odds:
-            prob_pct = calculate_statistical_probability_corners_over(
-                weighted_corners_avg=media_exp_ft_ajustada,
-                line=linha,
-                historical_frequency=None
-            )
-            
-            bet_type = f"Over {linha} Cantos"
-            conf_final, breakdown = calculate_final_confidence(
-                statistical_probability_pct=prob_pct,
-                bet_type=bet_type,
-                tactical_script=script_name,
-                injury_severity_home=_sev_home,
-                injury_severity_away=_sev_away
-            )
-            
-            if conf_final >= MIN_CONFIANCA_CANTOS:
-                all_predictions.append({
-                    "mercado": "Cantos",
-                    "tipo": bet_type,
-                    "confianca": conf_final,
-                    "odd": odds[odd_key],
-                    "periodo": "FT",
-                    "time": "Total",
-                    "breakdown": breakdown,
-                    "probabilidade_estatistica": prob_pct
-                })
+        prob_pct = calculate_statistical_probability_corners_over(
+            weighted_corners_avg=media_exp_ft_ajustada,
+            line=linha,
+            historical_frequency=None
+        )
+
+        bet_type = f"Over {linha} Cantos"
+        conf_final, breakdown = calculate_final_confidence(
+            statistical_probability_pct=prob_pct,
+            bet_type=bet_type,
+            tactical_script=script_name,
+            injury_severity_home=_sev_home,
+            injury_severity_away=_sev_away
+        )
+
+        if conf_final >= MIN_CONFIANCA_CANTOS:
+            all_predictions.append({
+                "mercado": "Cantos",
+                "tipo": bet_type,
+                "confianca": conf_final,
+                "odd": odds.get(odd_key),
+                "periodo": "FT",
+                "time": "Total",
+                "breakdown": breakdown,
+                "probabilidade_estatistica": prob_pct
+            })
     
     linhas_ft_under = [8.5, 9.5, 10.5, 11.5]
     for linha in linhas_ft_under:
