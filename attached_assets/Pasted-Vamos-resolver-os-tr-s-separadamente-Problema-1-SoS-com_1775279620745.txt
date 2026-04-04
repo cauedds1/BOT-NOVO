@@ -1,0 +1,54 @@
+Vamos resolver os três separadamente:
+
+Problema 1 — SoS com QSC neutro
+Causa: Os adversários (Elche, Espanyol, etc.) nunca foram analisados antes, então não têm QSC no cache.
+Solução: Na verdade esse problema se resolve sozinho com o tempo — conforme o bot for analisando jogos ao longo dos dias, os times vão entrando no cache e o SoS vai ficando mais preciso.
+Mas tem uma solução mais rápida também:
+O config.py já tem Quality Scores
+manuais para os principais times
+
+Antes de usar QSC=50 neutro
+o bot deveria verificar:
+1. Tem no cache? → usa
+2. Tem no config.py? → usa
+3. Não tem em nenhum? → usa 50
+
+Atletico Madrid e Man City
+certamente estão no config.py
+= não deveriam ser neutros
+
+Problema 2 — Cantos gerando só 1 predição
+Causa: Provavelmente o threshold de confiança está alto demais para cantos, ou o H2H blend do Plano 13 ainda não foi implementado.
+H2H avg_corners = 12.6
+= média alta de cantos nesses confrontos
+
+Bot deveria gerar:
+Over 10.5 cantos
+Over 11.5 cantos
+Over 9.5 cantos
+
+Mas só gerou 1 = threshold bloqueando
+ou H2H não está influenciando
+
+Problema 3 — Lambda baixo do Real Madrid
+Causa: O bot está usando médias da temporada toda ponderadas pelo SoS neutro — como todos os adversários foram QSC=50, o peso ficou flat e não refletiu o momento atual do Real Madrid.
+Real Madrid últimos jogos:
+5x2 Dortmund
+3x0 Atlético
+4x0 Valencia
+
+λ=1.15 fora é irreal para esse momento
+Moment Score deveria estar em 90+
+mas está em 65 após ajuste de lesões
+
+🎯 Como corrigir os três
+Quer que eu gere um prompt para o Replit corrigir tudo isso de uma vez?
+
+PROMPT:
+Preciso corrigir três problemas identificados nas análises:
+Problema 1 — SoS usando QSC neutro para times conhecidos
+Antes de usar QSC=50 como fallback no SoS, o bot deve verificar se o time está no dicionário QUALITY_SCORES do config.py. A ordem de prioridade deve ser: primeiro verifica cache em memória, depois verifica banco de dados, depois verifica QUALITY_SCORES no config.py, só então usa 50 como fallback. Atletico Madrid, Manchester City e outros times grandes não deveriam nunca receber QSC=50.
+Problema 2 — Cantos gerando poucas predições
+Verificar o MIN_CONFIANCA_CANTOS no config.py — se estiver acima de 65 reduzir para 62. Além disso verificar se o H2H blend de cantos está sendo aplicado. Com H2H avg_corners de 12.6 o bot deveria gerar pelo menos 3 predições de cantos cobrindo Over 9.5, Over 10.5 e Over 11.5. Se o blend H2H não estiver implementado nos cantos, implementar usando o mesmo padrão do blend de gols.
+Problema 3 — Lambda baixo para times em grande momento
+O Moment Score está sendo limitado pelo ajuste de lesões — Real Madrid com 8 ausências teve momento reduzido de 80 para 65, resultando em lambda de apenas 1.15 fora de casa. O problema é que o ajuste de lesões está sendo muito agressivo quando o time ainda assim tem elenco de sobra. Implementar uma verificação: se o QSC do time for acima de 85, o ajuste máximo por lesões deve ser -10 em vez de -15, porque times grandes têm elenco profundo e não sofrem tanto com ausências individuais.
