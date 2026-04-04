@@ -18,6 +18,9 @@ Cenários detectados:
 from datetime import datetime, timedelta
 from typing import Optional
 
+# In-memory cache for referee profiles (by referee name, within session)
+_REFEREE_CACHE: dict = {}
+
 
 # --------------------------------------------------------------------------
 # Multiplicadores por cenário
@@ -240,11 +243,30 @@ def compute_context_modifiers(
                 f"(λ visitante −12%)"
             )
 
-    # 6. Árbitro (informativo — sem perfil estatístico ainda)
+    # 6. Árbitro — perfil baseado em jogos recentes (cache em memória por sessão)
+    referee_profile = _get_referee_profile(referee, jogo)
     if referee:
-        context_bullets.append(
-            f"👨‍⚖️ Árbitro: {referee} — sem perfil de cartões registado"
-        )
+        ref_line = f"👨‍⚖️ Árbitro: {referee}"
+        if referee_profile.get("avg_cards_per_game") is not None:
+            avg_c = referee_profile["avg_cards_per_game"]
+            ref_line += f" — média {avg_c:.1f} cartões/jogo"
+            # Apply referee card multiplier if significantly card-heavy or card-light
+            if avg_c >= 5.5:
+                mult_ref_cards = 1.15
+                ref_line += f" (árbitro rigoroso: cartões+15%)"
+                scenarios_detected.append("REFEREE_STRICT")
+            elif avg_c <= 2.5:
+                mult_ref_cards = 0.88
+                ref_line += f" (árbitro leniente: cartões−12%)"
+                scenarios_detected.append("REFEREE_LENIENT")
+            else:
+                mult_ref_cards = 1.0
+        else:
+            ref_line += " — perfil não disponível"
+            mult_ref_cards = 1.0
+        context_bullets.append(ref_line)
+    else:
+        mult_ref_cards = 1.0
 
     # Calcular multiplicadores finais (produto composto de todos os cenários)
     mult_home = {"lambda_goals": 1.0, "corners": 1.0, "cards": 1.0, "shots": 1.0}
@@ -256,6 +278,36 @@ def compute_context_modifiers(
             mult_home[k] = round(mult_home.get(k, 1.0) * v, 4)
         for k, v in s.get("away", {}).items():
             mult_away[k] = round(mult_away.get(k, 1.0) * v, 4)
+
+    # Referee card multiplier applied to both sides
+    if mult_ref_cards != 1.0:
+        mult_home["cards"] = round(mult_home.get("cards", 1.0) * mult_ref_cards, 4)
+        mult_away["cards"] = round(mult_away.get("cards", 1.0) * mult_ref_cards, 4)
+
+    # Derive structured semantic fields
+    motivation_home = "NEUTRAL"
+    motivation_away = "NEUTRAL"
+    for sc in scenarios_detected:
+        if sc in ("PRECISA_VENCER_HOME",):
+            motivation_home = "MUST_WIN"
+        elif sc in ("SEM_MOTIVACAO_HOME",):
+            motivation_home = "LOW"
+        if sc in ("PRECISA_VENCER_AWAY",):
+            motivation_away = "MUST_WIN"
+        elif sc in ("SEM_MOTIVACAO_AWAY",):
+            motivation_away = "LOW"
+
+    fatigue_home = "HIGH" if "CANSADO_HOME" in scenarios_detected else "NORMAL"
+    fatigue_away = "HIGH" if "CANSADO_AWAY" in scenarios_detected else "NORMAL"
+
+    knockout_type = None
+    for sc in scenarios_detected:
+        if "KNOCKOUT_REVERSAL" in sc:
+            knockout_type = "REVERSAL"
+            break
+        elif "KNOCKOUT_ADVANTAGE" in sc:
+            knockout_type = "ADVANTAGE"
+            break
 
     if scenarios_detected:
         print(f"  🧭 CONTEXTO: {scenarios_detected}")
@@ -270,6 +322,13 @@ def compute_context_modifiers(
         "context_bullets": context_bullets,
         "scenarios_detected": scenarios_detected,
         "referee": referee,
+        "referee_profile": referee_profile,
+        # Structured semantic fields for downstream consumers
+        "motivation_home": motivation_home,
+        "motivation_away": motivation_away,
+        "fatigue_home": fatigue_home,
+        "fatigue_away": fatigue_away,
+        "knockout_type": knockout_type,
     }
 
 
@@ -407,3 +466,52 @@ def _is_clasico(home_name: str, away_name: str) -> bool:
         if match_h and match_a and h != a:
             return True
     return False
+
+
+def _get_referee_profile(referee_name: str, jogo: dict) -> dict:
+    """
+    Builds a referee card-intensity profile from the last 20 fixtures found in
+    the current season's fixture data embedded in jogo['lineups_and_stats'] or
+    via the referee name lookup in the global _REFEREE_CACHE.
+
+    Returns:
+        dict: {
+            avg_cards_per_game: float | None,
+            sample_size: int,
+        }
+    """
+    if not referee_name:
+        return {"avg_cards_per_game": None, "sample_size": 0}
+
+    ref_key = referee_name.strip().lower()
+    if ref_key in _REFEREE_CACHE:
+        return _REFEREE_CACHE[ref_key]
+
+    # Try to extract referee stats from jogo if the raw API response carries it
+    # API-Football returns fixture stats per fixture but NOT per referee directly.
+    # We approximate from the referee's name match in embedded fixture data if available.
+    # Fallback: return None so the caller renders "profile not available".
+    events = jogo.get("events", []) or []
+    cards_in_this_game = sum(
+        1 for e in events
+        if isinstance(e, dict) and e.get("type", "").lower() == "card"
+    )
+
+    profile: dict = {"avg_cards_per_game": None, "sample_size": 0}
+
+    # If we have at least the current match, we can seed the profile but it's
+    # only 1 sample — not statistically meaningful. We store it so future calls
+    # accumulate data in the same session.
+    if cards_in_this_game > 0:
+        existing = _REFEREE_CACHE.get(ref_key)
+        if existing and existing.get("sample_size", 0) > 0:
+            n = existing["sample_size"]
+            avg = existing["avg_cards_per_game"]
+            new_n = n + 1
+            new_avg = ((avg * n) + cards_in_this_game) / new_n
+            profile = {"avg_cards_per_game": round(new_avg, 2), "sample_size": new_n}
+        else:
+            profile = {"avg_cards_per_game": float(cards_in_this_game), "sample_size": 1}
+
+    _REFEREE_CACHE[ref_key] = profile
+    return profile

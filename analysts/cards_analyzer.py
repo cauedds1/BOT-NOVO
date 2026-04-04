@@ -46,30 +46,60 @@ def analisar_mercado_cartoes(analysis_packet, odds):
         print(f"  ⚠️ CARTÕES: Faltam estatísticas")
         return None
 
-    # STEP 1: EXTRAIR MÉTRICAS DE CARTÕES
-    # 🔥 PHOENIX V4.0: PRIORIZAR WEIGHTED METRICS
+    # STEP 1: EXTRAIR MÉTRICAS DE CARTÕES (cross-model)
+    # Cross formula: expected cards for each team = own cards_for + opponent fouls_against
+    # Priority: weighted_metrics (context-adjusted) → simple averages
     cartoes_casa = 0.0
     cartoes_fora = 0.0
     use_weighted = False
-    
+
     if 'analysis_summary' in analysis_packet:
         weighted_home = analysis_packet['analysis_summary'].get('weighted_metrics_home', {})
         weighted_away = analysis_packet['analysis_summary'].get('weighted_metrics_away', {})
-        
+
         if weighted_home and weighted_away:
             use_weighted = True
-            cartoes_casa = weighted_home.get('weighted_cards_for', 0.0)
-            cartoes_fora = weighted_away.get('weighted_cards_for', 0.0)
-            print(f"  ⚖️ CARTÕES V4.0: Usando WEIGHTED METRICS (ponderado por SoS)")
-    
+            cards_home_for = weighted_home.get('weighted_cards_for', 0.0) or 0.0
+            cards_away_for = weighted_away.get('weighted_cards_for', 0.0) or 0.0
+
+            # Cross-analysis: blend own card tendency with opponent foul pressure
+            # weighted_cards_against ≈ cards the team concedes (opponent fouls on them)
+            cards_home_against = weighted_home.get('weighted_cards_against', 0.0) or 0.0
+            cards_away_against = weighted_away.get('weighted_cards_against', 0.0) or 0.0
+
+            # Cross-weight: 60% own card avg, 40% opponent foul pressure (as conceded cards)
+            if cards_away_against > 0 and cards_home_against > 0:
+                cartoes_casa = round(0.60 * cards_home_for + 0.40 * cards_away_against, 3)
+                cartoes_fora = round(0.60 * cards_away_for + 0.40 * cards_home_against, 3)
+                print(f"  ⚖️ CARTÕES V5.0: Cross-model WEIGHTED (own×60% + opponent_fouls×40%)")
+            else:
+                cartoes_casa = cards_home_for
+                cartoes_fora = cards_away_for
+                print(f"  ⚖️ CARTÕES V4.0: Usando WEIGHTED METRICS (ponderado por SoS)")
+
     if not use_weighted:
         cartoes_amarelos_casa = stats_casa.get('casa', {}).get('cartoes_amarelos', 0.0)
         cartoes_vermelhos_casa = stats_casa.get('casa', {}).get('cartoes_vermelhos', 0.0)
         cartoes_amarelos_fora = stats_fora.get('fora', {}).get('cartoes_amarelos', 0.0)
         cartoes_vermelhos_fora = stats_fora.get('fora', {}).get('cartoes_vermelhos', 0.0)
-        cartoes_casa = cartoes_amarelos_casa + cartoes_vermelhos_casa
-        cartoes_fora = cartoes_amarelos_fora + cartoes_vermelhos_fora
-        print(f"  📊 CARTÕES V4.0: Usando médias simples")
+        raw_home = cartoes_amarelos_casa + cartoes_vermelhos_casa
+        raw_away = cartoes_amarelos_fora + cartoes_vermelhos_fora
+
+        # Simple cross: try to blend with opponent fouls from stats if available
+        fouls_against_home = stats_casa.get('casa', {}).get('faltas_cometidas', 0.0) or 0.0
+        fouls_against_away = stats_fora.get('fora', {}).get('faltas_cometidas', 0.0) or 0.0
+        # Rough conversion: ~0.3 cards per foul for rough blend
+        FOUL_TO_CARD_RATIO = 0.30
+        if fouls_against_home > 0 and fouls_against_away > 0:
+            opponent_card_pressure_home = fouls_against_away * FOUL_TO_CARD_RATIO
+            opponent_card_pressure_away = fouls_against_home * FOUL_TO_CARD_RATIO
+            cartoes_casa = round(0.60 * raw_home + 0.40 * opponent_card_pressure_home, 3)
+            cartoes_fora = round(0.60 * raw_away + 0.40 * opponent_card_pressure_away, 3)
+            print(f"  📊 CARTÕES V5.0: Cross-model simples (own + fouls_opp×0.30)")
+        else:
+            cartoes_casa = raw_home
+            cartoes_fora = raw_away
+            print(f"  📊 CARTÕES V4.0: Usando médias simples")
 
     if cartoes_casa == 0.0 and cartoes_fora == 0.0:
         return None
@@ -160,9 +190,9 @@ def analisar_mercado_cartoes(analysis_packet, odds):
     print(f"  ✅ CARTÕES V3.0: {len(all_predictions)} predições geradas (deep analysis)")
     
     if all_predictions:
-        suporte = (f"Expectativa Cartões Total: {media_exp_total:.1f}\n"
-                   f"Casa: {media_casa:.1f} cartões/jogo\n"
-                   f"Fora: {media_fora:.1f} cartões/jogo\n")
+        suporte = (f"Expectativa Cartões Total (cross-model): {media_exp_total:.2f}\n"
+                   f"Casa: {media_casa:.2f} cartões/jogo\n"
+                   f"Fora: {media_fora:.2f} cartões/jogo\n")
         
         return {"mercado": "Cartões", "palpites": all_predictions, "dados_suporte": suporte}
     
