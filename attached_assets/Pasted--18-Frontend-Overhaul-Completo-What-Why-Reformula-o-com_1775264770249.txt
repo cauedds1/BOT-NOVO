@@ -1,0 +1,58 @@
+#18 - Frontend Overhaul Completo
+What & Why
+Reformulação completa do frontend do AnalyTips seguindo a spec detalhada. O site deve evoluir de uma interface básica de listagem para uma experiência profissional de análise esportiva, com visual sofisticado, filtros avançados e todas as 8 seções da página de análise de jogo.
+
+O backend também precisa de ajustes nas respostas das APIs para expor dados que já existem no banco (H2H, forma recente, script tático, metadados do fixture, melhores palpites) mas que ainda não são enviados ao frontend.
+
+Done looks like
+Página principal (lista de jogos):
+
+Filtros funcionais no topo: badges clicáveis de liga com escudo, slider de confiança mínima (60–95), checkboxes de mercado (Gols, Cantos, Cartões, BTTS, Resultado), ordenação por confiança ou horário
+Jogos agrupados por liga com escudo da liga no cabeçalho de cada grupo
+Cada card mostra: horário + contador regressivo ("em 2h30"), escudos dos times, badges dos 2–3 mercados mais fortes com % de confiança (ex: ⚽ 78% 🚩 71%), indicador de escalação confirmada/pendente (se disponível), skeleton animado durante análise em progresso
+Filtros e busca filtram os jogos em tempo real sem recarregar a página
+Página de análise do jogo (8 seções):
+
+Cabeçalho: nome da liga + rodada, horário + estádio + árbitro (quando disponível no fixture), escudos e nomes dos times com Quality Score (QSC), script tático do bot com explicação em português, data da última análise
+Palpites: ordenados por confiança DESC, barra visual preenchida, odd com semáforo de value (verde = value, amarelo = justa, vermelho = ruim baseado em prob_bot vs prob_implícita da odd), justificativa do palpite; mercados vetados aparecem separados no final
+Mercados de jogador: seção aparece apenas se houver dados de jogadores salvos no DB; para cada jogador: nome, mercado, confiança, odd, últimos 5 jogos nessa estatística, média casa vs fora, tamanho da amostra; se n < 6 exibe aviso "amostra pequena"
+Forma recente: últimos 5 jogos de cada time lado a lado, resultado W/D/L colorido, média de gols marcados e sofridos, separado em casa vs fora
+H2H: últimos 5 confrontos diretos com placar, gols totais, e resumo (média de gols + vezes que BTTS ocorreu); se sem dados, mostra aviso e oculta a seção
+Escalação tática: layout visual de campo com formação (ex: 4-3-3), nomes nas posições corretas, lesionados/suspensos marcados em vermelho, jogadores com dúvida em amarelo; se escalação não confirmada, mostra aviso e oculta
+Estatísticas comparativas: tabela lado a lado com gols marcados/sofridos por jogo, média de escanteios, finalizações no alvo, cartões, % BTTS, % Over 2.5 nos jogos recentes
+Perfil do árbitro: nome, média de cartões por jogo, % jogos com Over 4.5 cartões, média de pênaltis, classificação do estilo (rigoroso/moderado/permissivo); se dados insuficientes, mostra apenas nome
+Visual e UX:
+
+Tema escuro sofisticado, visual moderno e profissional usando o design atual como base
+Semáforo de odds: verde/amarelo/vermelho baseado em edge do bot vs odd de mercado
+Badge "Análise Final" para jogos a menos de 30 minutos do kickoff
+Skeleton loading animado para jogos em análise
+Layout totalmente responsivo para mobile e desktop
+Jogos já analisados carregam instantaneamente (cache do estado)
+Out of scope
+Login, landing page, sistema de planos, autenticação
+Mercados de jogador com palpites novos gerados pelo bot (seção exibe histórico salvo do DB, não predições em tempo real por jogador)
+Dados de árbitro via endpoint separado da API-Football (usa apenas o que está no objeto fixture que já é buscado)
+Escalação em tempo real com animação 3D do campo
+Tasks
+Enriquecer API backend — Estender _formatar_jogo para incluir best_palpites (top 3 mercados com % confiança dos jogos já analisados) e rodada. Estender _db_to_api_response para incluir fixture_metadata (horário, estádio, árbitro, rodada extraídos do raw_data), script_tatico (selected_script + reasoning), qsc_home/qsc_away/pos_casa/pos_fora, forma_recente_casa/forma_recente_fora (últimos 5 jogos dos stats), h2h (do packet salvo no DB), stats_comparativas (estruturadas de stats_casa e stats_fora). Também criar endpoint GET /api/jogadores/:fixtureId que busca perfis de jogadores do DB para a seção de mercados de jogador.
+
+Refatorar página principal — filtros e cards — Reescrever Home.jsx com: barra de filtros (liga badges clicáveis com logos, slider de confiança mínima, multi-select de mercado, sort por confiança/horário), cards expandidos com countdown regressivo calculado client-side a partir de data_iso, badges de mercado com % confiança vindos de best_palpites, badge "Análise Final" quando jogo < 30min, skeleton animado enquanto status = processing, agrupamento por liga com escudo no cabeçalho.
+
+Reformular página de análise — seções 1 a 4 — Reescrever MatchDetail.jsx para incluir: (1) cabeçalho com metadados do fixture, QSC por time, script tático com texto explicativo; (2) palpites com barra de confiança proporcional, semáforo de value calculado a partir de probabilidade vs 1/odd; (3) seção de mercados de jogador carregada do endpoint /api/jogadores/:id com últimos 5 jogos e aviso de amostra pequena; (4) forma recente lado a lado com resultados W/D/L coloridos e médias casa vs fora.
+
+Reformular página de análise — seções 5 a 8 — Continuar MatchDetail.jsx adicionando: (5) H2H com confrontos e resumo BTTS, com fallback de "sem dados" se vazio; (6) escalação tática com layout visual de campo SVG mostrando a formação, titulares nas posições, lesionados marcados em vermelho e dúvidas em amarelo, com fallback se não confirmada; (7) tabela de estatísticas comparativas lado a lado; (8) card de perfil do árbitro com estilo classificado.
+
+Polimento visual e responsividade — Aplicar refinamentos de design em index.css e componentes: badges coloridos por mercado, tipografia moderna nos números, animações de loading skeleton, layout mobile-first responsivo, Header com status da API mais visível e polido. Garantir que todas as seções se adaptem ao que está disponível (ocultar graciosamente quando sem dados).
+
+Relevant files
+frontend/src/pages/Home.jsx
+frontend/src/pages/MatchDetail.jsx
+frontend/src/pages/Performance.jsx
+frontend/src/components/Header.jsx
+frontend/src/App.jsx
+frontend/src/index.css
+web_api.py:128-175
+web_api.py:340-381
+web_api.py:499-600
+db_manager.py
