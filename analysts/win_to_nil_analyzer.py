@@ -135,8 +135,8 @@ def analisar_mercado_win_to_nil(analysis_packet: dict, odds: dict) -> dict | Non
         f"   - <b>Power Score Casa:</b> {power_home}\n"
         f"   - <b>Power Score Fora:</b> {power_away}\n"
         f"   - <b>λ Casa:</b> {lambda_home:.2f} | <b>λ Fora:</b> {lambda_away:.2f}\n"
-        f"   - <b>P(Clean Sheet Casa):</b> {round(p_home_zero * 100, 1)}% | "
-        f"<b>P(Clean Sheet Fora):</b> {round(p_away_zero * 100, 1)}%"
+        f"   - <b>P(Clean Sheet Casa):</b> {round(p_away_zero * 100, 1)}% | "
+        f"<b>P(Clean Sheet Fora):</b> {round(p_home_zero * 100, 1)}%"
     )
 
     return {

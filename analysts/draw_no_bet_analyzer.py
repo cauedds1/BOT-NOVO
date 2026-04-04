@@ -47,12 +47,20 @@ def analisar_mercado_draw_no_bet(analysis_packet: dict, odds: dict) -> dict | No
         print("  ⚠️  Draw No Bet: probabilidades 1X2 não disponíveis")
         return None
 
+    # Normalizar escala: suporte tanto 0-1 quanto 0-100
+    _total_raw = home_win_prob + draw_prob + away_win_prob
+    if _total_raw > 1.5:
+        # Escala percentual (0-100) — converter para 0-1
+        home_win_prob /= 100.0
+        draw_prob /= 100.0
+        away_win_prob /= 100.0
+
     decisive_prob = home_win_prob + away_win_prob
-    if decisive_prob < 1.0:
+    if decisive_prob < 0.01:
         print("  ⚠️  Draw No Bet: probabilidade decisiva muito baixa")
         return None
 
-    # Probabilidades condicionais excluindo empate
+    # Probabilidades condicionais excluindo empate (saída em escala percentual)
     dnb_home_prob = round(home_win_prob / decisive_prob * 100, 2)
     dnb_away_prob = round(away_win_prob / decisive_prob * 100, 2)
 
