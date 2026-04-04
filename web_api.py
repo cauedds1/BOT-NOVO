@@ -306,9 +306,42 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
         if removed:
             print(f"  ⚠️  CONSISTÊNCIA: Removido '{tipo}' de [{label}] ({removed} palpite(s)) — conflito cruzado")
 
-    def _build_index(analise):
-        return {p["tipo"]: p["confianca"] for p in _get_palpites(analise)
+    def _normalize_btts_tipo(tipo):
+        """
+        Normaliza nomes de tipo de palpites BTTS.
+        btts_analyzer emite "Sim"/"Não"; goals_analyzer_v2 emite "BTTS Sim"/"BTTS Não".
+        Retorna sempre a forma longa "BTTS Sim" / "BTTS Não", ou o tipo original se não for BTTS.
+        """
+        if tipo == "Sim":
+            return "BTTS Sim"
+        if tipo == "Não":
+            return "BTTS Não"
+        return tipo
+
+    def _build_btts_index(analise):
+        """
+        Constrói índice {tipo_normalizado: confiança} para palpites BTTS.
+        Aceita tanto o formato de btts_analyzer ("Sim"/"Não")
+        quanto o de goals_analyzer_v2 ("BTTS Sim"/"BTTS Não").
+        """
+        return {_normalize_btts_tipo(p["tipo"]): p["confianca"]
+                for p in _get_palpites(analise)
                 if isinstance(p, dict) and "tipo" in p}
+
+    def _remove_btts_from(analise, btts_tipo_normalizado, label):
+        """Remove palpites BTTS (aceitando forma curta ou longa do tipo)."""
+        forma_curta = btts_tipo_normalizado.replace("BTTS ", "")  # "Sim" ou "Não"
+        palpites = _get_palpites(analise)
+        original_len = len(palpites)
+        filtrado = [p for p in palpites
+                    if p.get("tipo") not in (btts_tipo_normalizado, forma_curta)]
+        if isinstance(analise, list):
+            analise[:] = filtrado
+        elif isinstance(analise, dict):
+            analise["palpites"] = filtrado
+        removed = original_len - len(filtrado)
+        if removed:
+            print(f"  ⚠️  CONSISTÊNCIA: Removido '{btts_tipo_normalizado}' de [{label}] ({removed} palpite(s)) — conflito cruzado")
 
     def _apply_rules(btts_index, under_goals_index, over_goals_index,
                      btts_src, btts_label, gols_src, gols_label):
@@ -318,7 +351,7 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
         """
         # Regra 1: BTTS Sim + Under 0.5 FT → impossível; remove BTTS Sim sempre
         if "BTTS Sim" in btts_index and "Under 0.5" in under_goals_index:
-            _remove_tipo_from(btts_src, "BTTS Sim", btts_label)
+            _remove_btts_from(btts_src, "BTTS Sim", btts_label)
             return True  # regra 2 não se aplica mais
 
         # Regra 2: BTTS Sim + Under 1.5 FT → quase impossível; mantém o de maior confiança
@@ -326,7 +359,7 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
             conf_btts = btts_index["BTTS Sim"]
             conf_under = under_goals_index["Under 1.5"]
             if conf_btts <= conf_under:
-                _remove_tipo_from(btts_src, "BTTS Sim", btts_label)
+                _remove_btts_from(btts_src, "BTTS Sim", btts_label)
             else:
                 _remove_tipo_from(gols_src, "Under 1.5", gols_label)
 
@@ -335,40 +368,37 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
             conf_btts = btts_index["BTTS Não"]
             conf_over = over_goals_index["Over 2.5"]
             if conf_btts <= conf_over:
-                _remove_tipo_from(btts_src, "BTTS Não", btts_label)
+                _remove_btts_from(btts_src, "BTTS Não", btts_label)
             else:
                 _remove_tipo_from(gols_src, "Over 2.5", gols_label)
         return False
 
+    # Helper para Under/Over FT dentro de analise_gols
+    def _gols_under_index(analise):
+        return {p["tipo"]: p["confianca"]
+                for p in _get_palpites(analise)
+                if isinstance(p, dict) and p.get("periodo") == "FT"
+                and p.get("tipo", "").startswith("Under")}
+
+    def _gols_over_index(analise):
+        return {p["tipo"]: p["confianca"]
+                for p in _get_palpites(analise)
+                if isinstance(p, dict) and p.get("periodo") == "FT"
+                and p.get("tipo", "").startswith("Over")}
+
     # --- Caso A: conflitos entre analise_btts (btts_analyzer) e analise_gols ---
-    btts_ext_index = _build_index(analise_btts)
-    gols_index = _build_index(analise_gols)
-    # Separa Under e Over dentro do índice de gols (periodo=FT somente)
-    gols_under = {p["tipo"]: p["confianca"]
-                  for p in _get_palpites(analise_gols)
-                  if isinstance(p, dict) and p.get("periodo") == "FT" and p.get("tipo", "").startswith("Under")}
-    gols_over = {p["tipo"]: p["confianca"]
-                 for p in _get_palpites(analise_gols)
-                 if isinstance(p, dict) and p.get("periodo") == "FT" and p.get("tipo", "").startswith("Over")}
-    _apply_rules(btts_ext_index, gols_under, gols_over,
+    # btts_analyzer emite tipo="Sim"/"Não"; normalizar para "BTTS Sim"/"BTTS Não".
+    btts_ext_index = _build_btts_index(analise_btts)
+    _apply_rules(btts_ext_index, _gols_under_index(analise_gols), _gols_over_index(analise_gols),
                  analise_btts, "BTTS", analise_gols, "Gols")
 
     # --- Caso B: conflitos DENTRO de analise_gols ---
     # goals_analyzer_v2 também gera BTTS Sim/Não no mesmo array (mercado="BTTS").
     # Recalcula índices após possíveis remoções acima.
-    gols_palpites = _get_palpites(analise_gols)
-    btts_int_index = {p["tipo"]: p["confianca"]
-                      for p in gols_palpites
+    btts_int_index = {_normalize_btts_tipo(p["tipo"]): p["confianca"]
+                      for p in _get_palpites(analise_gols)
                       if isinstance(p, dict) and p.get("mercado") == "BTTS"}
-    gols_under_int = {p["tipo"]: p["confianca"]
-                      for p in gols_palpites
-                      if isinstance(p, dict) and p.get("periodo") == "FT"
-                      and p.get("tipo", "").startswith("Under")}
-    gols_over_int = {p["tipo"]: p["confianca"]
-                     for p in gols_palpites
-                     if isinstance(p, dict) and p.get("periodo") == "FT"
-                     and p.get("tipo", "").startswith("Over")}
-    _apply_rules(btts_int_index, gols_under_int, gols_over_int,
+    _apply_rules(btts_int_index, _gols_under_index(analise_gols), _gols_over_index(analise_gols),
                  analise_gols, "Gols(BTTS)", analise_gols, "Gols")
 
 
