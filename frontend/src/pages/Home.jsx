@@ -146,7 +146,7 @@ function MatchRow({ jogo, onOpen, featured = false }) {
 
   return (
     <div
-      className={`match-row${isReady ? ' analyzed' : ''}${isLiveSoon ? ' live-soon' : ''}`}
+      className={`match-row${isReady ? ' analyzed' : ''}${isLiveSoon ? ' live-soon' : featured && !isReady && !isLiveSoon ? ' featured-row' : ''}`}
       style={{ padding: '11px 14px', marginBottom: 4, cursor: 'pointer' }}
       onClick={() => onOpen(jogo.fixture_id, jogo, isReady)}
     >
@@ -479,15 +479,21 @@ export default function Home() {
   const totalPaises = data?.por_pais?.length || 0
   const totalAnalisados = allJogos.filter(j => j.tem_analise).length
   const totalFiltrados = filteredJogos.length
+  const totalAoVivo = allJogos.filter(j => {
+    if (!j.data_iso) return false
+    const diff = new Date(j.data_iso).getTime() - Date.now()
+    return diff < 0 && diff > -7200000
+  }).length
 
   const clearAll = () => { setSearch(''); setFilters({ confiancaMin: 60, mercados: [], ligaIds: [], sort: 'horario', apenasAnalisados: false }) }
 
   return (
     <div style={{ paddingTop: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: 10, marginBottom: 20 }}>
         {[
           { label: 'Jogos Hoje', value: total, sub: `${totalPaises} países` },
           { label: 'Analisados', value: totalAnalisados, sub: `${total > 0 ? ((totalAnalisados/total)*100).toFixed(0) : 0}% do total`, color: totalAnalisados > 0 ? 'var(--green-light)' : undefined },
+          { label: 'Ao Vivo', value: totalAoVivo, sub: 'últimas 2 horas', color: totalAoVivo > 0 ? 'var(--red)' : undefined },
           { label: 'Em Exibição', value: totalFiltrados, sub: filters.sort === 'horario' ? 'ord. horário' : filters.sort === 'confianca' ? 'ord. confiança' : 'ord. relevância' },
         ].map(({ label, value, sub, color }) => (
           <div key={label} className="stat-box" style={{ padding: '10px 14px' }}>
