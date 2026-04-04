@@ -5,6 +5,39 @@ const AUTO_REFRESH_SECS = 600
 
 const MERCADOS_DISPONIVEIS = ['Gols', 'Resultado', 'BTTS', 'Cantos', 'Cartões', 'Handicaps', 'Dupla Chance', 'Placar Exato']
 
+function useCountdown(horarioBrt) {
+  const [label, setLabel] = useState('')
+  const [minsLeft, setMinsLeft] = useState(null)
+
+  useEffect(() => {
+    if (!horarioBrt) return
+    const update = () => {
+      const now = new Date()
+      const [h, m] = horarioBrt.split(':').map(Number)
+      const target = new Date(now)
+      target.setHours(h, m, 0, 0)
+      if (target < now) target.setDate(target.getDate() + 1)
+      const diffMs = target - now
+      const diffMins = Math.floor(diffMs / 60000)
+      setMinsLeft(diffMins)
+      if (diffMins <= 0) {
+        setLabel('')
+      } else if (diffMins < 60) {
+        setLabel(`em ${diffMins}min`)
+      } else {
+        const hrs = Math.floor(diffMins / 60)
+        const mins = diffMins % 60
+        setLabel(mins > 0 ? `em ${hrs}h${mins}` : `em ${hrs}h`)
+      }
+    }
+    update()
+    const iv = setInterval(update, 30000)
+    return () => clearInterval(iv)
+  }, [horarioBrt])
+
+  return { label, minsLeft }
+}
+
 function TeamLogo({ logo, name, size = 28 }) {
   const [err, setErr] = useState(false)
   if (!logo || err) {
@@ -33,6 +66,7 @@ function TeamLogo({ logo, name, size = 28 }) {
 function MatchCard({ jogo, compact = false }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
+  const { label: countdown, minsLeft } = useCountdown(jogo.horario_brt)
 
   useEffect(() => {
     setStatus(jogo.tem_analise ? 'ready' : 'none')
@@ -71,8 +105,8 @@ function MatchCard({ jogo, compact = false }) {
 
   const isProcessing = status === 'processing'
   const isReady = status === 'ready'
-
-  const topPick = jogo.best_palpites?.[0]
+  const isLast30 = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
+  const topPicks = jogo.best_palpites?.slice(0, 2) || []
 
   return (
     <Link
@@ -82,48 +116,73 @@ function MatchCard({ jogo, compact = false }) {
     >
       <div
         className="card"
-        style={{ padding: compact ? '12px 14px' : '14px 16px', marginBottom: 8, cursor: 'pointer' }}
+        style={{
+          padding: compact ? '10px 12px' : '12px 14px', marginBottom: 6, cursor: 'pointer',
+          border: isLast30 ? '1px solid rgba(239,68,68,0.25)' : undefined,
+        }}
       >
         <div className="flex items-center gap-3">
-          <span style={{ fontSize: 12, color: '#64748b', fontWeight: 600, minWidth: 38, flexShrink: 0 }}>
-            {jogo.horario_brt}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 44, flexShrink: 0 }}>
+            <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 700, lineHeight: 1 }}>
+              {jogo.horario_brt}
+            </span>
+            {countdown && (
+              <span style={{ fontSize: 9, color: isLast30 ? '#f87171' : '#475569', marginTop: 2, whiteSpace: 'nowrap' }}>
+                {countdown}
+              </span>
+            )}
+          </div>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={compact ? 22 : 28} />
+            <TeamLogo logo={jogo.time_casa?.logo} name={jogo.time_casa?.nome} size={compact ? 22 : 26} />
             <span style={{
-              fontSize: compact ? 12 : 13, fontWeight: 600, color: '#e2e8f0',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100,
+              fontSize: compact ? 11 : 12, fontWeight: 600, color: '#e2e8f0',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90,
             }}>
               {jogo.time_casa?.nome}
             </span>
-            <span style={{ fontSize: 11, color: '#475569', margin: '0 2px', flexShrink: 0 }}>vs</span>
+            <span style={{ fontSize: 10, color: '#475569', margin: '0 1px', flexShrink: 0 }}>vs</span>
             <span style={{
-              fontSize: compact ? 12 : 13, fontWeight: 600, color: '#e2e8f0',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 100,
+              fontSize: compact ? 11 : 12, fontWeight: 600, color: '#e2e8f0',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90,
             }}>
               {jogo.time_fora?.nome}
             </span>
-            <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={compact ? 22 : 28} />
+            <TeamLogo logo={jogo.time_fora?.logo} name={jogo.time_fora?.nome} size={compact ? 22 : 26} />
           </div>
 
-          <div className="ml-auto flex-shrink-0 flex items-center gap-6">
-            {isReady && topPick && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                <span style={{ fontSize: 10, color: '#64748b' }}>{topPick.mercado}:</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: topPick.confianca >= 7 ? '#22c55e' : '#eab308', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {topPick.tipo}
-                </span>
-                {topPick.odd && <span style={{ fontSize: 10, color: '#818cf8' }}>@{Number(topPick.odd).toFixed(2)}</span>}
+          <div className="ml-auto flex-shrink-0 flex items-center gap-4">
+            {isLast30 && isReady && (
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)', whiteSpace: 'nowrap' }}>
+                🔴 Final
+              </span>
+            )}
+            {isReady && topPicks.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                {topPicks.map((p, i) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: 3,
+                    background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.18)',
+                    borderRadius: 6, padding: '2px 6px',
+                  }}>
+                    <span style={{ fontSize: 9, color: '#64748b' }}>{p.mercado}:</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308', whiteSpace: 'nowrap', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.tipo}
+                    </span>
+                    {p.probabilidade != null && (
+                      <span style={{ fontSize: 9, color: '#818cf8' }}>{Number(p.probabilidade).toFixed(0)}%</span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
             {isReady && (
-              <span className="badge badge-green" style={{ fontSize: 11 }}>✓ Analisado</span>
+              <span className="badge badge-green" style={{ fontSize: 10 }}>✓</span>
             )}
             {isProcessing && (
-              <span className="badge badge-blue" style={{ fontSize: 11, gap: 5 }}>
-                <div className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
-                Analisando...
+              <span className="badge badge-blue" style={{ fontSize: 10, gap: 4 }}>
+                <div className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
+                ...
               </span>
             )}
             {!isReady && !isProcessing && (
@@ -133,6 +192,7 @@ function MatchCard({ jogo, compact = false }) {
                   fontSize: 11, fontWeight: 600, padding: '3px 10px',
                   background: 'rgba(99,102,241,0.15)', color: '#818cf8',
                   border: '1px solid rgba(99,102,241,0.3)', borderRadius: 8, cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 Analisar →
@@ -148,6 +208,7 @@ function MatchCard({ jogo, compact = false }) {
 function FeaturedMatchCard({ jogo }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
+  const { label: countdown, minsLeft } = useCountdown(jogo.horario_brt)
 
   useEffect(() => {
     setStatus(jogo.tem_analise ? 'ready' : 'none')
@@ -186,6 +247,7 @@ function FeaturedMatchCard({ jogo }) {
 
   const isProcessing = status === 'processing'
   const isReady = status === 'ready'
+  const isLast30 = minsLeft !== null && minsLeft >= 0 && minsLeft <= 30
   const score = jogo.score_destaque || 0
 
   return (
@@ -198,13 +260,15 @@ function FeaturedMatchCard({ jogo }) {
         className="card"
         style={{
           padding: '16px 18px', marginBottom: 10, cursor: 'pointer',
-          border: '1px solid rgba(99,102,241,0.25)',
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(15,23,42,0.8) 100%)',
+          border: isLast30 ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(99,102,241,0.25)',
+          background: isLast30
+            ? 'linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(15,23,42,0.8) 100%)'
+            : 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(15,23,42,0.8) 100%)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
               {jogo.liga.logo && (
                 <img
                   src={jogo.liga.logo} alt=""
@@ -216,7 +280,17 @@ function FeaturedMatchCard({ jogo }) {
                 {jogo.liga.nome}
               </span>
               <span style={{ fontSize: 10, color: '#475569' }}>·</span>
-              <span style={{ fontSize: 11, color: '#64748b' }}>{jogo.horario_brt}</span>
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700 }}>{jogo.horario_brt}</span>
+              {countdown && (
+                <span style={{ fontSize: 10, color: isLast30 ? '#f87171' : '#64748b' }}>
+                  ({countdown})
+                </span>
+              )}
+              {isLast30 && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 6, background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                  🔴 Análise Final
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -278,7 +352,10 @@ function FeaturedMatchCard({ jogo }) {
               }}>
                 <span style={{ fontSize: 10, color: '#64748b' }}>{p.mercado}:</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: p.confianca >= 7 ? '#22c55e' : '#eab308' }}>{p.tipo}</span>
-                {p.odd && <span style={{ fontSize: 10, color: '#818cf8' }}>@{Number(p.odd).toFixed(2)}</span>}
+                {p.probabilidade != null && (
+                  <span style={{ fontSize: 10, color: '#818cf8', fontWeight: 600 }}>{Number(p.probabilidade).toFixed(0)}%</span>
+                )}
+                {p.odd && <span style={{ fontSize: 10, color: '#64748b' }}>@{Number(p.odd).toFixed(2)}</span>}
               </div>
             ))}
           </div>

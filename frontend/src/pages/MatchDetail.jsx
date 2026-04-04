@@ -359,10 +359,13 @@ function PlayerMarketRow({ record }) {
   if (conf >= 7) confColor = '#22c55e'
   else if (conf >= 5) confColor = '#eab308'
 
+  const mediaHistorico = record.media_historico != null ? record.media_historico : null
+  const mediaCasa = record.media_casa != null ? record.media_casa : null
+  const mediaFora = record.media_fora != null ? record.media_fora : null
+  const isHome = record.eh_mandante
+
   return (
-    <div style={{
-      padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
-    }}>
+    <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', flex: 1 }}>{record.jogador}</span>
         {record.odd && (
@@ -382,14 +385,22 @@ function PlayerMarketRow({ record }) {
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#64748b' }}>
-        <span>📈 Média: <strong style={{ color: '#94a3b8' }}>{(record.media_historico * 100).toFixed(1)}%</strong></span>
+      <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#64748b', flexWrap: 'wrap' }}>
+        {mediaHistorico !== null && (
+          <span>📈 Média geral: <strong style={{ color: '#94a3b8' }}>{(mediaHistorico * 100).toFixed(1)}%</strong></span>
+        )}
+        {isHome && mediaCasa !== null && (
+          <span>🏠 Casa: <strong style={{ color: '#818cf8' }}>{(mediaCasa * 100).toFixed(1)}%</strong></span>
+        )}
+        {!isHome && mediaFora !== null && (
+          <span>✈️ Fora: <strong style={{ color: '#34d399' }}>{(mediaFora * 100).toFixed(1)}%</strong></span>
+        )}
         <span>📊 Prob: <strong style={{ color: '#94a3b8' }}>{record.probabilidade.toFixed(1)}%</strong></span>
         {record.n_jogos > 0 && <span>🎮 {record.n_jogos} jogos</span>}
       </div>
       {record.ultimos_5?.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-          <span style={{ fontSize: 10, color: '#475569' }}>Últimos 5:</span>
+        <div style={{ display: 'flex', gap: 4, marginTop: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: '#475569' }}>Últimos {record.ultimos_5.length}:</span>
           {record.ultimos_5.map((v, i) => (
             <span key={i} style={{
               fontSize: 10, fontWeight: 700,
@@ -500,81 +511,99 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora }) {
     )
   }
 
-  const PlayerChip = ({ j, lesionado = false }) => (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 8px', borderRadius: 8,
-      background: j.foi_titular ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)',
-      border: `1px solid ${j.foi_titular ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.06)'}`,
-      marginBottom: 4,
-    }}>
+  const splitLines = (players) => {
+    if (players.length === 0) return []
+    if (players.length <= 4) return [players]
+    const n = players.length
+    if (n <= 8) {
+      const mid = Math.ceil(n / 2)
+      return [players.slice(0, 1), players.slice(1, mid), players.slice(mid)]
+    }
+    return [players.slice(0, 1), players.slice(1, 5), players.slice(5, 9), players.slice(9)]
+  }
+
+  const FieldPlayer = ({ j, color = '#818cf8' }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
       <div style={{
-        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-        background: j.foi_titular ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.06)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 9, fontWeight: 800, color: j.foi_titular ? '#818cf8' : '#475569',
+        width: 36, height: 36, borderRadius: '50%', border: `2px solid ${color}`,
+        background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 10, fontWeight: 800, color,
+        position: 'relative',
       }}>
-        {j.foi_titular ? '11' : 'S'}
+        {j.nome ? j.nome.split(' ').pop()?.slice(0, 3).toUpperCase() : `J${j.jogador_id}`}
+        {j.cartao_amarelo && <span style={{ position: 'absolute', top: -4, right: -4, fontSize: 8 }}>🟨</span>}
+        {j.cartao_vermelho && <span style={{ position: 'absolute', top: -4, right: -4, fontSize: 8 }}>🟥</span>}
+        {j.gols > 0 && <span style={{ position: 'absolute', bottom: -4, left: -4, fontSize: 8 }}>⚽</span>}
       </div>
-      <span style={{ fontSize: 11, color: j.foi_titular ? '#e2e8f0' : '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {j.nome || `Jogador #${j.jogador_id}`}
-        {lesionado && <span style={{ marginLeft: 4, fontSize: 10 }}>🏥</span>}
+      <span style={{ fontSize: 9, color: '#94a3b8', textAlign: 'center', maxWidth: 52, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {j.nome?.split(' ').pop() || `#${j.jogador_id}`}
       </span>
-      {j.minutos > 0 && <span style={{ fontSize: 10, color: '#475569' }}>{j.minutos}'</span>}
-      {j.gols > 0 && <span style={{ fontSize: 11 }}>⚽</span>}
-      {j.cartao_amarelo && <span style={{ fontSize: 11 }}>🟨</span>}
-      {j.cartao_vermelho && <span style={{ fontSize: 11 }}>🟥</span>}
+    </div>
+  )
+
+  const FormationField = ({ players, teamName, isCasa }) => {
+    const lines = splitLines(players)
+    const color = isCasa ? '#818cf8' : '#34d399'
+    return (
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 6, textAlign: 'center' }}>
+          {isCasa ? '🏠' : '✈️'} {teamName}
+        </div>
+        <div style={{
+          background: 'linear-gradient(180deg, rgba(34,197,94,0.05) 0%, rgba(34,197,94,0.02) 100%)',
+          border: '1px solid rgba(34,197,94,0.12)',
+          borderRadius: 12, padding: '12px 8px',
+          display: 'flex', flexDirection: isCasa ? 'column' : 'column-reverse', gap: 14,
+          minHeight: 280,
+        }}>
+          {lines.map((line, li) => (
+            <div key={li} style={{ display: 'flex', justifyContent: 'space-evenly', alignItems: 'center' }}>
+              {line.map((j, i) => <FieldPlayer key={i} j={j} color={color} />)}
+            </div>
+          ))}
+          {players.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: '#64748b', fontSize: 12 }}>Sem dados</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const BenchRow = ({ j, color }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
+      borderRadius: 6, background: 'rgba(255,255,255,0.02)',
+    }}>
+      <div style={{ width: 20, height: 20, borderRadius: '50%', border: `1px dashed ${color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#475569' }}>S</div>
+      <span style={{ fontSize: 10, color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {j.nome?.split(' ').pop() || `#${j.jogador_id}`}
+      </span>
+      {j.minutos > 0 && <span style={{ fontSize: 9, color: '#475569' }}>{j.minutos}'</span>}
     </div>
   )
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-      <div>
-        <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa} — Titulares</div>
-          {titularesCasa.length === 0
-            ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
-            : titularesCasa.map((j, i) => <PlayerChip key={i} j={j} />)
-          }
-        </div>
-        {reservasCasa.length > 0 && (
-          <div className="card" style={{ padding: '10px 14px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Banco</div>
-            {reservasCasa.map((j, i) => <PlayerChip key={i} j={j} />)}
-          </div>
-        )}
+    <div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+        <FormationField players={titularesCasa} teamName={timeCasa} isCasa={true} />
+        <div style={{ width: 1, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
+        <FormationField players={titularesFora} teamName={timeFora} isCasa={false} />
       </div>
-      <div>
-        <div className="card" style={{ padding: '14px 16px', marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora} — Titulares</div>
-          {titularesFora.length === 0
-            ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem dados</p>
-            : titularesFora.map((j, i) => <PlayerChip key={i} j={j} />)
-          }
-        </div>
-        {reservasFora.length > 0 && (
-          <div className="card" style={{ padding: '10px 14px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Banco</div>
-            {reservasFora.map((j, i) => <PlayerChip key={i} j={j} />)}
+      {(reservasCasa.length > 0 || reservasFora.length > 0) && (
+        <div className="card" style={{ padding: '10px 14px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>Banco de Reservas</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            <div>{reservasCasa.map((j, i) => <BenchRow key={i} j={j} color="#818cf8" />)}</div>
+            <div>{reservasFora.map((j, i) => <BenchRow key={i} j={j} color="#34d399" />)}</div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function ArbitroSection({ arbitro, metadata }) {
   const nomeArbitro = arbitro || metadata?.arbitro || ''
-
-  const getArbitroProfile = (nome) => {
-    if (!nome) return null
-    const n = nome.toLowerCase()
-    if (n.includes('oliver') || n.includes('atkinson')) return { estilo: 'rigoroso', cartoes_media: 4.8, penaltis_jogo: 0.18, cor: '#f87171', descricao: 'Árbitro rigoroso, muitos cartões amarelos e alta frequência de penaltis.', icon: '🔴' }
-    if (n.includes('collina') || n.includes('kuipers')) return { estilo: 'permissivo', cartoes_media: 2.1, penaltis_jogo: 0.08, cor: '#22c55e', descricao: 'Árbitro permissivo, deixa o jogo fluir. Menos interrupções.', icon: '🟢' }
-    return { estilo: 'moderado', cartoes_media: 3.4, penaltis_jogo: 0.12, cor: '#eab308', descricao: 'Árbitro moderado. Estilo equilibrado com intervenções pontuais.', icon: '🟡' }
-  }
-
-  const profile = getArbitroProfile(nomeArbitro)
 
   if (!nomeArbitro) return (
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
@@ -584,64 +613,69 @@ function ArbitroSection({ arbitro, metadata }) {
     </div>
   )
 
+  const cartoesPorJogo = metadata?.arbitro_cartoes_por_jogo ?? null
+  const penalusPorJogo = metadata?.arbitro_penaltis_por_jogo ?? null
+  const estiloArbitro = metadata?.arbitro_estilo ?? null
+  const estiloMap = { rigoroso: '#f87171', moderado: '#eab308', permissivo: '#22c55e' }
+  const estiloCor = estiloArbitro ? (estiloMap[estiloArbitro] ?? '#818cf8') : null
+
+  const hasRealStats = cartoesPorJogo !== null || penalusPorJogo !== null || estiloArbitro !== null
+
   return (
     <div>
-      <div className="card" style={{ padding: '20px 22px', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+      <div className="card" style={{ padding: '20px 22px', marginBottom: hasRealStats ? 14 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: hasRealStats ? 16 : 0 }}>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
             🟨
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{nomeArbitro}</div>
             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Árbitro Principal</div>
           </div>
-          {profile && (
+          {estiloArbitro && (
             <div style={{
-              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
+              display: 'flex', alignItems: 'center', gap: 6,
               padding: '6px 12px', borderRadius: 10,
-              background: `${profile.cor}12`, border: `1px solid ${profile.cor}30`,
+              background: `${estiloCor}12`, border: `1px solid ${estiloCor}30`,
             }}>
-              <span style={{ fontSize: 16 }}>{profile.icon}</span>
               <div>
                 <div style={{ fontSize: 10, color: '#64748b' }}>Estilo</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: profile.cor, textTransform: 'capitalize' }}>{profile.estilo}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: estiloCor, textTransform: 'capitalize' }}>{estiloArbitro}</div>
               </div>
             </div>
           )}
         </div>
 
-        {profile && (
-          <>
-            <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, marginBottom: 16 }}>{profile.descricao}</p>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {hasRealStats && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+            {cartoesPorJogo !== null && (
               <div style={statBoxStyle}>
                 <div style={statLabelStyle}>Cartões / Jogo</div>
-                <div style={{ ...statValueStyle, fontSize: 22, color: profile.cartoes_media >= 4 ? '#f87171' : profile.cartoes_media >= 3 ? '#eab308' : '#22c55e' }}>
-                  {profile.cartoes_media.toFixed(1)}
+                <div style={{ ...statValueStyle, fontSize: 22, color: cartoesPorJogo >= 4 ? '#f87171' : cartoesPorJogo >= 3 ? '#eab308' : '#22c55e' }}>
+                  {Number(cartoesPorJogo).toFixed(1)}
                 </div>
-                <div style={statSubStyle}>média histórica</div>
+                <div style={statSubStyle}>média real</div>
               </div>
+            )}
+            {penalusPorJogo !== null && (
               <div style={statBoxStyle}>
                 <div style={statLabelStyle}>Penaltis / Jogo</div>
-                <div style={{ ...statValueStyle, fontSize: 22, color: profile.penaltis_jogo >= 0.15 ? '#f87171' : '#94a3b8' }}>
-                  {profile.penaltis_jogo.toFixed(2)}
+                <div style={{ ...statValueStyle, fontSize: 22, color: penalusPorJogo >= 0.15 ? '#f87171' : '#94a3b8' }}>
+                  {Number(penalusPorJogo).toFixed(2)}
                 </div>
-                <div style={statSubStyle}>frequência média</div>
+                <div style={statSubStyle}>frequência real</div>
               </div>
-              <div style={statBoxStyle}>
-                <div style={statLabelStyle}>Classificação</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: profile.cor, textTransform: 'capitalize' }}>{profile.estilo}</div>
-                <div style={statSubStyle}>rigoroso / moderado / permissivo</div>
-              </div>
-            </div>
-          </>
+            )}
+          </div>
         )}
-      </div>
 
-      <div style={{ padding: '12px 16px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 10 }}>
-        <p style={{ fontSize: 11, color: '#92400e', margin: 0 }}>
-          ⚠️ Os dados do árbitro são estimativas baseadas no nome. Para histórico completo, a API requer plano premium.
-        </p>
+        {!hasRealStats && (
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(99,102,241,0.04)', border: '1px dashed rgba(99,102,241,0.15)', borderRadius: 8 }}>
+            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+              Histórico detalhado do árbitro não disponível no plano atual da API. Apenas o nome foi fornecido pela fonte de dados.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -695,15 +729,35 @@ function TabelaClassificacao({ classificacao, timeCasa, timeFora }) {
   )
 }
 
-function ScriptTaticoCard({ script }) {
+function ScriptTaticoCard({ script, reasoning }) {
+  const [showReasoning, setShowReasoning] = useState(false)
   const info = SCRIPT_LABELS[script] || { label: script, color: '#818cf8', icon: '📋' }
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 10, background: `${info.color}12`, border: `1px solid ${info.color}30` }}>
-      <span style={{ fontSize: 16 }}>{info.icon}</span>
-      <div>
-        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Script Tático</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: info.color }}>{info.label}</div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <button
+        onClick={() => reasoning && setShowReasoning(o => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+          borderRadius: 10, background: `${info.color}12`, border: `1px solid ${info.color}30`,
+          cursor: reasoning ? 'pointer' : 'default',
+        }}
+      >
+        <span style={{ fontSize: 16 }}>{info.icon}</span>
+        <div>
+          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Script Tático</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: info.color }}>{info.label}</div>
+        </div>
+        {reasoning && <span style={{ fontSize: 10, color: '#475569', marginLeft: 4 }}>{showReasoning ? '▲' : '▼'}</span>}
+      </button>
+      {showReasoning && reasoning && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 8,
+          background: `${info.color}08`, border: `1px solid ${info.color}20`,
+          fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 480,
+        }}>
+          {reasoning}
+        </div>
+      )}
     </div>
   )
 }
@@ -903,7 +957,7 @@ export default function MatchDetail() {
             <span style={{ fontSize: 12, color: '#818cf8', fontWeight: 600 }}>{jogoInfo?.liga?.nome || analise.liga}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {analise.script_tatico && <ScriptTaticoCard script={analise.script_tatico} />}
+            {analise.script_tatico && <ScriptTaticoCard script={analise.script_tatico} reasoning={analise.script_reasoning} />}
             {isLast30 && (
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
                 🔴 Análise Final
