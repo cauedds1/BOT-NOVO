@@ -15,6 +15,7 @@ Este modelo garante que a confiança está sempre ancorada na realidade estatís
 
 import math
 from typing import Dict, List, Tuple, Optional
+from config import ODD_MINIMA_PALPITE, ODD_PENALIDADE_BAIXA, ODD_PENALIDADE_MEDIA
 
 
 def calculate_statistical_probability_goals_over(
@@ -471,14 +472,12 @@ def calculate_final_confidence(
                confianca_final = 0.0 indica que o palpite deve ser descartado
                (odd abaixo do mínimo aceitável)
     """
-    # STEP 0: Filtro de odd mínima — sem valor para o usuário abaixo de 1.35
-    _ODD_MINIMA_PALPITE = 1.35
-    _ODD_PENALIDADE_BAIXA_LIMITE = 1.50
-    _ODD_PENALIDADE_MEDIA_LIMITE = 1.70
-
+    # STEP 0: Filtro de odd mínima — sem valor para o usuário abaixo de ODD_MINIMA_PALPITE.
+    # Thresholds lidos de config.py: ODD_MINIMA_PALPITE=1.35, ODD_PENALIDADE_BAIXA=1.50,
+    # ODD_PENALIDADE_MEDIA=1.70
     mod_odd = 0.0
     if odd is not None:
-        if odd < _ODD_MINIMA_PALPITE:
+        if odd < ODD_MINIMA_PALPITE:
             # Descartado imediatamente — sem valor real para o apostador
             _bd = {
                 "probabilidade_base": statistical_probability_pct,
@@ -490,9 +489,9 @@ def calculate_final_confidence(
                 "confianca_final": 0.0,
             }
             return 0.0, _bd
-        elif odd < _ODD_PENALIDADE_BAIXA_LIMITE:
+        elif odd < ODD_PENALIDADE_BAIXA:
             mod_odd = -1.5
-        elif odd < _ODD_PENALIDADE_MEDIA_LIMITE:
+        elif odd < ODD_PENALIDADE_MEDIA:
             mod_odd = -0.5
 
     # STEP 2: Base confidence

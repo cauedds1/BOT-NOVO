@@ -43,6 +43,11 @@ def _get_trivial_market_types() -> set:
     Query palpites_historico to find bet types that appeared in >70% of analyzed
     games in the last 7 days. Result is cached in memory for 1 hour.
 
+    Note: Uses palpites_historico (individual bet records with fixture_id) rather
+    than performance_mercados because the latter stores accuracy/ROI aggregates, not
+    per-fixture appearance counts. palpites_historico is the correct source for
+    measuring how frequently a given bet type is generated across distinct games.
+
     Returns an empty set when there are insufficient samples (<5 distinct fixtures).
     """
     now = _time.time()

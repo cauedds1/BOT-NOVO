@@ -37,6 +37,8 @@ MIN_CONFIANCA_BINGO = 5.5  # Para bingo (odd alta)
 #   odd = None                        → sem penalidade (mercado sem odds)
 ODD_MINIMA_PENALIDADE = 1.40  # legado — mantido para referência histórica
 ODD_MINIMA_PALPITE = 1.35     # novo mínimo: abaixo disso não gera palpite
+ODD_PENALIDADE_BAIXA = 1.50   # 1.35–1.50 → -1.5 na confiança
+ODD_PENALIDADE_MEDIA = 1.70   # 1.50–1.70 → -0.5 na confiança
 ODD_MINIMA_TACTICAL_TIP = 1.20  # Mínimo para considerar como tactical tip válido
 
 # --- THRESHOLDS DE PROBABILIDADES E MÉTRICAS ESTATÍSTICAS ---
