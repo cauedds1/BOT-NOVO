@@ -7,9 +7,9 @@ import Header from './components/Header'
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen" style={{ background: '#0d0f1a' }}>
+      <div className="min-h-screen" style={{ background: '#09090e' }}>
         <Header />
-        <main style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px 64px' }}>
+        <main style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px 80px' }}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/jogo/:fixtureId" element={<MatchDetail />} />

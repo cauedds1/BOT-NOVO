@@ -49,15 +49,15 @@ function useCountdown(isoDate) {
   return `${h > 0 ? `${h}h ` : ''}${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
 }
 
-function TeamLogo({ logo, name, size = 44 }) {
+function TeamLogo({ logo, name, size = 48 }) {
   const [err, setErr] = useState(false)
   if (!logo || err) {
     return (
       <div style={{
         width: size, height: size, borderRadius: '50%',
-        background: 'rgba(99,102,241,0.2)',
+        background: 'rgba(99,102,241,0.15)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: size * 0.4, color: '#818cf8', fontWeight: 700, flexShrink: 0,
+        fontSize: size * 0.38, color: '#818cf8', fontWeight: 700, flexShrink: 0,
       }}>
         {name?.[0] || '?'}
       </div>
@@ -68,9 +68,9 @@ function TeamLogo({ logo, name, size = 44 }) {
 
 function ConfidenceBar({ value, max = 10 }) {
   const pct = Math.min(100, (value / max) * 100)
-  let color = '#ef4444'
+  let color = '#f87171'
   if (value >= 7) color = '#22c55e'
-  else if (value >= 5.5) color = '#eab308'
+  else if (value >= 5.5) color = '#f59e0b'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
       <div className="confidence-bar-track" style={{ flex: 1 }}>
@@ -88,12 +88,12 @@ function OddsTrafficLight({ odd, probabilidade }) {
   const impliedProb = (1 / odd) * 100
   const edge = probabilidade - impliedProb
   let color, label, bg
-  if (edge >= 5) { color = '#22c55e'; label = 'Valor'; bg = 'rgba(34,197,94,0.12)' }
-  else if (edge >= -3) { color = '#eab308'; label = 'Justo'; bg = 'rgba(234,179,8,0.12)' }
-  else { color = '#f87171'; label = 'Caro'; bg = 'rgba(239,68,68,0.12)' }
+  if (edge >= 5) { color = '#22c55e'; label = 'Valor'; bg = 'rgba(34,197,94,0.1)' }
+  else if (edge >= -3) { color = '#f59e0b'; label = 'Justo'; bg = 'rgba(245,158,11,0.1)' }
+  else { color = '#f87171'; label = 'Caro'; bg = 'rgba(239,68,68,0.1)' }
   return (
     <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+      fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5,
       background: bg, color, border: `1px solid ${color}33`,
     }}>
       {label} {edge >= 0 ? '+' : ''}{edge.toFixed(1)}%
@@ -107,24 +107,24 @@ function ConfidenceBreakdown({ bd }) {
   if (keys.length === 0) return null
   return (
     <div style={{ marginTop: 6 }}>
-      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#475569', padding: 0 }}>
-        {open ? '▲' : '▼'} Detalhes de confiança
+      <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#4b5563', padding: 0 }}>
+        {open ? '▴' : '▾'} Detalhes de confiança
       </button>
       {open && (
         <div style={{
-          marginTop: 6, padding: '8px 10px', borderRadius: 8,
+          marginTop: 6, padding: '8px 10px', borderRadius: 7,
           background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.1)',
           display: 'flex', flexWrap: 'wrap', gap: '4px 16px',
         }}>
           {keys.map(k => (
             <div key={k} style={{ fontSize: 10, color: '#64748b' }}>
-              <span style={{ color: '#475569' }}>{k.replace(/_/g, ' ')}: </span>
+              <span style={{ color: '#4b5563' }}>{k.replace(/_/g, ' ')}: </span>
               <span style={{ color: '#818cf8', fontWeight: 600 }}>{typeof bd[k] === 'number' ? bd[k].toFixed(2) : String(bd[k])}</span>
             </div>
           ))}
           {bd.modificador_historico !== undefined && (
             <div style={{ fontSize: 10, color: '#64748b' }}>
-              <span style={{ color: '#475569' }}>ajuste histórico: </span>
+              <span style={{ color: '#4b5563' }}>ajuste histórico: </span>
               <span style={{ color: bd.modificador_historico >= 0 ? '#22c55e' : '#f87171', fontWeight: 600 }}>
                 {bd.modificador_historico >= 0 ? '+' : ''}{Number(bd.modificador_historico).toFixed(2)}
               </span>
@@ -139,18 +139,24 @@ function ConfidenceBreakdown({ bd }) {
 function PredictionRow({ palpite, rank }) {
   const conf = palpite.confianca || 0
   return (
-    <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{
+      padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 5 }}>
             {rank === 0 && (
-              <span style={{ fontSize: 10, background: 'rgba(99,102,241,0.2)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>
+              <span style={{
+                fontSize: 9, background: 'rgba(99,102,241,0.15)', color: '#818cf8',
+                border: '1px solid rgba(99,102,241,0.3)', borderRadius: 4, padding: '1px 6px', fontWeight: 700,
+              }}>
                 #1
               </span>
             )}
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{palpite.tipo}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>{palpite.tipo}</span>
             {palpite.periodo && palpite.periodo !== 'FT' && (
-              <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.05)', borderRadius: 4, padding: '1px 5px' }}>
+              <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.04)', borderRadius: 4, padding: '1px 5px' }}>
                 {palpite.periodo}
               </span>
             )}
@@ -162,15 +168,15 @@ function PredictionRow({ palpite, rank }) {
             <OddsTrafficLight odd={palpite.odd} probabilidade={palpite.probabilidade} />
           </div>
           {palpite.justificativa && (
-            <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, marginBottom: 6 }}>{palpite.justificativa}</p>
+            <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.55, marginBottom: 7 }}>{palpite.justificativa}</p>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, color: '#475569', minWidth: 60 }}>Confiança</span>
+            <span style={{ fontSize: 11, color: '#4b5563', minWidth: 60 }}>Confiança</span>
             <ConfidenceBar value={conf} />
           </div>
           {palpite.probabilidade > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-              <span style={{ fontSize: 11, color: '#475569', minWidth: 60 }}>Prob. Bot</span>
+              <span style={{ fontSize: 11, color: '#4b5563', minWidth: 60 }}>Prob. Bot</span>
               <ConfidenceBar value={palpite.probabilidade} max={100} />
               <span style={{ fontSize: 11, color: '#64748b', marginLeft: -20 }}>%</span>
             </div>
@@ -191,18 +197,27 @@ function MarketCard({ mercado, minConfianca }) {
   const topConf = palpitesFiltrados[0]?.confianca || 0
   if (palpitesFiltrados.length === 0) return null
   return (
-    <div className="card" style={{ marginBottom: 14, overflow: 'hidden' }}>
+    <div className="card" style={{ marginBottom: 12, overflow: 'hidden' }}>
       <button onClick={() => setOpen(o => !o)} style={{
         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 16px', cursor: 'pointer', background: 'transparent', border: 'none',
         borderBottom: open ? '1px solid rgba(255,255,255,0.05)' : 'none',
       }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>{mercado.mercado}</span>
-        <span style={{ fontSize: 11, color: '#475569' }}>{palpitesFiltrados.length} palpite{palpitesFiltrados.length !== 1 ? 's' : ''}</span>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9,
+          background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 15, flexShrink: 0,
+        }}>
+          {icon}
+        </div>
+        <div style={{ flex: 1, textAlign: 'left' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', letterSpacing: '-0.01em' }}>{mercado.mercado}</div>
+          <div style={{ fontSize: 11, color: '#4b5563', marginTop: 1 }}>{palpitesFiltrados.length} palpite{palpitesFiltrados.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           {topConf >= 7 && <span className="badge badge-green" style={{ fontSize: 10 }}>⭐ Top</span>}
-          <span style={{ fontSize: 12, color: '#475569' }}>{open ? '▲' : '▼'}</span>
+          <span style={{ fontSize: 11, color: '#4b5563' }}>{open ? '▴' : '▾'}</span>
         </div>
       </button>
       {open && (
@@ -219,7 +234,7 @@ function FormaRecente({ forma, label, mediaMarcados, mediaSofridos }) {
   const getColor = (r) => {
     const u = String(r).toUpperCase()
     if (u === 'W' || u === 'V') return '#22c55e'
-    if (u === 'D' || u === 'E') return '#eab308'
+    if (u === 'D' || u === 'E') return '#f59e0b'
     return '#f87171'
   }
   const getLabel = (r) => {
@@ -230,12 +245,13 @@ function FormaRecente({ forma, label, mediaMarcados, mediaSofridos }) {
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
       <div style={{ display: 'flex', gap: 4 }}>
         {forma.slice(0, 5).map((r, i) => (
           <div key={i} style={{
             width: 26, height: 26, borderRadius: 7,
-            background: `${getColor(r)}18`, border: `1.5px solid ${getColor(r)}44`,
+            background: `${getColor(r)}14`,
+            border: `1.5px solid ${getColor(r)}40`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 10, fontWeight: 700, color: getColor(r),
           }}>
@@ -244,7 +260,7 @@ function FormaRecente({ forma, label, mediaMarcados, mediaSofridos }) {
         ))}
       </div>
       {(mediaMarcados != null || mediaSofridos != null) && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 1 }}>
           {mediaMarcados != null && (
             <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 600 }}>
               ⚽ {Number(mediaMarcados).toFixed(2)} marc.
@@ -274,18 +290,18 @@ function H2HSection({ h2h, h2hSummary, timeCasa, timeFora }) {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           <div style={statBoxStyle}>
             <div style={statLabelStyle}>Gols/Jogo (H2H)</div>
-            <div style={{ ...statValueStyle, fontSize: 20 }}>{h2hSummary.media_gols}</div>
+            <div style={{ ...statValueStyle, fontSize: 22 }}>{h2hSummary.media_gols}</div>
             <div style={statSubStyle}>{h2hSummary.total_jogos} confrontos</div>
           </div>
           <div style={statBoxStyle}>
             <div style={statLabelStyle}>BTTS nos H2H</div>
-            <div style={{ ...statValueStyle, fontSize: 20 }}>{h2hSummary.btts_freq}%</div>
+            <div style={{ ...statValueStyle, fontSize: 22 }}>{h2hSummary.btts_freq}%</div>
             <div style={statSubStyle}>ambos marcaram</div>
           </div>
         </div>
       )}
-      <div className="card" style={{ padding: '16px 18px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="card" style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {h2h.map((jogo, i) => {
             const data = (jogo.data || jogo.date || '').slice(0, 4)
             const gc = jogo.gols_casa ?? jogo.home_goals ?? jogo.score_home ?? '?'
@@ -295,15 +311,15 @@ function H2HSection({ h2h, h2hSummary, timeCasa, timeFora }) {
             return (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '8px 10px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(99,102,241,0.08)',
+                padding: '7px 10px', borderRadius: 7,
+                background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
               }}>
-                <span style={{ fontSize: 11, color: '#475569', minWidth: 32 }}>{data}</span>
+                <span style={{ fontSize: 11, color: '#4b5563', minWidth: 32, fontWeight: 500 }}>{data}</span>
                 <span style={{ fontSize: 12, color: '#94a3b8', flex: 1, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{home}</span>
                 <span style={{
                   fontSize: 13, fontWeight: 700, color: '#e2e8f0',
-                  background: 'rgba(99,102,241,0.1)', borderRadius: 6,
-                  padding: '2px 10px', minWidth: 52, textAlign: 'center', flexShrink: 0,
+                  background: 'rgba(99,102,241,0.08)', borderRadius: 6,
+                  padding: '2px 10px', minWidth: 50, textAlign: 'center', flexShrink: 0,
                 }}>{gc} – {gf}</span>
                 <span style={{ fontSize: 12, color: '#94a3b8', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{away}</span>
               </div>
@@ -315,56 +331,87 @@ function H2HSection({ h2h, h2hSummary, timeCasa, timeFora }) {
   )
 }
 
+function StatBar({ valCasa, valFora, label }) {
+  const numC = parseFloat(valCasa) || 0
+  const numF = parseFloat(valFora) || 0
+  const total = numC + numF
+  const pctC = total > 0 ? (numC / total) * 100 : 50
+  const pctF = total > 0 ? (numF / total) * 100 : 50
+  const winC = numC > numF
+  const winF = numF > numC
+
+  return (
+    <>
+      <div style={{
+        fontSize: 16, fontWeight: 800, textAlign: 'right',
+        color: winC ? '#22c55e' : '#e2e8f0',
+        letterSpacing: '-0.02em',
+      }}>
+        {valCasa !== undefined ? valCasa : '—'}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 100 }}>
+        <div style={{ fontSize: 10, color: '#4b5563', textAlign: 'center', fontWeight: 600, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          {label}
+        </div>
+        {total > 0 && (
+          <div style={{ width: '100%', height: 3, borderRadius: 3, display: 'flex', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+            <div style={{ width: `${pctC}%`, background: '#6366f1', borderRadius: '3px 0 0 3px', transition: 'width 0.5s' }} />
+            <div style={{ width: `${pctF}%`, background: '#34d399', borderRadius: '0 3px 3px 0', transition: 'width 0.5s' }} />
+          </div>
+        )}
+      </div>
+      <div style={{
+        fontSize: 16, fontWeight: 800,
+        color: winF ? '#22c55e' : '#e2e8f0',
+        letterSpacing: '-0.02em',
+      }}>
+        {valFora !== undefined ? valFora : '—'}
+      </div>
+    </>
+  )
+}
+
 function StatsComparativas({ stats, timeCasa, timeFora }) {
   if (!stats || Object.keys(stats).length === 0) return (
-    <div style={{ textAlign: 'center', padding: '40px 24px', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+    <div style={{ textAlign: 'center', padding: '40px 24px', color: '#64748b', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.07)' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
       <p style={{ fontSize: 14 }}>Estatísticas comparativas disponíveis após análise completa.</p>
-      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os dados aparecem conforme a API retorna estatísticas da temporada.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#4b5563' }}>Os dados aparecem conforme a API retorna estatísticas da temporada.</p>
     </div>
   )
   const rows = [
     { key: 'media_gols_marcados', label: 'Gols Marcados (méd.)' },
     { key: 'media_gols_sofridos', label: 'Gols Sofridos (méd.)' },
-    { key: 'btts_percent', label: 'BTTS % (recente)' },
-    { key: 'over25_percent', label: 'Over 2.5 % (recente)' },
+    { key: 'btts_percent', label: 'BTTS %' },
+    { key: 'over25_percent', label: 'Over 2.5 %' },
     { key: 'media_cantos', label: 'Escanteios (méd.)' },
     { key: 'media_cartoes', label: 'Cartões (méd.)' },
     { key: 'media_finalizacoes', label: 'Finalizações (méd.)' },
     { key: 'avg_shots', label: 'Chutes (méd.)' },
-    { key: 'posse_media', label: 'Posse de Bola (%)' },
-    { key: 'avg_possession', label: 'Posse (%)' },
+    { key: 'posse_media', label: 'Posse de Bola %' },
+    { key: 'avg_possession', label: 'Posse %' },
   ].filter(r => stats[`${r.key}_casa`] !== undefined || stats[`${r.key}_fora`] !== undefined)
 
   if (rows.length === 0) return (
-    <div style={{ textAlign: 'center', padding: '40px 24px', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+    <div style={{ textAlign: 'center', padding: '40px 24px', color: '#64748b', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.07)' }}>
       <p style={{ fontSize: 14 }}>Sem métricas comparativas disponíveis para este jogo.</p>
     </div>
   )
 
   return (
     <div className="card" style={{ padding: '16px 18px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '8px 12px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', textAlign: 'right', paddingBottom: 4 }}>{timeCasa}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr minmax(120px, auto) 1fr', alignItems: 'center', gap: '10px 16px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', textAlign: 'right', paddingBottom: 6 }}>{timeCasa}</div>
         <div />
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#818cf8', paddingBottom: 4 }}>{timeFora}</div>
-        {rows.map(r => {
-          const vC = stats[`${r.key}_casa`]
-          const vF = stats[`${r.key}_fora`]
-          const cW = vC !== undefined && vF !== undefined && vC > vF
-          const fW = vC !== undefined && vF !== undefined && vF > vC
-          return [
-            <div key={`c-${r.key}`} style={{ fontSize: 15, fontWeight: 700, textAlign: 'right', color: cW ? '#22c55e' : '#e2e8f0' }}>
-              {vC !== undefined ? vC : '—'}
-            </div>,
-            <div key={`l-${r.key}`} style={{ fontSize: 10, color: '#475569', textAlign: 'center', padding: '2px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 4, whiteSpace: 'nowrap' }}>
-              {r.label}
-            </div>,
-            <div key={`f-${r.key}`} style={{ fontSize: 15, fontWeight: 700, color: fW ? '#22c55e' : '#e2e8f0' }}>
-              {vF !== undefined ? vF : '—'}
-            </div>,
-          ]
-        })}
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', paddingBottom: 6 }}>{timeFora}</div>
+        {rows.map(r => (
+          <StatBar
+            key={r.key}
+            valCasa={stats[`${r.key}_casa`]}
+            valFora={stats[`${r.key}_fora`]}
+            label={r.label}
+          />
+        ))}
       </div>
     </div>
   )
@@ -378,8 +425,8 @@ function PlayerStatRow({ record, color }) {
     <div style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
         <div style={{
-          width: 24, height: 24, borderRadius: '50%', border: `1.5px solid ${color}44`,
-          background: `${color}10`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 24, height: 24, borderRadius: '50%', border: `1.5px solid ${color}40`,
+          background: `${color}0e`, display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 8, fontWeight: 700, color, flexShrink: 0,
         }}>
           {record.nome?.split(' ').pop()?.slice(0, 3).toUpperCase() || '?'}
@@ -404,11 +451,11 @@ function PlayerStatRow({ record, color }) {
       </div>
       {u5g.length > 0 && (
         <div style={{ display: 'flex', gap: 3, marginTop: 4, alignItems: 'center', paddingLeft: 30 }}>
-          <span style={{ fontSize: 9, color: '#475569' }}>Gols ult.{u5g.length}:</span>
+          <span style={{ fontSize: 9, color: '#4b5563' }}>Gols ult.{u5g.length}:</span>
           {u5g.map((v, i) => (
             <span key={i} style={{
               fontSize: 9, fontWeight: 700,
-              color: v > 0 ? '#22c55e' : '#475569',
+              color: v > 0 ? '#22c55e' : '#4b5563',
               background: v > 0 ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.04)',
               borderRadius: 3, padding: '0 4px',
             }}>
@@ -417,11 +464,11 @@ function PlayerStatRow({ record, color }) {
           ))}
           {u5a.length > 0 && (
             <>
-              <span style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>Ast:</span>
+              <span style={{ fontSize: 9, color: '#4b5563', marginLeft: 4 }}>Ast:</span>
               {u5a.map((v, i) => (
                 <span key={i} style={{
                   fontSize: 9, fontWeight: 700,
-                  color: v > 0 ? '#818cf8' : '#475569',
+                  color: v > 0 ? '#818cf8' : '#4b5563',
                   background: v > 0 ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)',
                   borderRadius: 3, padding: '0 4px',
                 }}>
@@ -465,7 +512,7 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
       <p style={{ fontSize: 14 }}>Sem dados de jogadores para este jogo.</p>
-      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os perfis de jogadores aparecem após análise com estatísticas individuais da API.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#4b5563' }}>Os perfis de jogadores aparecem após análise com estatísticas individuais da API.</p>
     </div>
   )
 
@@ -477,10 +524,11 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
           { id: 'stats', label: '📊 Estatísticas' },
         ].map(t => (
           <button key={t.id} onClick={() => setAba(t.id)} style={{
-            padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-            background: aba === t.id ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
+            padding: '6px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            background: aba === t.id ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
             color: aba === t.id ? '#818cf8' : '#64748b',
-            border: `1px solid ${aba === t.id ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.06)'}`,
+            border: `1px solid ${aba === t.id ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.06)'}`,
+            transition: 'all 0.15s',
           }}>
             {t.label}
           </button>
@@ -496,10 +544,10 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
         const titularesForaStats = visitantes.filter(r => r.foi_titular)
         if (titularesCasaStats.length === 0 && titularesForaStats.length === 0) {
           return (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.07)' }}>
               <div style={{ fontSize: 32, marginBottom: 10 }}>👕</div>
               <p style={{ fontSize: 14 }}>Aguardando escalação confirmada para exibir estatísticas dos titulares.</p>
-              <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>As estatísticas individuais aparecem após a escalação ser confirmada pela API.</p>
+              <p style={{ fontSize: 12, marginTop: 6, color: '#4b5563' }}>As estatísticas individuais aparecem após a escalação ser confirmada pela API.</p>
             </div>
           )
         }
@@ -536,10 +584,10 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
 
   if (semDados) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+      <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.07)' }}>
         <div style={{ fontSize: 32, marginBottom: 10 }}>🟩</div>
         <p style={{ fontSize: 14 }}>Escalação não confirmada para este jogo.</p>
-        <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>
+        <p style={{ fontSize: 12, marginTop: 6, color: '#4b5563' }}>
           O lineup é divulgado normalmente 1 hora antes do jogo. Os dados aparecem quando a API retorna a escalação confirmada.
         </p>
       </div>
@@ -566,7 +614,7 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
     const dotColor = isInjured ? '#ef4444' : isSusp ? '#f59e0b' : color
     return (
       <g key={`p-${j.jogador_id}-${x}`}>
-        <circle cx={x} cy={y} r={16} fill={`${dotColor}18`} stroke={dotColor} strokeWidth={1.5} />
+        <circle cx={x} cy={y} r={16} fill={`${dotColor}14`} stroke={dotColor} strokeWidth={1.5} />
         <text x={x} y={y + 4} textAnchor="middle" fontSize={9} fontWeight="bold" fill={dotColor}
           style={{ fontFamily: 'system-ui, sans-serif', pointerEvents: 'none' }}>
           {label.slice(0, 4)}
@@ -597,18 +645,18 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
             {flipped ? '✈️' : '🏠'} {teamName}
           </span>
           {formation && (
-            <span style={{ fontSize: 11, color: '#475569', fontWeight: 600, background: 'rgba(255,255,255,0.04)', padding: '1px 8px', borderRadius: 6 }}>
+            <span style={{ fontSize: 11, color: '#4b5563', fontWeight: 600, background: 'rgba(255,255,255,0.04)', padding: '1px 8px', borderRadius: 5 }}>
               {formation}
             </span>
           )}
         </div>
         <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', borderRadius: 10, overflow: 'hidden' }}>
-          <rect x={0} y={0} width={W} height={H} rx={8} fill="rgba(34,197,94,0.04)" stroke="rgba(34,197,94,0.15)" strokeWidth={1} />
-          <line x1={W/2} y1={0} x2={W/2} y2={H} stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
-          <line x1={0} y1={H/2} x2={W} y2={H/2} stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
-          <ellipse cx={W/2} cy={H/2} rx={40} ry={28} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
-          <rect x={W/2-36} y={0} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
-          <rect x={W/2-36} y={H-44} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
+          <rect x={0} y={0} width={W} height={H} rx={8} fill="rgba(34,197,94,0.03)" stroke="rgba(34,197,94,0.12)" strokeWidth={1} />
+          <line x1={W/2} y1={0} x2={W/2} y2={H} stroke="rgba(34,197,94,0.09)" strokeWidth={1} />
+          <line x1={0} y1={H/2} x2={W} y2={H/2} stroke="rgba(34,197,94,0.09)" strokeWidth={1} />
+          <ellipse cx={W/2} cy={H/2} rx={40} ry={28} fill="none" stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
+          <rect x={W/2-36} y={0} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
+          <rect x={W/2-36} y={H-44} width={72} height={44} rx={2} fill="none" stroke="rgba(34,197,94,0.1)" strokeWidth={1} />
           {rowsOrdered.map((row, ri) => {
             const totalRows = rowsOrdered.length
             const yPct = (ri + 0.5) / totalRows
@@ -625,8 +673,8 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
   }
 
   const BenchRow = ({ j, color }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px', borderRadius: 5, background: 'rgba(255,255,255,0.02)' }}>
-      <div style={{ width: 20, height: 20, borderRadius: '50%', border: `1px dashed ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#475569', flexShrink: 0 }}>S</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 5px', borderRadius: 4, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ width: 18, height: 18, borderRadius: '50%', border: `1px dashed ${color}38`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#4b5563', flexShrink: 0 }}>S</div>
       <span style={{ fontSize: 10, color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {j.nome?.split(' ').pop() || `#${j.jogador_id}`}
       </span>
@@ -643,11 +691,11 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
   return (
     <div>
       {lineupConfirmado ? (
-        <div style={{ padding: '6px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, marginBottom: 10, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>
+        <div style={{ padding: '6px 12px', background: 'rgba(34,197,94,0.07)', border: '1px solid rgba(34,197,94,0.18)', borderRadius: 7, marginBottom: 10, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>
           ✅ Escalação confirmada
         </div>
       ) : (
-        <div style={{ padding: '6px 12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 10, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+        <div style={{ padding: '6px 12px', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)', borderRadius: 7, marginBottom: 10, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
           ⏳ Escalação não confirmada — provável lineup baseado em dados históricos. 🏥 Lesionado · 🚫 Suspenso · 🟨 Amarelo · ⚽ Gol
         </div>
       )}
@@ -665,13 +713,13 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupCon
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 4 }}>
             {reservasCasa.length > 0 && (
               <div>
-                <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, marginBottom: 3 }}>{timeCasa}</div>
+                <div style={{ fontSize: 9, color: '#4b5563', fontWeight: 600, marginBottom: 3 }}>{timeCasa}</div>
                 {reservasCasa.map((j, i) => <BenchRow key={i} j={j} color="#818cf8" />)}
               </div>
             )}
             {reservasFora.length > 0 && (
               <div>
-                <div style={{ fontSize: 9, color: '#475569', fontWeight: 600, marginBottom: 3 }}>{timeFora}</div>
+                <div style={{ fontSize: 9, color: '#4b5563', fontWeight: 600, marginBottom: 3 }}>{timeFora}</div>
                 {reservasFora.map((j, i) => <BenchRow key={i} j={j} color="#34d399" />)}
               </div>
             )}
@@ -686,37 +734,37 @@ function ArbitroSection({ arbitro, metadata }) {
   const nomeArbitro = arbitro || metadata?.arbitro || ''
 
   if (!nomeArbitro) return (
-    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+    <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px dashed rgba(255,255,255,0.07)' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>🟨</div>
       <p style={{ fontSize: 14 }}>Árbitro não informado para este jogo.</p>
-      <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>O perfil do árbitro aparece quando a API retorna o nome do juiz.</p>
+      <p style={{ fontSize: 12, marginTop: 6, color: '#4b5563' }}>O perfil do árbitro aparece quando a API retorna o nome do juiz.</p>
     </div>
   )
 
   const cartoesPorJogo = metadata?.arbitro_cartoes_por_jogo ?? null
   const penalusPorJogo = metadata?.arbitro_penaltis_por_jogo ?? null
   const estiloArbitro = metadata?.arbitro_estilo ?? null
-  const estiloMap = { rigoroso: '#f87171', moderado: '#eab308', permissivo: '#22c55e' }
+  const estiloMap = { rigoroso: '#f87171', moderado: '#f59e0b', permissivo: '#22c55e' }
   const estiloCor = estiloArbitro ? (estiloMap[estiloArbitro] ?? '#818cf8') : null
 
   const hasRealStats = cartoesPorJogo !== null || penalusPorJogo !== null || estiloArbitro !== null
 
   return (
     <div>
-      <div className="card" style={{ padding: '20px 22px', marginBottom: hasRealStats ? 14 : 0 }}>
+      <div className="card" style={{ padding: '18px 20px', marginBottom: hasRealStats ? 14 : 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: hasRealStats ? 16 : 0 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 13, background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
             🟨
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{nomeArbitro}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>{nomeArbitro}</div>
             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Árbitro Principal</div>
           </div>
           {estiloArbitro && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              padding: '6px 12px', borderRadius: 10,
-              background: `${estiloCor}12`, border: `1px solid ${estiloCor}30`,
+              padding: '6px 12px', borderRadius: 9,
+              background: `${estiloCor}10`, border: `1px solid ${estiloCor}28`,
             }}>
               <div>
                 <div style={{ fontSize: 10, color: '#64748b' }}>Estilo</div>
@@ -731,7 +779,7 @@ function ArbitroSection({ arbitro, metadata }) {
             {cartoesPorJogo !== null && (
               <div style={statBoxStyle}>
                 <div style={statLabelStyle}>Cartões / Jogo</div>
-                <div style={{ ...statValueStyle, fontSize: 22, color: cartoesPorJogo >= 4 ? '#f87171' : cartoesPorJogo >= 3 ? '#eab308' : '#22c55e' }}>
+                <div style={{ ...statValueStyle, fontSize: 22, color: cartoesPorJogo >= 4 ? '#f87171' : cartoesPorJogo >= 3 ? '#f59e0b' : '#22c55e' }}>
                   {Number(cartoesPorJogo).toFixed(1)}
                 </div>
                 <div style={statSubStyle}>média real</div>
@@ -750,7 +798,7 @@ function ArbitroSection({ arbitro, metadata }) {
         )}
 
         {!hasRealStats && (
-          <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(99,102,241,0.04)', border: '1px dashed rgba(99,102,241,0.15)', borderRadius: 8 }}>
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 7 }}>
             <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
               Histórico detalhado do árbitro não disponível no plano atual da API. Apenas o nome foi fornecido pela fonte de dados.
             </p>
@@ -772,13 +820,13 @@ function TabelaClassificacao({ classificacao, timeCasa, timeFora }) {
   ).slice(0, 10)
   if (relevantes.length === 0) return null
   return (
-    <div className="card" style={{ padding: '16px 18px' }}>
+    <div className="card" style={{ padding: '14px 16px' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr>
               {['#', 'Time', 'J', 'V', 'E', 'D', 'Pts'].map(h => (
-                <th key={h} style={{ padding: '4px 8px', textAlign: h === 'Time' ? 'left' : 'center', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(99,102,241,0.1)' }}>{h}</th>
+                <th key={h} style={{ padding: '4px 8px', textAlign: h === 'Time' ? 'left' : 'center', color: '#64748b', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: 11 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -786,17 +834,17 @@ function TabelaClassificacao({ classificacao, timeCasa, timeFora }) {
             {relevantes.map((t, i) => {
               const hl = t.team?.name === timeCasa || t.team?.name === timeFora
               return (
-                <tr key={i} style={{ background: hl ? 'rgba(99,102,241,0.08)' : 'transparent' }}>
+                <tr key={i} style={{ background: hl ? 'rgba(99,102,241,0.07)' : 'transparent' }}>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{t.rank}</td>
                   <td style={{ padding: '6px 8px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {t.team?.logo && <img src={t.team.logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
+                      {t.team?.logo && <img src={t.team.logo} alt="" style={{ width: 15, height: 15, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
                       <span style={{ color: hl ? '#f1f5f9' : '#94a3b8', fontWeight: hl ? 700 : 400, whiteSpace: 'nowrap' }}>{t.team?.name || ''}</span>
                     </div>
                   </td>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: '#64748b' }}>{t.all?.played ?? '—'}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: '#22c55e' }}>{t.all?.win ?? '—'}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'center', color: '#eab308' }}>{t.all?.draw ?? '—'}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'center', color: '#f59e0b' }}>{t.all?.draw ?? '—'}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: '#f87171' }}>{t.all?.lose ?? '—'}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'center', color: '#f1f5f9', fontWeight: 700 }}>{t.points ?? '—'}</td>
                 </tr>
@@ -817,22 +865,22 @@ function ScriptTaticoCard({ script, reasoning }) {
       <button
         onClick={() => reasoning && setShowReasoning(o => !o)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-          borderRadius: 10, background: `${info.color}12`, border: `1px solid ${info.color}30`,
+          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px',
+          borderRadius: 9, background: `${info.color}0d`, border: `1px solid ${info.color}28`,
           cursor: reasoning ? 'pointer' : 'default',
         }}
       >
-        <span style={{ fontSize: 16 }}>{info.icon}</span>
+        <span style={{ fontSize: 15 }}>{info.icon}</span>
         <div>
-          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Script Tático</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: info.color }}>{info.label}</div>
+          <div style={{ fontSize: 9, color: '#64748b', fontWeight: 600 }}>Script Tático</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: info.color }}>{info.label}</div>
         </div>
-        {reasoning && <span style={{ fontSize: 10, color: '#475569', marginLeft: 4 }}>{showReasoning ? '▲' : '▼'}</span>}
+        {reasoning && <span style={{ fontSize: 10, color: '#4b5563', marginLeft: 2 }}>{showReasoning ? '▴' : '▾'}</span>}
       </button>
       {showReasoning && reasoning && (
         <div style={{
-          padding: '10px 14px', borderRadius: 8,
-          background: `${info.color}08`, border: `1px solid ${info.color}20`,
+          padding: '10px 14px', borderRadius: 7,
+          background: `${info.color}07`, border: `1px solid ${info.color}1a`,
           fontSize: 12, color: '#94a3b8', lineHeight: 1.6, maxWidth: 480,
         }}>
           {reasoning}
@@ -859,14 +907,14 @@ function FixtureMetadata({ metadata, jogoInfo }) {
   if (items.length === 0) return null
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
       {items.map((item, i) => (
         <div key={i} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(99,102,241,0.1)',
-          borderRadius: 8, padding: '5px 10px',
+          display: 'flex', alignItems: 'center', gap: 5,
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: 7, padding: '4px 10px',
         }}>
-          <span style={{ fontSize: 13 }}>{item.icon}</span>
+          <span style={{ fontSize: 12 }}>{item.icon}</span>
           <span style={{ fontSize: 10, color: '#64748b' }}>{item.label}:</span>
           <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{item.value}</span>
         </div>
@@ -876,7 +924,7 @@ function FixtureMetadata({ metadata, jogoInfo }) {
 }
 
 function SkeletonCard({ height = 80 }) {
-  return <div className="skeleton-card" style={{ height, borderRadius: 12, marginBottom: 14 }} />
+  return <div className="skeleton-card" style={{ height, borderRadius: 12, marginBottom: 12 }} />
 }
 
 export default function MatchDetail() {
@@ -958,21 +1006,21 @@ export default function MatchDetail() {
 
   if (loading) return (
     <div style={{ paddingTop: 24 }}>
-      <div style={{ height: 16, width: 120, borderRadius: 6, background: 'rgba(99,102,241,0.1)', marginBottom: 24 }} />
-      <SkeletonCard height={200} /><SkeletonCard height={50} /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+      <div style={{ height: 14, width: 110, borderRadius: 5, background: 'rgba(255,255,255,0.05)', marginBottom: 24 }} />
+      <SkeletonCard height={200} /><SkeletonCard height={48} /><SkeletonCard /><SkeletonCard /><SkeletonCard />
     </div>
   )
 
   if (processing) return (
-    <div className="flex flex-col items-center justify-center" style={{ minHeight: 400, gap: 16, paddingTop: 80, textAlign: 'center' }}>
-      <div className="spinner" style={{ width: 48, height: 48 }} />
-      <p style={{ color: '#c7d2fe', fontSize: 16, fontWeight: 600 }}>Analisando o jogo...</p>
-      <p style={{ color: '#64748b', fontSize: 13, maxWidth: 360 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 14, paddingTop: 80, textAlign: 'center' }}>
+      <div className="spinner" style={{ width: 44, height: 44 }} />
+      <p style={{ color: '#c7d2fe', fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>Analisando o jogo...</p>
+      <p style={{ color: '#64748b', fontSize: 13, maxWidth: 360, lineHeight: 1.5 }}>
         O sistema está processando estatísticas, odds e dados táticos. Isso pode levar até 60 segundos.
       </p>
-      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
         {['Estatísticas', 'Odds', 'H2H', 'Analistas', 'Palpites'].map((s, i) => (
-          <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 6 }}>{s}</span>
+          <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(99,102,241,0.08)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 5 }}>{s}</span>
         ))}
       </div>
     </div>
@@ -1030,48 +1078,56 @@ export default function MatchDetail() {
       </Link>
 
       {/* ── HERO CARD ─────────────────────────────────────────────── */}
-      <div style={{ background: 'linear-gradient(135deg, #131729 0%, #1a1d2e 100%)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 16, padding: 24, marginBottom: 16 }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: 16, padding: '20px 22px', marginBottom: 14,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {jogoInfo?.liga?.logo && <img src={jogoInfo.liga.logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
-            <span style={{ fontSize: 12, color: '#818cf8', fontWeight: 600 }}>{jogoInfo?.liga?.nome || analise.liga}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            {jogoInfo?.liga?.logo && <img src={jogoInfo.liga.logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} onError={e => e.target.style.display = 'none'} />}
+            <span style={{ fontSize: 11, color: '#818cf8', fontWeight: 700, letterSpacing: '0.02em' }}>{jogoInfo?.liga?.nome || analise.liga}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {analise.script_tatico && <ScriptTaticoCard script={analise.script_tatico} reasoning={analise.script_reasoning} />}
             {isLast30 && (
-              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 7, background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.22)' }}>
                 🔴 Análise Final
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-6" style={{ marginBottom: 20 }}>
-          <div className="flex flex-col items-center gap-2">
-            <TeamLogo logo={jogoInfo?.time_casa?.logo} name={analise.time_casa} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120 }}>{analise.time_casa}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <TeamLogo logo={jogoInfo?.time_casa?.logo} name={analise.time_casa} size={52} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120, letterSpacing: '-0.02em' }}>{analise.time_casa}</span>
             {analise.pos_casa && <span style={{ fontSize: 11, color: '#64748b' }}>#{analise.pos_casa} na tabela</span>}
             {analise.qsc_home != null && (
-              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 5, padding: '1px 7px' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 5, padding: '1px 7px' }}>
                 QSC {Number(analise.qsc_home).toFixed(0)}
               </span>
             )}
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.1em' }}>VS</div>
+          <div style={{ textAlign: 'center', minWidth: 80 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.15em' }}>VS</div>
             {countdown && (
-              <div style={{ fontSize: countdown === 'AO VIVO' ? 13 : 12, color: countdown === 'AO VIVO' ? '#22c55e' : '#818cf8', fontWeight: 700, marginTop: 6 }}>
+              <div style={{
+                fontSize: countdown === 'AO VIVO' ? 13 : 12,
+                color: countdown === 'AO VIVO' ? '#22c55e' : '#818cf8',
+                fontWeight: 700, marginTop: 6,
+              }}>
                 {countdown === 'AO VIVO' ? '🟢 AO VIVO' : `⏱ ${countdown}`}
               </div>
             )}
-            {!countdown && jogoInfo?.horario_brt && <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>{jogoInfo.horario_brt}</div>}
+            {!countdown && jogoInfo?.horario_brt && <div style={{ fontSize: 11, color: '#4b5563', marginTop: 4 }}>{jogoInfo.horario_brt}</div>}
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <TeamLogo logo={jogoInfo?.time_fora?.logo} name={analise.time_fora} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120 }}>{analise.time_fora}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <TeamLogo logo={jogoInfo?.time_fora?.logo} name={analise.time_fora} size={52} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', maxWidth: 120, letterSpacing: '-0.02em' }}>{analise.time_fora}</span>
             {analise.pos_fora && <span style={{ fontSize: 11, color: '#64748b' }}>#{analise.pos_fora} na tabela</span>}
             {analise.qsc_away != null && (
-              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 5, padding: '1px 7px' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 5, padding: '1px 7px' }}>
                 QSC {Number(analise.qsc_away).toFixed(0)}
               </span>
             )}
@@ -1103,7 +1159,7 @@ export default function MatchDetail() {
           </div>
           <div style={statBoxStyle}>
             <div style={statLabelStyle}>Top Confiança</div>
-            <div style={{ ...statValueStyle, color: analise.melhor_confianca >= 7 ? '#22c55e' : analise.melhor_confianca >= 5.5 ? '#eab308' : '#f87171' }}>
+            <div style={{ ...statValueStyle, color: analise.melhor_confianca >= 7 ? '#22c55e' : analise.melhor_confianca >= 5.5 ? '#f59e0b' : '#f87171' }}>
               {analise.melhor_confianca?.toFixed(1)}/10
             </div>
             <div style={statSubStyle}>score máximo</div>
@@ -1121,14 +1177,14 @@ export default function MatchDetail() {
       <FixtureMetadata metadata={analise.fixture_metadata} jogoInfo={jogoInfo} />
 
       {/* ── TABS ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 2 }}>
+      <div style={{ display: 'flex', gap: 3, marginBottom: 14, overflowX: 'auto', paddingBottom: 2 }}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '8px 16px', borderRadius: 10, cursor: 'pointer',
-            fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
-            background: activeTab === tab.id ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
-            color: activeTab === tab.id ? '#818cf8' : '#64748b',
-            border: activeTab === tab.id ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.06)',
+            padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+            background: activeTab === tab.id ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+            color: activeTab === tab.id ? '#c7d2fe' : '#64748b',
+            border: activeTab === tab.id ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(255,255,255,0.06)',
             transition: 'all 0.15s ease',
           }}>
             {tab.label}
@@ -1138,25 +1194,25 @@ export default function MatchDetail() {
 
       {/* ── FILTROS (Palpites) ────────────────────────────────────────── */}
       {activeTab === 'palpites' && (
-        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(99,102,241,0.1)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+        <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '13px 16px', marginBottom: 14 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8 }}>
-                Confiança mínima: <span style={{ color: '#818cf8' }}>{minConfianca.toFixed(1)}</span>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Confiança mínima: <span style={{ color: '#818cf8', textTransform: 'none', letterSpacing: 0, fontWeight: 700 }}>{minConfianca.toFixed(1)}</span>
               </div>
               <input type="range" min="0" max="9" step="0.5" value={minConfianca}
                 onChange={e => setMinConfianca(Number(e.target.value))}
                 style={{ width: '100%', accentColor: '#6366f1' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#475569', marginTop: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#4b5563', marginTop: 3 }}>
                 <span>0 (todos)</span><span>5.5 (bom)</span><span>7+ (top)</span><span>9 (elite)</span>
               </div>
             </div>
             <div style={{ minWidth: 160 }}>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8 }}>Mercado</div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mercado</div>
               <select value={filtroMercado} onChange={e => setFiltroMercado(e.target.value)} style={{
-                width: '100%', background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8,
-                color: '#e2e8f0', padding: '6px 10px', fontSize: 13, cursor: 'pointer',
+                width: '100%', background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)', borderRadius: 7,
+                color: '#e2e8f0', padding: '6px 10px', fontSize: 12, cursor: 'pointer', outline: 'none',
               }}>
                 {mercadosDisponiveis.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -1173,9 +1229,9 @@ export default function MatchDetail() {
               <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
               <p style={{ fontSize: 14 }}>Nenhum palpite com confiança ≥ {minConfianca.toFixed(1)}</p>
               <button onClick={() => { setMinConfianca(0); setFiltroMercado('Todos') }} style={{
-                marginTop: 12, fontSize: 12, padding: '6px 16px', borderRadius: 8,
-                background: 'rgba(99,102,241,0.12)', color: '#818cf8',
-                border: '1px solid rgba(99,102,241,0.25)', cursor: 'pointer',
+                marginTop: 12, fontSize: 12, padding: '6px 16px', borderRadius: 7,
+                background: 'rgba(99,102,241,0.1)', color: '#818cf8',
+                border: '1px solid rgba(99,102,241,0.22)', cursor: 'pointer',
               }}>
                 Limpar filtros
               </button>
@@ -1184,23 +1240,23 @@ export default function MatchDetail() {
             mercadosFiltrados.map((m, i) => <MarketCard key={i} mercado={m} minConfianca={minConfianca} />)
           )}
           {analise.mercados_vetados?.length > 0 && (
-            <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.12)', borderRadius: 12 }}>
+            <div style={{ marginTop: 18, padding: '13px 16px', background: 'rgba(239,68,68,0.03)', border: '1px solid rgba(239,68,68,0.1)', borderRadius: 10 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 10 }}>
                 ⛔ Mercados sem palpite (baixa confiança / dados insuficientes)
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {analise.mercados_vetados.map((v, i) => (
                   <div key={i} title={v.motivo} style={{
-                    fontSize: 11, padding: '3px 10px', borderRadius: 6,
-                    background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
-                    color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6, cursor: 'default',
+                    fontSize: 11, padding: '3px 10px', borderRadius: 5,
+                    background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.12)',
+                    color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 5, cursor: 'default',
                   }}>
                     <span style={{ color: '#64748b' }}>⛔</span>
                     <span>{v.mercado}</span>
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: 10, color: '#475569', marginTop: 8, marginBottom: 0 }}>
+              <p style={{ fontSize: 10, color: '#4b5563', marginTop: 8, marginBottom: 0 }}>
                 Passe o mouse sobre cada mercado para ver o motivo.
               </p>
             </div>
@@ -1232,9 +1288,9 @@ export default function MatchDetail() {
 }
 
 const statBoxStyle = {
-  background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
+  background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.1)',
   borderRadius: 10, padding: '12px 16px', flex: 1, minWidth: 120,
 }
-const statLabelStyle = { fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 4 }
-const statValueStyle = { fontSize: 22, fontWeight: 800, color: '#f1f5f9' }
-const statSubStyle = { fontSize: 11, color: '#475569', marginTop: 2 }
+const statLabelStyle = { fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }
+const statValueStyle = { fontSize: 24, fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.03em' }
+const statSubStyle = { fontSize: 10, color: '#4b5563', marginTop: 3 }
