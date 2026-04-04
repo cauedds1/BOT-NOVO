@@ -1267,7 +1267,11 @@ async def buscar_contribuicao_gols_ultimos_jogos(
     goals = 0
     assists = 0
     apps = 0
-    name_lower = player_name.lower()
+    rate_limit_hits = 0
+    # Normalize to lowercase tokens for matching — stricter than substring search.
+    # We require that all tokens of the search name appear in the API name, which
+    # prevents misattribution for common last names (e.g. "Jesus" ≠ "José Jesus").
+    name_tokens = set(player_name.lower().split())
 
     for fixture_id in recent_fixture_ids:
         try:
@@ -1277,7 +1281,13 @@ async def buscar_contribuicao_gols_ultimos_jogos(
                 API_URL + "fixtures/players",
                 params={"fixture": str(fixture_id), "team": str(team_id)},
             )
-            if response.status_code in (403, 404, 429):
+            if response.status_code == 429:
+                rate_limit_hits += 1
+                if rate_limit_hits >= 2:
+                    print(f"  ⚠️ [CONTRIB_RECENTE] {player_name}: 2x 429 → abortando busca restante")
+                    break
+                continue
+            if response.status_code in (403, 404):
                 continue
             response.raise_for_status()
             data = response.json().get("response", [])
@@ -1286,7 +1296,12 @@ async def buscar_contribuicao_gols_ultimos_jogos(
                     continue
                 for player_entry in team_block.get("players", []):
                     pinfo = player_entry.get("player") or {}
-                    if name_lower not in (pinfo.get("name") or "").lower():
+                    api_name = (pinfo.get("name") or "").lower()
+                    api_tokens = set(api_name.split())
+                    # Prefer player ID match (if injected), fallback to all-tokens match
+                    player_id_match = pinfo.get("id") and pinfo.get("id") == player_entry.get("player_id")
+                    token_match = name_tokens and name_tokens.issubset(api_tokens)
+                    if not (player_id_match or token_match):
                         continue
                     stats = (player_entry.get("statistics") or [{}])[0]
                     goals_obj = stats.get("goals") or {}
@@ -1298,6 +1313,9 @@ async def buscar_contribuicao_gols_ultimos_jogos(
                     break
         except Exception:
             continue
+
+    if rate_limit_hits > 0:
+        print(f"  ⚠️ [CONTRIB_RECENTE] {player_name}: {rate_limit_hits} chamada(s) bloqueadas por rate limit")
 
     if apps == 0:
         cache_manager.set(cache_key, {}, expiration_minutes=60)
@@ -1911,70 +1929,3 @@ async def buscar_players_stats_jogo(fixture_id: int):
         return []
 
 
-async def buscar_contribuicao_gols_jogador(player_name: str, team_id: int, league_id: int, season: int = None) -> dict:
-    """
-    Busca contribuição histórica de gols+assistências de um jogador na temporada atual.
-    Usado por TASK 7 para ponderar ajuste de lambda por desfalques confirmados.
-
-    Endpoint: GET /players?search={name}&league={id}&season={ano}
-
-    Returns:
-        dict com goal_contribution_pct (float 0-1) e raw stats, ou {} em caso de erro.
-    """
-    import datetime
-    if season is None:
-        season = datetime.date.today().year
-        if datetime.date.today().month < 7:
-            season -= 1  # temporadas europeias: 2024/25 → season=2024
-
-    cache_key = f"player_contrib_{team_id}_{player_name[:10].replace(' ', '_')}_{league_id}_{season}"
-    cached = cache_manager.get(cache_key)
-    if cached is not None:
-        return cached
-
-    try:
-        await asyncio.sleep(1.2)
-        response = await api_request_with_retry(
-            "GET",
-            API_URL + "players",
-            params={"search": player_name, "league": str(league_id), "season": str(season)},
-        )
-        if response.status_code in (403, 429):
-            cache_manager.set(cache_key, {}, expiration_minutes=60)
-            return {}
-        response.raise_for_status()
-        data = response.json().get("response", [])
-
-        # Filtrar pelo time correto
-        for entry in data:
-            p = entry.get("player", {})
-            stats_list = entry.get("statistics", [])
-            for s in stats_list:
-                s_team_id = s.get("team", {}).get("id")
-                if s_team_id != team_id:
-                    continue
-                goals_obj = s.get("goals", {}) or {}
-                games_obj = s.get("games", {}) or {}
-                goals = int(goals_obj.get("total") or 0)
-                assists = int(goals_obj.get("assists") or 0)
-                apps = int(games_obj.get("appearences") or 0)
-                minutes = int(games_obj.get("minutes") or 0)
-                result = {
-                    "goals": goals,
-                    "assists": assists,
-                    "apps": apps,
-                    "minutes": minutes,
-                    "goals_per_game": goals / apps if apps > 0 else 0.0,
-                    "assists_per_game": assists / apps if apps > 0 else 0.0,
-                    "goal_contribution_pct": None,  # calulado no master_analyzer após somar equipe
-                }
-                cache_manager.set(cache_key, result, expiration_minutes=120)
-                return result
-
-        cache_manager.set(cache_key, {}, expiration_minutes=60)
-        return {}
-
-    except Exception as e:
-        print(f"  ⚠️ [buscar_contribuicao_gols_jogador] {player_name}: {e}")
-        cache_manager.set(cache_key, {}, expiration_minutes=30)
-        return {}
