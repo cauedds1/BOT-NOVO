@@ -351,27 +351,24 @@ def _validar_consistencia_cruzada(analise_gols, analise_btts):
         """
         Aplica as 3 regras de conflito entre um índice BTTS e um índice de gols.
         btts_src / gols_src são as analises de onde os palpites devem ser removidos.
-        Regra 1 é verificada primeiro e impede Regra 2 de rodar (short-circuit).
+        Regras 1/2 tratam BTTS Sim; Regra 3 trata BTTS Não (completamente independente).
         """
-        # Regra 1: BTTS Sim + Under 0.5 FT → impossível; remove BTTS Sim sempre
-        if "BTTS Sim" in btts_index and "Under 0.5" in under_goals_index:
-            _remove_btts_from(btts_src, "BTTS Sim", btts_label)
-            return  # Regra 2 não se aplica: BTTS Sim já foi removido
-
-        # Regra 2: BTTS Sim + Under 1.5 FT → quase impossível; mantém o de maior confiança
-        if "BTTS Sim" in btts_index and "Under 1.5" in under_goals_index:
-            conf_btts = btts_index["BTTS Sim"]
-            conf_under = under_goals_index["Under 1.5"]
-            if conf_btts <= conf_under:
+        # Regras 1 e 2: conflitos com BTTS Sim (mutuamente exclusivas entre si)
+        if "BTTS Sim" in btts_index:
+            # Regra 1: Under 0.5 FT → impossível; remove BTTS Sim sempre
+            if "Under 0.5" in under_goals_index:
                 _remove_btts_from(btts_src, "BTTS Sim", btts_label)
-            else:
-                _remove_tipo_from(gols_src, "Under 1.5", gols_label)
+            # Regra 2: Under 1.5 FT → quase impossível; mantém o de maior confiança
+            elif "Under 1.5" in under_goals_index:
+                if btts_index["BTTS Sim"] <= under_goals_index["Under 1.5"]:
+                    _remove_btts_from(btts_src, "BTTS Sim", btts_label)
+                else:
+                    _remove_tipo_from(gols_src, "Under 1.5", gols_label)
 
         # Regra 3: BTTS Não + Over 2.5 FT → inconsistente; mantém o de maior confiança
+        # Independente de Regra 1/2 — avaliada sempre
         if "BTTS Não" in btts_index and "Over 2.5" in over_goals_index:
-            conf_btts = btts_index["BTTS Não"]
-            conf_over = over_goals_index["Over 2.5"]
-            if conf_btts <= conf_over:
+            if btts_index["BTTS Não"] <= over_goals_index["Over 2.5"]:
                 _remove_btts_from(btts_src, "BTTS Não", btts_label)
             else:
                 _remove_tipo_from(gols_src, "Over 2.5", gols_label)
