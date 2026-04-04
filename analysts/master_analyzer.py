@@ -1169,6 +1169,7 @@ async def _analyze_strength_of_schedule(team_id, league_id):
             opponents_qsc.append(opponent_qsc)
         else:
             # Opponent not in cache — use neutral default instead of firing a fresh API call
+            print(f"    ⚠️ [SoS] Adversário {opponent_id} ({opponent_name}) não está em cache → QSC=50 (neutro)")
             opponents_qsc.append(50.0)
     
     if not opponents_qsc:
@@ -1242,7 +1243,7 @@ async def _calculate_weighted_metrics(team_id, league_id, sos_data, team_stats=N
     
     opponents_qsc = sos_data.get('opponents_qsc', [])
     
-    for idx, jogo in enumerate(ultimos_jogos[:10]):
+    for idx, jogo in enumerate(ultimos_jogos[:5]):
         fixture_id = jogo.get('fixture_id')
 
         if not fixture_id:
@@ -1678,12 +1679,11 @@ async def generate_match_analysis(jogo):
     async def _last_game_moment_refresh(moment: int, team_id: int, team_name: str) -> int:
         """
         Atualiza momento com base no ÚLTIMO jogo finalizado (usado apenas em MODO LEVE).
-        Faz chamada explícita com limite=1 para capturar o estado mais recente do time.
-        Essa chamada usa o DB cache de cache_ultimos_jogos (TTL 24h) — sem custo de API
-        quando o dado foi buscado recentemente.
+        Usa canonical limite=10 para aproveitar o cache unificado, depois toma apenas
+        o primeiro elemento.
         """
         from api_client import buscar_ultimos_jogos_time
-        ultimo_jogo_list = await buscar_ultimos_jogos_time(team_id, limite=1)
+        ultimo_jogo_list = await buscar_ultimos_jogos_time(team_id, limite=10)
         if not ultimo_jogo_list:
             return moment
         last = ultimo_jogo_list[0]
