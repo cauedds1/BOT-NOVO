@@ -270,6 +270,108 @@ def _estruturar_palpites(mercado_nome: str, analise: Optional[dict]) -> Optional
     }
 
 
+def _validar_consistencia_cruzada(analise_gols, analise_btts):
+    """
+    Remove palpites logicamente contraditórios entre os mercados de Gols e BTTS.
+
+    Conflitos tratados:
+    - BTTS Sim + Under 0.5 FT → impossível (nenhuma equipe marca + ambas marcam)
+    - BTTS Sim + Under 1.5 FT → quase impossível (max 1 gol, mas ambas devem marcar ≥2)
+    - BTTS Não + Over 2.5 FT  → inconsistente (3+ gols concentrados num time é raro)
+
+    Os conflitos são verificados tanto entre analise_gols e analise_btts (mercados
+    separados) quanto dentro da própria analise_gols (goals_analyzer_v2 gera palpites
+    de BTTS dentro do mesmo array de gols).
+
+    Para cada conflito, o palpite de menor confiança é removido. Em caso de empate,
+    remove-se o palpite de BTTS (mais difícil de prever).
+
+    Modifica as listas de palpites in-place — chamada antes de db.salvar_analise().
+    """
+    def _get_palpites(analise):
+        if not analise:
+            return []
+        if isinstance(analise, list):
+            return analise
+        return analise.get("palpites", [])
+
+    def _remove_tipo_from(analise, tipo, label):
+        palpites = _get_palpites(analise)
+        original_len = len(palpites)
+        if isinstance(analise, list):
+            analise[:] = [p for p in analise if p.get("tipo") != tipo]
+        elif isinstance(analise, dict):
+            analise["palpites"] = [p for p in palpites if p.get("tipo") != tipo]
+        removed = original_len - len(_get_palpites(analise))
+        if removed:
+            print(f"  ⚠️  CONSISTÊNCIA: Removido '{tipo}' de [{label}] ({removed} palpite(s)) — conflito cruzado")
+
+    def _build_index(analise):
+        return {p["tipo"]: p["confianca"] for p in _get_palpites(analise)
+                if isinstance(p, dict) and "tipo" in p}
+
+    def _apply_rules(btts_index, under_goals_index, over_goals_index,
+                     btts_src, btts_label, gols_src, gols_label):
+        """
+        Aplica as 3 regras de conflito entre um índice BTTS e um índice de gols.
+        btts_src / gols_src são as analises de onde os palpites devem ser removidos.
+        """
+        # Regra 1: BTTS Sim + Under 0.5 FT → impossível; remove BTTS Sim sempre
+        if "BTTS Sim" in btts_index and "Under 0.5" in under_goals_index:
+            _remove_tipo_from(btts_src, "BTTS Sim", btts_label)
+            return True  # regra 2 não se aplica mais
+
+        # Regra 2: BTTS Sim + Under 1.5 FT → quase impossível; mantém o de maior confiança
+        if "BTTS Sim" in btts_index and "Under 1.5" in under_goals_index:
+            conf_btts = btts_index["BTTS Sim"]
+            conf_under = under_goals_index["Under 1.5"]
+            if conf_btts <= conf_under:
+                _remove_tipo_from(btts_src, "BTTS Sim", btts_label)
+            else:
+                _remove_tipo_from(gols_src, "Under 1.5", gols_label)
+
+        # Regra 3: BTTS Não + Over 2.5 FT → inconsistente; mantém o de maior confiança
+        if "BTTS Não" in btts_index and "Over 2.5" in over_goals_index:
+            conf_btts = btts_index["BTTS Não"]
+            conf_over = over_goals_index["Over 2.5"]
+            if conf_btts <= conf_over:
+                _remove_tipo_from(btts_src, "BTTS Não", btts_label)
+            else:
+                _remove_tipo_from(gols_src, "Over 2.5", gols_label)
+        return False
+
+    # --- Caso A: conflitos entre analise_btts (btts_analyzer) e analise_gols ---
+    btts_ext_index = _build_index(analise_btts)
+    gols_index = _build_index(analise_gols)
+    # Separa Under e Over dentro do índice de gols (periodo=FT somente)
+    gols_under = {p["tipo"]: p["confianca"]
+                  for p in _get_palpites(analise_gols)
+                  if isinstance(p, dict) and p.get("periodo") == "FT" and p.get("tipo", "").startswith("Under")}
+    gols_over = {p["tipo"]: p["confianca"]
+                 for p in _get_palpites(analise_gols)
+                 if isinstance(p, dict) and p.get("periodo") == "FT" and p.get("tipo", "").startswith("Over")}
+    _apply_rules(btts_ext_index, gols_under, gols_over,
+                 analise_btts, "BTTS", analise_gols, "Gols")
+
+    # --- Caso B: conflitos DENTRO de analise_gols ---
+    # goals_analyzer_v2 também gera BTTS Sim/Não no mesmo array (mercado="BTTS").
+    # Recalcula índices após possíveis remoções acima.
+    gols_palpites = _get_palpites(analise_gols)
+    btts_int_index = {p["tipo"]: p["confianca"]
+                      for p in gols_palpites
+                      if isinstance(p, dict) and p.get("mercado") == "BTTS"}
+    gols_under_int = {p["tipo"]: p["confianca"]
+                      for p in gols_palpites
+                      if isinstance(p, dict) and p.get("periodo") == "FT"
+                      and p.get("tipo", "").startswith("Under")}
+    gols_over_int = {p["tipo"]: p["confianca"]
+                     for p in gols_palpites
+                     if isinstance(p, dict) and p.get("periodo") == "FT"
+                     and p.get("tipo", "").startswith("Over")}
+    _apply_rules(btts_int_index, gols_under_int, gols_over_int,
+                 analise_gols, "Gols(BTTS)", analise_gols, "Gols")
+
+
 async def _executar_analise_completa(fixture_id: int, jogo: dict):
     """
     Executa o pipeline completo de análise para um jogo e salva no DB.
@@ -371,6 +473,9 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
                     if "confidence_breakdown" in _p and isinstance(_p["confidence_breakdown"], dict):
                         _p["confidence_breakdown"]["modificador_historico"] = _adj
                         _p["confidence_breakdown"]["confianca_final"] = _p["confianca"]
+
+        # 3c. Validação de consistência cruzada entre mercados
+        _validar_consistencia_cruzada(analise_gols, analise_btts)
 
         # 4. Salvar no banco
         data_utc = jogo.get("fixture", {}).get("date", "")

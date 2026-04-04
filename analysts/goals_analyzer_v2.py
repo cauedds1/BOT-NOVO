@@ -10,7 +10,8 @@ BLUEPRINT IMPLEMENTATION:
 
 from config import (MIN_CONFIANCA_GOLS_OVER_UNDER,
                     MIN_CONFIANCA_GOLS_OVER_1_5, MIN_CONFIANCA_GOLS_OVER_3_5,
-                    MAX_PALPITES_GOLS)
+                    MAX_PALPITES_GOLS,
+                    MIN_CONFIANCA_BTTS_SIM, MIN_CONFIANCA_BTTS_NAO)
 from analysts.confidence_calculator import (
     calculate_final_confidence,
     calculate_statistical_probability_goals_over
@@ -461,7 +462,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get('gols_ht_over_0.5'),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
                 "mercado": "Gols",
                 "tipo": "Over 0.5 HT",
@@ -486,7 +487,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get('gols_ht_under_0.5'),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
                 "mercado": "Gols",
                 "tipo": "Under 0.5 HT",
@@ -511,7 +512,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get('gols_ht_over_1.5'),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
                 "mercado": "Gols",
                 "tipo": "Over 1.5 HT",
@@ -536,7 +537,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get('gols_ht_under_1.5'),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_GOLS_OVER_1_5:
             all_predictions.append({
                 "mercado": "Gols",
                 "tipo": "Under 1.5 HT",
@@ -564,7 +565,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get(odd_key),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_BTTS_SIM:
             all_predictions.append({
                 "mercado": "BTTS",
                 "tipo": "BTTS Sim",
@@ -590,7 +591,7 @@ def analisar_mercado_gols(analysis_packet, odds):
             injury_role_away=_role_away,
             odd=odds.get(odd_key),
         )
-        if confianca >= 5.0:
+        if confianca >= MIN_CONFIANCA_BTTS_NAO:
             all_predictions.append({
                 "mercado": "BTTS",
                 "tipo": "BTTS Não",
@@ -847,11 +848,32 @@ def analisar_mercado_gols(analysis_packet, odds):
             if _over_conf >= _under_conf:
                 all_predictions = [p for p in all_predictions
                                    if not (p.get('tipo') == _under_tipo and p.get('periodo') == 'FT')]
-                print(f"  🔄 EXCLUSÃO MÚTUA: Under {_linha} descartado (Over {_linha} conf={_over_conf:.1f} > Under conf={_under_conf:.1f})")
+                print(f"  🔄 EXCLUSÃO MÚTUA FT: Under {_linha} descartado (Over {_linha} conf={_over_conf:.1f} > Under conf={_under_conf:.1f})")
             else:
                 all_predictions = [p for p in all_predictions
                                    if not (p.get('tipo') == _over_tipo and p.get('periodo') == 'FT')]
-                print(f"  🔄 EXCLUSÃO MÚTUA: Over {_linha} descartado (Under {_linha} conf={_under_conf:.1f} > Over conf={_over_conf:.1f})")
+                print(f"  🔄 EXCLUSÃO MÚTUA FT: Over {_linha} descartado (Under {_linha} conf={_under_conf:.1f} > Over conf={_over_conf:.1f})")
+
+    # Exclusão mútua Over/Under HT por linha — mesma lógica aplicada ao 1º tempo.
+    _linhas_ht_exclusao = ['0.5', '1.5']
+    for _linha in _linhas_ht_exclusao:
+        _over_tipo = f"Over {_linha} HT"
+        _under_tipo = f"Under {_linha} HT"
+        _over_preds = [p for p in all_predictions
+                       if p.get('tipo') == _over_tipo and p.get('periodo') == 'HT']
+        _under_preds = [p for p in all_predictions
+                        if p.get('tipo') == _under_tipo and p.get('periodo') == 'HT']
+        if _over_preds and _under_preds:
+            _over_conf = _over_preds[0]['confianca']
+            _under_conf = _under_preds[0]['confianca']
+            if _over_conf >= _under_conf:
+                all_predictions = [p for p in all_predictions
+                                   if not (p.get('tipo') == _under_tipo and p.get('periodo') == 'HT')]
+                print(f"  🔄 EXCLUSÃO MÚTUA HT: Under {_linha} HT descartado (Over conf={_over_conf:.1f} > Under conf={_under_conf:.1f})")
+            else:
+                all_predictions = [p for p in all_predictions
+                                   if not (p.get('tipo') == _over_tipo and p.get('periodo') == 'HT')]
+                print(f"  🔄 EXCLUSÃO MÚTUA HT: Over {_linha} HT descartado (Under conf={_under_conf:.1f} > Over conf={_over_conf:.1f})")
 
     # Ordenar por confiança (descendente)
     all_predictions.sort(key=lambda x: x['confianca'], reverse=True)
