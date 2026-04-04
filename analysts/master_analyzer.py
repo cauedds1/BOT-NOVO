@@ -1693,13 +1693,13 @@ async def generate_match_analysis(jogo):
         goals_against = int(last.get('away_goals') or 0) if is_home else int(last.get('home_goals') or 0)
         if goals_for > goals_against:
             new_moment = min(100, moment + 5)
-            print(f"    📈 [{team_name}] Último jogo (limite=1): VITÓRIA ({goals_for}-{goals_against}) → Momento +5 → {new_moment}")
+            print(f"    📈 [{team_name}] Último jogo: VITÓRIA ({goals_for}-{goals_against}) → Momento +5 → {new_moment}")
         elif goals_for < goals_against:
             new_moment = max(0, moment - 5)
-            print(f"    📉 [{team_name}] Último jogo (limite=1): DERROTA ({goals_for}-{goals_against}) → Momento -5 → {new_moment}")
+            print(f"    📉 [{team_name}] Último jogo: DERROTA ({goals_for}-{goals_against}) → Momento -5 → {new_moment}")
         else:
             new_moment = moment
-            print(f"    ➡️ [{team_name}] Último jogo (limite=1): EMPATE ({goals_for}-{goals_against}) → Momento inalterado ({moment})")
+            print(f"    ➡️ [{team_name}] Último jogo: EMPATE ({goals_for}-{goals_against}) → Momento inalterado ({moment})")
         return new_moment
 
     # ── TIME DA CASA ─────────────────────────────────────────────────────────
