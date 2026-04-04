@@ -240,7 +240,8 @@ def _estruturar_palpites(mercado_nome: str, analise: Optional[dict]) -> Optional
 
     resultado_palpites = []
     for p in palpites:
-        prob = p.get("probabilidade", 0) or 0
+        # Normalize probability: some analyzers emit probabilidade_estatistica instead
+        prob = p.get("probabilidade") or p.get("probabilidade_estatistica") or 0
         odd = p.get("odd")
         # Usar valor pre-computado pelo analyzer se disponível, caso contrário calcular
         if p.get("is_value") is not None and p.get("edge") is not None:
