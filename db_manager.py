@@ -585,6 +585,7 @@ class DatabaseManager:
                         fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
                     age_hours = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 3600
                     if age_hours < 48:
+                        print(f"✅ DB CACHE HIT: team_profile {team_id} liga {league_id} ({age_hours:.1f}h atrás)")
                         return {'sos_data': row[0], 'weighted_metrics': row[1], 'age_hours': age_hours}
                     print(f"⏰ DB CACHE EXPIRADO: team_profile {team_id} ({age_hours:.1f}h > 48h)")
                 return None
