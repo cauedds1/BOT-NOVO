@@ -178,15 +178,37 @@ async def _fetch_eventos_odds_api(sport_key: str, date_str: str) -> list:
         return []
 
 
-def _encontrar_evento(eventos: list, home_team: str, away_team: str) -> Optional[dict]:
+def _encontrar_evento(
+    eventos: list, home_team: str, away_team: str, date_str: str = ""
+) -> Optional[dict]:
     """
     Encontra o evento que melhor corresponde ao par home/away via matching fuzzy.
-    Retorna None se nenhum evento tiver similaridade >= 0.75 em ambos os times.
+
+    Critérios:
+    - Similaridade de nomes (difflib, threshold 0.75 na média home+away)
+    - Verificação explícita de data: o evento deve iniciar no mesmo dia UTC que date_str
+      (guarda de segurança contra edge cases de timezone ou listagens multi-dia)
+
+    Retorna None se nenhum evento satisfizer os critérios.
     """
     melhor_score = 0.0
     melhor_evento = None
 
     for ev in eventos:
+        # Verificação explícita de data quando disponível
+        if date_str:
+            ev_commence = ev.get("commence_time", "")
+            if ev_commence and not ev_commence.startswith(date_str):
+                # Aceitar também +/-1 dia para lidar com diferença de timezone
+                try:
+                    ev_date = ev_commence[:10]
+                    target = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    ev_dt = datetime.strptime(ev_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    if abs((ev_dt - target).days) > 1:
+                        continue
+                except Exception:
+                    pass
+
         ev_home = ev.get("home_team", "")
         ev_away = ev.get("away_team", "")
 
@@ -390,7 +412,7 @@ async def buscar_odds_the_odds_api(
     if not eventos:
         return {}
 
-    evento = _encontrar_evento(eventos, home_team, away_team)
+    evento = _encontrar_evento(eventos, home_team, away_team, date_str=date_str)
     if evento is None:
         logger.debug(f"[OddsAPI] Fixture {fixture_id}: evento não encontrado para '{home_team}' vs '{away_team}'")
         return {}
@@ -401,3 +423,21 @@ async def buscar_odds_the_odds_api(
         f"({sport_key})"
     )
     return odds
+
+
+# ── Wrappers públicos com nomes da especificação ──────────────────────────────
+async def buscar_eventos_odds_api(sport_key: str, date_str: str) -> list:
+    """Wrapper público para buscar lista de eventos da The Odds API por sport+data."""
+    return await _fetch_eventos_odds_api(sport_key, date_str)
+
+
+def encontrar_evento_odds_api(
+    eventos: list, home_team: str, away_team: str, date_str: str = ""
+) -> Optional[dict]:
+    """Wrapper público para matching fuzzy de fixture em lista de eventos."""
+    return _encontrar_evento(eventos, home_team, away_team, date_str=date_str)
+
+
+def normalizar_odds_api(evento: dict) -> dict:
+    """Wrapper público para normalizar evento The Odds API → formato interno."""
+    return _normalizar_evento_odds_api(evento)
