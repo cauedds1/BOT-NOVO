@@ -8,7 +8,7 @@ from api_client import (
     buscar_estatisticas_jogo,
     buscar_h2h,
     buscar_lesoes_jogo,
-    buscar_contribuicao_gols_jogador,
+    buscar_contribuicao_gols_ultimos_jogos,
     buscar_lineup_confirmado,
 )
 
@@ -1535,38 +1535,72 @@ async def generate_match_analysis(jogo):
     home_injuries = [p for p in injuries_raw if p.get('team_id') == home_team_id]
     away_injuries = [p for p in injuries_raw if p.get('team_id') == away_team_id]
 
-    # TASK 7: Enriquecer ausências confirmadas com contribuição real de gols via /players
-    # Só busca para ausências com peso >= 1.0 (suspensões/lesões graves) para não desperdiçar rate limits
-    _home_total_goals_season = float(
-        home_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0) or 0
-    ) * float(home_stats.get('fixtures', {}).get('played', {}).get('total', 30) or 30)
-    _away_total_goals_season = float(
-        away_stats.get('goals', {}).get('for', {}).get('average', {}).get('total', 0) or 0
-    ) * float(away_stats.get('fixtures', {}).get('played', {}).get('total', 30) or 30)
+    # TASK 7: Enriquecer ausências confirmadas com contribuição recente de gols.
+    # Usa /fixtures/players sobre os últimos 10 jogos finalizados (não season aggregate)
+    # para refletir a forma recente do jogador. Total de gols da equipe nos mesmos jogos
+    # serve de denominador para goal_contribution_pct.
+    # Só busca para ausências com peso >= 1.0 (suspensões/lesões graves).
+    from api_client import buscar_ultimos_jogos_time
 
-    async def _enrich_injuries_with_contribution(injuries, team_id, total_goals):
-        """Busca gols da temporada para jogadores ausentes confirmados e calcula goal_contribution_pct."""
-        if not injuries or total_goals <= 0:
+    _home_recent_fixtures_raw = await buscar_ultimos_jogos_time(home_team_id, limite=10)
+    _away_recent_fixtures_raw = await buscar_ultimos_jogos_time(away_team_id, limite=10)
+
+    def _extract_team_goals_from_fixtures(fixtures_raw, team_id):
+        """Soma gols marcados pelo time nos últimos jogos para usar como denominador."""
+        total = 0
+        for f in fixtures_raw:
+            teams = f.get('teams') or {}
+            goals = f.get('goals') or {}
+            if (teams.get('home') or {}).get('id') == team_id:
+                total += int(goals.get('home') or 0)
+            elif (teams.get('away') or {}).get('id') == team_id:
+                total += int(goals.get('away') or 0)
+        return float(total) if total > 0 else 1.0
+
+    _home_recent_ids = [
+        f['fixture']['id'] for f in _home_recent_fixtures_raw
+        if (f.get('fixture') or {}).get('id')
+    ]
+    _away_recent_ids = [
+        f['fixture']['id'] for f in _away_recent_fixtures_raw
+        if (f.get('fixture') or {}).get('id')
+    ]
+    _home_recent_goals = _extract_team_goals_from_fixtures(_home_recent_fixtures_raw, home_team_id)
+    _away_recent_goals = _extract_team_goals_from_fixtures(_away_recent_fixtures_raw, away_team_id)
+
+    async def _enrich_injuries_with_contribution(injuries, team_id, recent_fixture_ids, recent_team_goals):
+        """Busca contribuição recente de gols via /fixtures/players e calcula goal_contribution_pct."""
+        if not injuries or not recent_fixture_ids:
             return injuries
         enriched = []
         for p in injuries:
-            p = dict(p)  # cópia para não mutar original
+            p = dict(p)
             if _injury_weight(p) >= 1.0 and not p.get('goal_contribution_pct'):
-                player_stats = await buscar_contribuicao_gols_jogador(
-                    p['name'], team_id, league_id
+                player_stats = await buscar_contribuicao_gols_ultimos_jogos(
+                    p['name'], team_id, recent_fixture_ids
                 )
                 if player_stats:
-                    player_goals_assists = player_stats.get('goals', 0) + player_stats.get('assists', 0)
-                    p['goal_contribution_pct'] = min(0.5, player_goals_assists / total_goals) if total_goals > 0 else 0.0
-                    p['player_season_goals'] = player_stats.get('goals', 0)
-                    p['player_season_assists'] = player_stats.get('assists', 0)
-                    if player_stats.get('goals', 0) > 0 or player_stats.get('assists', 0) > 0:
-                        print(f"  📊 [CONTRIB] {p['name']}: {player_stats.get('goals',0)}G + {player_stats.get('assists',0)}A → {p['goal_contribution_pct']*100:.0f}% da equipe")
+                    player_g_a = player_stats.get('goals', 0) + player_stats.get('assists', 0)
+                    p['goal_contribution_pct'] = min(0.5, player_g_a / recent_team_goals)
+                    p['player_recent_goals'] = player_stats.get('goals', 0)
+                    p['player_recent_assists'] = player_stats.get('assists', 0)
+                    p['player_recent_apps'] = player_stats.get('apps', 0)
+                    if player_g_a > 0:
+                        print(
+                            f"  📊 [CONTRIB] {p['name']}: "
+                            f"{player_stats.get('goals',0)}G + {player_stats.get('assists',0)}A "
+                            f"em {player_stats.get('apps',0)} jogos → "
+                            f"{p['goal_contribution_pct']*100:.0f}% da equipe (últimos jogos)"
+                        )
             enriched.append(p)
         return enriched
 
-    home_injuries = await _enrich_injuries_with_contribution(home_injuries, home_team_id, _home_total_goals_season)
-    away_injuries = await _enrich_injuries_with_contribution(away_injuries, away_team_id, _away_total_goals_season)
+    home_injuries = await _enrich_injuries_with_contribution(
+        home_injuries, home_team_id, _home_recent_ids, _home_recent_goals
+    )
+    away_injuries = await _enrich_injuries_with_contribution(
+        away_injuries, away_team_id, _away_recent_ids, _away_recent_goals
+    )
 
     # TASK 7 GATE: Only adjust Poisson lambdas when lineup is officially confirmed.
     # Without confirmation, the historical model must be preserved unchanged.

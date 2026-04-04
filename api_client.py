@@ -1228,70 +1228,81 @@ async def buscar_lineup_confirmado(fixture_id: int) -> bool:
 
 
 async def buscar_contribuicao_gols_ultimos_jogos(
-    player_id: int, player_name: str, team_id: int, limite: int = 10
+    player_name: str, team_id: int, recent_fixture_ids: list
 ) -> dict:
     """
-    TASK 7: Calcula contribuição de gols+assistências de um jogador nos últimos
-    jogos finalizados via /fixtures/players (dados por partida, não agregado de temporada).
+    TASK 7: Calcula contribuição recente de gols+assistências de um jogador
+    usando o endpoint /fixtures/players (estatísticas por partida).
 
-    Este método é preferido ao season aggregate porque reflete a forma recente,
-    conforme especificado no Task 7 (últimas 10 partidas).
+    Recebe a lista de fixture IDs mais recentes do time (últimos 10 jogos)
+    e agrega os totais de gols e assistências nessas partidas, produzindo
+    goals_per_game e assists_per_game sobre a janela solicitada.
 
     Args:
-        player_id: ID do jogador na API-Football
-        player_name: Nome (para log)
-        team_id: ID do time (para filtrar)
-        limite: Quantas partidas recentes analisar
+        player_name: Nome do jogador (para busca case-insensitive nos dados)
+        team_id: ID do time (para filtrar o lado correto do fixture)
+        recent_fixture_ids: Lista de IDs de fixtures finalizados mais recentes
 
     Returns:
         dict com goals, assists, apps, goals_per_game, assists_per_game
-        ou {} em caso de erro/sem dados
+        ou {} se jogador não encontrado ou endpoint indisponível
     """
-    cache_key = f"player_recent_{player_id}_{team_id}_{limite}"
+    if not recent_fixture_ids:
+        return {}
+
+    cache_key = f"player_fixtures_contrib_{team_id}_{player_name.lower().replace(' ', '_')}_{len(recent_fixture_ids)}"
     cached = cache_manager.get(cache_key)
     if cached is not None:
         return cached
 
-    try:
-        await asyncio.sleep(1.2)
-        response = await api_request_with_retry(
-            "GET",
-            API_URL + "players",
-            params={"id": str(player_id), "season": str(__import__('datetime').date.today().year - (1 if __import__('datetime').date.today().month < 7 else 0))},
-        )
-        if response.status_code in (403, 429):
-            cache_manager.set(cache_key, {}, expiration_minutes=60)
-            return {}
-        response.raise_for_status()
-        data = response.json().get("response", [])
+    goals = 0
+    assists = 0
+    apps = 0
+    name_lower = player_name.lower()
 
-        for entry in data:
-            stats_list = entry.get("statistics", [])
-            for s in stats_list:
-                if s.get("team", {}).get("id") != team_id:
+    for fixture_id in recent_fixture_ids:
+        try:
+            await asyncio.sleep(0.4)
+            response = await api_request_with_retry(
+                "GET",
+                API_URL + "fixtures/players",
+                params={"fixture": str(fixture_id), "team": str(team_id)},
+            )
+            if response.status_code in (403, 404, 429):
+                continue
+            response.raise_for_status()
+            data = response.json().get("response", [])
+            for team_block in data:
+                if (team_block.get("team") or {}).get("id") != team_id:
                     continue
-                goals_obj = s.get("goals", {}) or {}
-                games_obj = s.get("games", {}) or {}
-                goals = int(goals_obj.get("total") or 0)
-                assists = int(goals_obj.get("assists") or 0)
-                apps = int(games_obj.get("appearences") or 0)
-                result = {
-                    "goals": goals,
-                    "assists": assists,
-                    "apps": apps,
-                    "goals_per_game": goals / apps if apps > 0 else 0.0,
-                    "assists_per_game": assists / apps if apps > 0 else 0.0,
-                }
-                cache_manager.set(cache_key, result, expiration_minutes=120)
-                return result
+                for player_entry in team_block.get("players", []):
+                    pinfo = player_entry.get("player") or {}
+                    if name_lower not in (pinfo.get("name") or "").lower():
+                        continue
+                    stats = (player_entry.get("statistics") or [{}])[0]
+                    goals_obj = stats.get("goals") or {}
+                    games_obj = stats.get("games") or {}
+                    if games_obj.get("minutes") or games_obj.get("number"):
+                        apps += 1
+                        goals += int(goals_obj.get("total") or 0)
+                        assists += int(goals_obj.get("assists") or 0)
+                    break
+        except Exception:
+            continue
 
+    if apps == 0:
         cache_manager.set(cache_key, {}, expiration_minutes=60)
         return {}
 
-    except Exception as e:
-        print(f"  ⚠️ [CONTRIB_RECENTE] {player_name}: {e}")
-        cache_manager.set(cache_key, {}, expiration_minutes=30)
-        return {}
+    result = {
+        "goals": goals,
+        "assists": assists,
+        "apps": apps,
+        "goals_per_game": goals / apps,
+        "assists_per_game": assists / apps,
+    }
+    cache_manager.set(cache_key, result, expiration_minutes=120)
+    return result
 
 
 async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
