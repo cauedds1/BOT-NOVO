@@ -161,6 +161,11 @@ function MatchCard({ jogo, compact = false }) {
                 {countdown}
               </span>
             )}
+            {isReady && (
+              jogo.fixture_metadata?.lineup_confirmado
+                ? <span style={{ fontSize: 8, color: '#22c55e', marginTop: 2, fontWeight: 600, whiteSpace: 'nowrap' }}>✅ Lineup</span>
+                : <span style={{ fontSize: 8, color: '#f59e0b', marginTop: 2, fontWeight: 600, whiteSpace: 'nowrap' }}>⏳ Lineup</span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">

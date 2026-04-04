@@ -422,7 +422,7 @@ function PlayerMarketRow({ record }) {
 function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
   const [dados, setDados] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [aba, setAba] = useState('mercados')
+  const [aba, setAba] = useState('escalacao')
 
   useEffect(() => {
     fetch(`/api/jogadores/${fixtureId}`)
@@ -442,9 +442,12 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
   const mercadosVisitante = dados?.mercados_visitante || []
   const mandantesStats = dados?.mandantes || []
   const visitantesStats = dados?.visitantes || []
-  const semDados = mercadosMandante.length === 0 && mercadosVisitante.length === 0
+  const lineupConfirmado = dados?.lineup_confirmado ?? false
 
-  if (semDados) return (
+  const semMercados = mercadosMandante.length === 0 && mercadosVisitante.length === 0
+  const semLineup = mandantesStats.length === 0 && visitantesStats.length === 0
+
+  if (semMercados && semLineup) return (
     <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>👥</div>
       <p style={{ fontSize: 14 }}>Sem dados de jogadores para este jogo.</p>
@@ -454,11 +457,11 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
 
   return (
     <div>
-      {/* Sub-tabs: Mercados / Escalação */}
+      {/* Sub-tabs: Escalação / Mercados de Jogadores */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
         {[
-          { id: 'mercados', label: '📊 Mercados de Jogadores' },
           { id: 'escalacao', label: '👕 Escalação' },
+          { id: 'mercados', label: '📊 Mercados de Jogadores' },
         ].map(t => (
           <button key={t.id} onClick={() => setAba(t.id)} style={{
             padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
@@ -471,33 +474,35 @@ function JogadoresSection({ fixtureId, timeCasa, timeFora }) {
         ))}
       </div>
 
-      {aba === 'mercados' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div className="card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
-            {mercadosMandante.length === 0
-              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem mercados disponíveis</p>
-              : mercadosMandante.map((r, i) => <PlayerMarketRow key={i} record={r} />)
-            }
-          </div>
-          <div className="card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora}</div>
-            {mercadosVisitante.length === 0
-              ? <p style={{ fontSize: 12, color: '#64748b' }}>Sem mercados disponíveis</p>
-              : mercadosVisitante.map((r, i) => <PlayerMarketRow key={i} record={r} />)
-            }
-          </div>
-        </div>
+      {aba === 'escalacao' && (
+        <EscalacaoSection mandantes={mandantesStats} visitantes={visitantesStats} timeCasa={timeCasa} timeFora={timeFora} lineupConfirmado={lineupConfirmado} />
       )}
 
-      {aba === 'escalacao' && (
-        <EscalacaoSection mandantes={mandantesStats} visitantes={visitantesStats} timeCasa={timeCasa} timeFora={timeFora} />
+      {aba === 'mercados' && (
+        semMercados ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
+            <p style={{ fontSize: 14 }}>Mercados de jogadores não disponíveis.</p>
+            <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>Os mercados individuais aparecem quando a API retorna estatísticas de desempenho dos jogadores.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>🏠 {timeCasa}</div>
+              {mercadosMandante.map((r, i) => <PlayerMarketRow key={i} record={r} />)}
+            </div>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#818cf8', marginBottom: 10 }}>✈️ {timeFora}</div>
+              {mercadosVisitante.map((r, i) => <PlayerMarketRow key={i} record={r} />)}
+            </div>
+          </div>
+        )
       )}
     </div>
   )
 }
 
-function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora }) {
+function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora, lineupConfirmado = false }) {
   const titularesCasa = mandantes.filter(j => j.foi_titular)
   const reservasCasa = mandantes.filter(j => !j.foi_titular)
   const titularesFora = visitantes.filter(j => j.foi_titular)
@@ -507,11 +512,23 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora }) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px dashed rgba(99,102,241,0.15)' }}>
         <div style={{ fontSize: 32, marginBottom: 10 }}>🟩</div>
-        <p style={{ fontSize: 14 }}>Escalação não disponível para este jogo.</p>
-        <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>As formações são exibidas quando a API retorna dados de lineup.</p>
+        <p style={{ fontSize: 14 }}>Escalação não confirmada para este jogo.</p>
+        <p style={{ fontSize: 12, marginTop: 6, color: '#475569' }}>
+          O lineup é divulgado normalmente 1 hora antes do jogo. Os dados aparecem quando a API retorna a escalação confirmada.
+        </p>
       </div>
     )
   }
+
+  const statusBanner = lineupConfirmado ? (
+    <div style={{ padding: '6px 12px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, marginBottom: 10, fontSize: 11, color: '#22c55e', fontWeight: 600 }}>
+      ✅ Escalação confirmada
+    </div>
+  ) : (
+    <div style={{ padding: '6px 12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, marginBottom: 10, fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+      ⏳ Provável escalação — aguardando confirmação oficial (~1h antes do jogo). Jogadores lesionados 🏥 e suspensos 🚫 marcados quando disponíveis.
+    </div>
+  )
 
   const splitLines = (players) => {
     if (players.length === 0) return []
@@ -586,6 +603,15 @@ function EscalacaoSection({ mandantes, visitantes, timeCasa, timeFora }) {
 
   return (
     <div>
+      {statusBanner}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: '#475569', fontWeight: 600 }}>Legenda:</span>
+        <span style={{ fontSize: 10, color: '#475569' }}>⚽ Gol</span>
+        <span style={{ fontSize: 10, color: '#475569' }}>🟨 Amarelo</span>
+        <span style={{ fontSize: 10, color: '#475569' }}>🟥 Vermelho</span>
+        <span style={{ fontSize: 10, color: '#475569' }}>🏥 Lesionado (quando disponível)</span>
+        <span style={{ fontSize: 10, color: '#475569' }}>🚫 Suspenso (quando disponível)</span>
+      </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
         <FormationField players={titularesCasa} teamName={timeCasa} isCasa={true} />
         <div style={{ width: 1, background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />

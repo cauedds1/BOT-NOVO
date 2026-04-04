@@ -214,6 +214,13 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False, analise_db: Optional[d
         "best_palpites": best_palpites,
         "score_destaque": score_destaque,
         "liga_peso": liga_peso,
+        "fixture_metadata": {
+            "lineup_confirmado": False,
+            "rodada": rodada,
+            "venue": venue_nome,
+            "venue_cidade": venue_cidade,
+            "arbitro": arbitro,
+        },
     }
 
 
@@ -538,6 +545,7 @@ def _db_to_api_response(analise_db: dict, fixture_id: int) -> dict:
         "venue_cidade": stats_casa.get("venue_cidade") or stats_fora.get("venue_cidade") or "",
         "arbitro": stats_casa.get("arbitro") or stats_fora.get("arbitro") or "",
         "data_analise": str(analise_db.get("data_analise", "")),
+        "lineup_confirmado": False,
     }
 
     # H2H summary: avg goals + BTTS frequency
@@ -1110,6 +1118,8 @@ async def get_jogadores_fixture(fixture_id: int):
                     "mandantes": mandantes_rows,
                     "visitantes": visitantes_rows,
                     "total": len(rows),
+                    "lineup_confirmado": False,
+                    "lineup_fonte": "historico",
                 }
     except Exception as e:
         print(f"[WebAPI] Erro ao buscar jogadores para fixture #{fixture_id}: {e}")
@@ -1121,6 +1131,8 @@ async def get_jogadores_fixture(fixture_id: int):
         "mandantes": [],
         "visitantes": [],
         "total": 0,
+        "lineup_confirmado": False,
+        "lineup_fonte": None,
     }
 
 
