@@ -107,14 +107,19 @@ def analisar_mercado_cantos(analysis_packet, odds):
     media_casa = cantos_casa_feitos * (fator_cantos if fator_cantos > 1.0 else 1.0)
     media_fora = cantos_fora_feitos
 
-    # FASE 3: Blending H2H quando houver 3+ confrontos históricos com dados de cantos
+    # FASE 3: Blending H2H dinâmico quando houver 3+ confrontos históricos com dados de cantos
     h2h_data = analysis_packet.get('h2h')
     if h2h_data and h2h_data.get('count', 0) >= 3:
         h2h_avg_corners = h2h_data.get('avg_corners')
         if h2h_avg_corners is not None and h2h_avg_corners > 0:
-            media_exp_ft_ajustada = 0.6 * media_exp_ft_ajustada + 0.4 * h2h_avg_corners
+            count = h2h_data['count']
+            base_w = 0.40 + min(count - 3, 2) * 0.05
+            divergence = abs(media_exp_ft_ajustada - h2h_avg_corners)
+            div_bonus = min(divergence * 0.05, 0.10)
+            h2h_weight = min(base_w + div_bonus, 0.55)
+            model_weight = 1.0 - h2h_weight
+            media_exp_ft_ajustada = model_weight * media_exp_ft_ajustada + h2h_weight * h2h_avg_corners
             media_exp_ht = media_exp_ft_ajustada * 0.48
-            print(f"  🔗 H2H BLEND CANTOS ({h2h_data['count']} jogos): h2h_avg={h2h_avg_corners:.1f} → media_ft={media_exp_ft_ajustada:.1f}")
 
     print(f"  📊 Médias: FT={media_exp_ft_ajustada:.1f}, HT={media_exp_ht:.1f}, Casa={media_casa:.1f}, Fora={media_fora:.1f}")
 

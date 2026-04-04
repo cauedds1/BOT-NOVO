@@ -603,13 +603,15 @@ async def _process_h2h_data(h2h_list):
     total_goals = sum((c['home_goals'] or 0) + (c['away_goals'] or 0) for c in valid)
     avg_goals = total_goals / len(valid)
 
-    # Enriquecer cada jogo com total_goals e tentar buscar total_corners via fixture stats
+    # Enriquecer cada jogo com total_goals, total_corners e total_cards via fixture stats
     enriched_games = []
     corner_totals = []
+    card_totals = []
     for confronto in valid[:5]:
         fid = confronto.get('fixture_id')
         total_goals = (confronto.get('home_goals') or 0) + (confronto.get('away_goals') or 0)
         total_corners = None
+        total_cards = None
         if fid:
             try:
                 stats = await buscar_estatisticas_jogo(fid)
@@ -618,22 +620,29 @@ async def _process_h2h_data(h2h_list):
                     away_c = int(stats.get('away', {}).get('Corner Kicks', 0) or 0)
                     total_corners = home_c + away_c
                     corner_totals.append(total_corners)
+                    home_y = int(stats.get('home', {}).get('Yellow Cards', 0) or 0)
+                    away_y = int(stats.get('away', {}).get('Yellow Cards', 0) or 0)
+                    home_r = int(stats.get('home', {}).get('Red Cards', 0) or 0)
+                    away_r = int(stats.get('away', {}).get('Red Cards', 0) or 0)
+                    total_cards = home_y + away_y + home_r + away_r
+                    card_totals.append(total_cards)
             except Exception:
                 pass
         enriched_games.append({
             **confronto,
             'total_goals': total_goals,
-            'total_corners': total_corners
+            'total_corners': total_corners,
+            'total_cards': total_cards
         })
 
     avg_corners = sum(corner_totals) / len(corner_totals) if corner_totals else None
-
-    print(f"  🔗 H2H processado: {len(valid)} jogos | avg_goals={avg_goals:.2f} | avg_corners={avg_corners}")
+    avg_cards = sum(card_totals) / len(card_totals) if card_totals else None
 
     return {
         'count': len(valid),
         'avg_goals': round(avg_goals, 2),
         'avg_corners': round(avg_corners, 1) if avg_corners is not None else None,
+        'avg_cards': round(avg_cards, 1) if avg_cards is not None else None,
         'games': enriched_games
     }
 
@@ -1120,8 +1129,8 @@ async def _analyze_strength_of_schedule(team_id, league_id):
     """
     from api_client import buscar_ultimos_jogos_time
     from analysts.context_analyzer import calculate_dynamic_qsc
-    
-    ultimos_jogos = await buscar_ultimos_jogos_time(team_id, limite=5)
+
+    ultimos_jogos = await buscar_ultimos_jogos_time(team_id, limite=10)
     
     if not ultimos_jogos or len(ultimos_jogos) == 0:
         return {
@@ -1147,20 +1156,20 @@ async def _analyze_strength_of_schedule(team_id, league_id):
         
         # Validação robusta: pular jogo se opponent_id for inválido
         if opponent_id is None or not isinstance(opponent_id, int):
-            print(f"    ⚠️ [SoS DEBUG] ID do adversário inválido (None ou não-inteiro) no jogo {jogo.get('fixture_id', 'unknown')} - pulando...")
             continue
-        
-        print(f"    🔍 [SoS DEBUG] Buscando stats para adversário ID: {opponent_id} ({opponent_name})")
-        
-        # Buscar stats do adversário para calcular QSC
-        from api_client import buscar_estatisticas_gerais_time
-        opponent_stats = await buscar_estatisticas_gerais_time(opponent_id, league_id)
-        
+
+        # Only use opponent stats if already cached — never fire fresh API calls during SoS
+        from db_manager import _get_db_cache
+        cache_key_opp = f"stats_{opponent_id}_liga_{league_id}"
+        from cache_manager import cache_manager as _cm
+        opponent_stats = _cm.get(cache_key_opp) or _get_db_cache().get_cache_stats_time(opponent_id, league_id)
+
         if opponent_stats:
             opponent_qsc = calculate_dynamic_qsc(opponent_stats, opponent_id, None, opponent_name, league_id, 0)
             opponents_qsc.append(opponent_qsc)
         else:
-            print(f"    ⚠️ [SoS DEBUG] Não foi possível obter stats do adversário ID {opponent_id} - pulando...")
+            # Opponent not in cache — use neutral default instead of firing a fresh API call
+            opponents_qsc.append(50.0)
     
     if not opponents_qsc:
         return {
@@ -1182,7 +1191,6 @@ async def _analyze_strength_of_schedule(team_id, league_id):
     else:
         difficulty = 'easy'
     
-    print(f"    📅 SoS Analysis: Últimos {len(opponents_qsc)} jogos vs oponentes com QSC médio: {sos_score:.1f} ({difficulty})")
     
     return {
         'sos_score': sos_score,
@@ -1217,16 +1225,11 @@ async def _calculate_weighted_metrics(team_id, league_id, sos_data, team_stats=N
         }
     """
     from api_client import buscar_ultimos_jogos_time, buscar_estatisticas_jogo
-    
-    print(f"    🔍 FASE 1: Buscando últimos jogos do time {team_id}...")
-    ultimos_jogos = await buscar_ultimos_jogos_time(team_id, limite=5)
-    
+
+    ultimos_jogos = await buscar_ultimos_jogos_time(team_id, limite=10)
+
     if not ultimos_jogos or len(ultimos_jogos) == 0:
-        print(f"    ❌ ERRO CRÍTICO: Nenhum jogo encontrado para o time {team_id}")
-        print(f"    🛑 PHOENIX PROTOCOL: Análise IMPOSSÍVEL sem dados históricos")
-        return None  # Sinaliza falha - não há dados para análise
-    
-    print(f"    ✅ {len(ultimos_jogos)} jogos encontrados. Buscando estatísticas DETALHADAS de cada jogo...")
+        return None
     
     total_corners_for = 0
     total_corners_against = 0
@@ -1239,29 +1242,23 @@ async def _calculate_weighted_metrics(team_id, league_id, sos_data, team_stats=N
     
     opponents_qsc = sos_data.get('opponents_qsc', [])
     
-    for idx, jogo in enumerate(ultimos_jogos[:5]):
+    for idx, jogo in enumerate(ultimos_jogos[:10]):
         fixture_id = jogo.get('fixture_id')
-        
+
         if not fixture_id:
-            print(f"    ⚠️ Jogo {idx+1}: Sem fixture_id, pulando...")
             continue
-        
-        # 🔥 PHOENIX PROTOCOL: BUSCAR ESTATÍSTICAS DETALHADAS DE CADA JOGO
-        print(f"    🔎 Jogo {idx+1}/{len(ultimos_jogos[:5])}: Buscando stats do fixture {fixture_id}...")
+
         stats = await buscar_estatisticas_jogo(fixture_id)
-        
+
         if not stats:
-            print(f"    ⚠️ Jogo {idx+1}: Estatísticas não disponíveis para fixture {fixture_id}, pulando...")
             continue
-        
-        # Determinar se jogou em casa ou fora
+
         teams_data = jogo.get('teams', {})
         home_team_id = teams_data.get('home', {}).get('id')
         eh_casa = home_team_id == team_id
         team_key = 'home' if eh_casa else 'away'
         opponent_key = 'away' if eh_casa else 'home'
-        
-        # Extrair métricas do jogo
+
         corners_for = int(stats.get(team_key, {}).get('Corner Kicks', 0) or 0)
         corners_against = int(stats.get(opponent_key, {}).get('Corner Kicks', 0) or 0)
         shots_for = int(stats.get(team_key, {}).get('Shots on Goal', 0) or 0)
@@ -1270,29 +1267,22 @@ async def _calculate_weighted_metrics(team_id, league_id, sos_data, team_stats=N
         red_cards_for = int(stats.get(team_key, {}).get('Red Cards', 0) or 0)
         yellow_cards_against = int(stats.get(opponent_key, {}).get('Yellow Cards', 0) or 0)
         red_cards_against = int(stats.get(opponent_key, {}).get('Red Cards', 0) or 0)
-        
-        # Calcular peso baseado no QSC do adversário
+
         opponent_qsc = opponents_qsc[idx] if idx < len(opponents_qsc) else 50.0
-        weight = opponent_qsc / 50.0  # Normalizar (50 = peso 1.0)
-        
-        # Acumular valores ponderados
+        weight = opponent_qsc / 50.0
+
         total_corners_for += corners_for * weight
         total_corners_against += corners_against * weight
         total_shots_for += shots_for * weight
         total_shots_against += shots_against * weight
-        total_cards_for += (yellow_cards_for + red_cards_for * 3) * weight  # Vermelho = 3 amarelos
+        total_cards_for += (yellow_cards_for + red_cards_for * 3) * weight
         total_cards_against += (yellow_cards_against + red_cards_against * 3) * weight
         total_weight += weight
         jogos_processados += 1
-        
-        print(f"    ✅ Jogo {idx+1}: {corners_for} cantos | {shots_for} finalizações | {yellow_cards_for+red_cards_for} cartões (peso: {weight:.2f})")
-    
+
     if jogos_processados == 0 or total_weight == 0:
-        print(f"    ❌ ERRO CRÍTICO: Nenhum jogo processado com sucesso")
-        print(f"    🛑 PHOENIX PROTOCOL: Análise IMPOSSÍVEL - estatísticas não disponíveis")
-        return None  # Sinaliza falha - não conseguiu obter dados reais
-    
-    # Calcular médias ponderadas
+        return None
+
     weighted_metrics = {
         'weighted_corners_for': total_corners_for / total_weight,
         'weighted_corners_against': total_corners_against / total_weight,
@@ -1301,12 +1291,7 @@ async def _calculate_weighted_metrics(team_id, league_id, sos_data, team_stats=N
         'weighted_cards_for': total_cards_for / total_weight,
         'weighted_cards_against': total_cards_against / total_weight
     }
-    
-    print(f"    🎯 WEIGHTED METRICS CALCULADOS ({jogos_processados} jogos):")
-    print(f"       🚩 Cantos: {weighted_metrics['weighted_corners_for']:.1f} feitos | {weighted_metrics['weighted_corners_against']:.1f} sofridos")
-    print(f"       ⚽ Finalizações no gol: {weighted_metrics['weighted_shots_for']:.1f} feitas | {weighted_metrics['weighted_shots_against']:.1f} sofridas")
-    print(f"       🟨 Cartões: {weighted_metrics['weighted_cards_for']:.1f} recebidos | {weighted_metrics['weighted_cards_against']:.1f} provocados")
-    
+
     return weighted_metrics
 
 
@@ -1987,10 +1972,11 @@ async def generate_match_analysis(jogo):
     print("🎲 Calculando probabilidades baseadas no script...")
     probabilities = _calculate_probabilities_from_script(script_name, power_home, power_away)
     
-    print("📊 EVIDENCE-BASED: Buscando últimos 4 jogos para evidências...")
     from api_client import buscar_ultimos_jogos_time
-    ultimos_jogos_casa = await buscar_ultimos_jogos_time(home_team_id, limite=4)
-    ultimos_jogos_fora = await buscar_ultimos_jogos_time(away_team_id, limite=4)
+    _all_home_ev = await buscar_ultimos_jogos_time(home_team_id, limite=10)
+    _all_away_ev = await buscar_ultimos_jogos_time(away_team_id, limite=10)
+    ultimos_jogos_casa = (_all_home_ev or [])[:4]
+    ultimos_jogos_fora = (_all_away_ev or [])[:4]
     
     # Extrair evidências dos últimos jogos para cada mercado
     evidencias_home = _extract_evidence_from_recent_games(ultimos_jogos_casa, home_team_id, home_team_name) if ultimos_jogos_casa else {}

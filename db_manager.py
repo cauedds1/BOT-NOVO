@@ -185,6 +185,15 @@ class DatabaseManager:
         );
         CREATE INDEX IF NOT EXISTS idx_cache_ultimos_jogos_fetched ON cache_ultimos_jogos(fetched_at);
 
+        -- Estatísticas detalhadas por fixture (cantos, cartões, finalizações, etc.)
+        -- TTL: 30 dias — dados históricos imutáveis (o jogo já aconteceu)
+        CREATE TABLE IF NOT EXISTS cache_fixture_stats (
+            fixture_id INTEGER PRIMARY KEY,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_fixture_stats_fetched ON cache_fixture_stats(fetched_at);
+
         -- Confrontos diretos (H2H) entre dois times
         -- TTL: 30 dias — histórico ultra-estável, muda só se os times se encontrarem
         CREATE TABLE IF NOT EXISTS cache_h2h (
@@ -440,7 +449,7 @@ class DatabaseManager:
                 
                 print("✅ Database schema inicializado com sucesso!")
                 print("   📋 Tabelas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados, estatisticas_jogadores, perfis_jogadores")
-                print("   📦 Cache persistente: cache_fixtures_dia, cache_stats_time, cache_ultimos_jogos, cache_h2h, cache_team_profile")
+                print("   📦 Cache persistente: cache_fixtures_dia, cache_stats_time, cache_ultimos_jogos, cache_fixture_stats, cache_h2h, cache_team_profile")
                 return True
                 
         except Exception as e:
@@ -671,6 +680,56 @@ class DatabaseManager:
                 print(f"💾 DB CACHE SAVE: ultimos_jogos time {team_id} limite {limite} ({len(data)} jogos)")
         except Exception as e:
             print(f"⚠️ DB cache_ultimos_jogos set erro: {e}")
+
+    def get_cache_fixture_stats(self, fixture_id: int) -> Optional[dict]:
+        """Busca estatísticas de fixture no DB. TTL: 30 dias (dado imutável). Retorna None em miss."""
+        if not self.enabled:
+            return None
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data, fetched_at FROM cache_fixture_stats WHERE fixture_id = %s",
+                    (fixture_id,)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[1]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_days = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 86400
+                    if age_days < 30:
+                        return row[0]
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_fixture_stats get erro: {e}")
+            return None
+
+    def set_cache_fixture_stats(self, fixture_id: int, data: dict) -> None:
+        """Salva estatísticas de fixture no DB."""
+        if not self.enabled:
+            return
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_fixture_stats (fixture_id, data, fetched_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (fixture_id) DO UPDATE
+                        SET data = EXCLUDED.data, fetched_at = NOW()
+                    """,
+                    (fixture_id, Json(data))
+                )
+                conn.commit()
+                cur.close()
+        except Exception as e:
+            print(f"⚠️ DB cache_fixture_stats set erro: {e}")
 
     def get_cache_h2h(self, team1_id: int, team2_id: int, limite: int) -> Optional[list]:
         """Busca H2H entre dois times no DB. TTL: 30 dias. Retorna None em caso de miss."""

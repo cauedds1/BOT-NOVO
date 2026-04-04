@@ -689,11 +689,6 @@ async def buscar_jogos_do_dia():
         for idx, liga_id in enumerate(LIGAS_DE_INTERESSE, 1):
             params = {"league": str(liga_id), "season": season, "date": data_busca}
             
-            # 🔍 DEBUG: Log dos parâmetros enviados à API
-            if idx == 1:  # Log apenas na primeira liga para não poluir
-                print(f"   [DEBUG] Parâmetros API: {params}")
-                print(f"   [DEBUG] URL: {API_URL}fixtures")
-            
             try:
                 response = await api_request_with_retry("GET", API_URL + "fixtures", params=params)
                 response.raise_for_status()
@@ -791,29 +786,10 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         response_data = response.json()
         data = response_data.get('response')
 
-        # 🔍 INVESTIGAÇÃO COMPLETA: Mostrar TODA a resposta da API
-        print(f"\n  🔬 INVESTIGAÇÃO /teams/statistics:")
-        print(f"     → Time: {time_id}, Liga: {id_liga}, Season: {season}")
-        print(f"     → URL: {API_URL}teams/statistics")
-        print(f"     → Status: {response.status_code}")
-        
-        # DEBUG: Verificar se a API retornou dados
         if not data:
-            print(f"     ❌ Campo 'response' está vazio ou None")
-            print(f"     🔍 JSON completo retornado: {response_data}")
             return None
 
-        print(f"     ✅ Campo 'response' presente")
-        
-        # Mostrar estrutura completa de 'corners'
         corners_data = data.get('corners', {})
-        print(f"\n     📦 ESTRUTURA COMPLETA DE CANTOS:")
-        print(f"        data.get('corners'): {corners_data}")
-        print(f"        Chaves disponíveis em corners: {list(corners_data.keys()) if corners_data else 'VAZIO'}")
-        
-        if corners_data:
-            for chave, valor in corners_data.items():
-                print(f"        → corners['{chave}']: {valor}")
 
         # Extrair dados de gols
         goals_data = data.get('goals', {})
@@ -839,12 +815,6 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         finalizacoes_no_gol_casa_primary = float(shots_on_data.get('home', 0) or 0)
         finalizacoes_no_gol_fora_primary = float(shots_on_data.get('away', 0) or 0)
         
-        # DEBUG: Mostrar valores finais extraídos
-        print(f"\n     📊 VALORES EXTRAÍDOS:")
-        print(f"        Gols Casa: {gols_casa_marcados:.1f} | Fora: {gols_fora_marcados:.1f}")
-        print(f"        Cantos Casa: {cantos_avg_casa:.1f} | Fora: {cantos_avg_fora:.1f}")
-        print(f"        Finalizações (primária) Casa: {finalizacoes_casa_primary:.1f} | Fora: {finalizacoes_fora_primary:.1f}")
-
         # 🎯 FALLBACK: Se API retornar 0.0, calcular dos últimos jogos (cantos, finalizações, etc)
         # Inicializar com valores da API primária quando disponíveis
         cantos_sofridos_casa = 0.0
@@ -865,13 +835,7 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         needs_shots_fallback = finalizacoes_casa == 0.0 and finalizacoes_fora == 0.0
 
         if needs_corners_fallback or needs_shots_fallback:
-            _reason = []
-            if needs_corners_fallback:
-                _reason.append("cantos")
-            if needs_shots_fallback:
-                _reason.append("finalizações")
-            print(f"  🔄 FALLBACK ({', '.join(_reason)}): API retornou 0.0, buscando estatísticas dos últimos jogos...")
-            ultimos_jogos = await buscar_ultimos_jogos_time(time_id, limite=5)
+            ultimos_jogos = await buscar_ultimos_jogos_time(time_id, limite=10)
 
             if ultimos_jogos:
                 cantos_feitos_casa_soma = 0
@@ -898,14 +862,9 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
                     teams_info = jogo.get('teams', {})
 
                     if not stats or not fixture_id:
-                        # Tentar buscar estatísticas detalhadas
-                        print(f"     🔍 DEBUG: Buscando stats para fixture {fixture_id}...")
                         stats_detalhadas = await buscar_estatisticas_jogo(fixture_id)
                         if stats_detalhadas:
                             stats = stats_detalhadas
-                            print(f"     ✅ DEBUG: Stats encontradas para fixture {fixture_id}")
-                        else:
-                            print(f"     ⚠️ DEBUG: Nenhuma stat encontrada para fixture {fixture_id}")
 
                     # Determinar se o time jogou em casa ou fora
                     home_id = teams_info.get('home', {}).get('id')
@@ -997,18 +956,6 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
                     cartoes_amarelos_fora = cartoes_amarelos_fora_soma / jogos_fora
                     cartoes_vermelhos_fora = cartoes_vermelhos_fora_soma / jogos_fora
 
-                print(f"\n  ✅ DADOS CALCULADOS FALLBACK ({jogos_casa} jogos casa / {jogos_fora} jogos fora):")
-                print(f"     🚩 CANTOS: Casa {cantos_avg_casa:.1f} (cede {cantos_sofridos_casa:.1f}) | Fora {cantos_avg_fora:.1f} (cede {cantos_sofridos_fora:.1f})")
-                print(f"     ⚽ FINALIZAÇÕES: Casa {finalizacoes_casa:.1f} total ({finalizacoes_no_gol_casa:.1f} no gol) | Fora {finalizacoes_fora:.1f} total ({finalizacoes_no_gol_fora:.1f} no gol)")
-                print(f"     🟨 CARTÕES: Casa {cartoes_amarelos_casa:.1f} amarelos + {cartoes_vermelhos_casa:.1f} vermelhos | Fora {cartoes_amarelos_fora:.1f} amarelos + {cartoes_vermelhos_fora:.1f} vermelhos")
-                print(f"     📊 SOMAS BRUTAS:")
-                print(f"        Cantos Casa: {cantos_feitos_casa_soma} feitos / {cantos_cedidos_casa_soma} cedidos")
-                print(f"        Cantos Fora: {cantos_feitos_fora_soma} feitos / {cantos_cedidos_fora_soma} cedidos")
-                print(f"        Finalizações Casa: {finalizacoes_casa_soma} total / {finalizacoes_gol_casa_soma} no gol")
-                print(f"        Finalizações Fora: {finalizacoes_fora_soma} total / {finalizacoes_gol_fora_soma} no gol")
-                print(f"        Cartões Casa: {cartoes_amarelos_casa_soma} amarelos / {cartoes_vermelhos_casa_soma} vermelhos")
-                print(f"        Cartões Fora: {cartoes_amarelos_fora_soma} amarelos / {cartoes_vermelhos_fora_soma} vermelhos")
-
         # Preservar campos essenciais do API para cálculo de QSC Dinâmico
         # 🔧 FIX: Garantir que nunca seja None (API pode retornar None explicitamente)
         form_string = data.get('form') or ''
@@ -1025,11 +972,6 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         clean_sheet_rate_home = (cs_home_count / fp_home) if fp_home > 0 else None
         clean_sheet_rate_away = (cs_away_count / fp_away) if fp_away > 0 else None
 
-        print(f"  📋 Campos essenciais capturados:")
-        print(f"     Form: '{form_string}' (len: {len(form_string)})")
-        print(f"     Goals structure: {bool(goals_raw)}")
-        print(f"     Clean sheets: casa={cs_home_count}/{fp_home}={clean_sheet_rate_home} | fora={cs_away_count}/{fp_away}={clean_sheet_rate_away}")
-        
         analise = {
             "casa": {
                 "gols_marcados": gols_casa_marcados,
@@ -1445,30 +1387,16 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
         
         response_json = response.json()
         
-        # 🔍 INVESTIGAÇÃO: Logging completo
-        print(f"\n  🔬 INVESTIGAÇÃO /fixtures (últimos jogos) - Tentativa {_tentativa}:")
-        print(f"     → Time: {time_id}, Season: {season}, Limite: {limite}")
-        print(f"     → URL: {API_URL}fixtures")
-        print(f"     → Status: {response.status_code}")
-
         if data := response_json.get('response'):
-            print(f"     ✅ {len(data)} jogos retornados pela API")
-            
             jogos_processados = []
-            jogos_finalizados = 0
-            jogos_futuros = 0
-            
+
             for jogo in data:
                 fixture_status = jogo['fixture']['status']['short']
                 fixture_id = jogo['fixture']['id']
-                
-                # 🚨 FILTRO CRÍTICO: Apenas jogos FINALIZADOS (FT, AET, PEN)
+
                 if fixture_status not in ['FT', 'AET', 'PEN']:
-                    print(f"     ⏭️  IGNORADO Fixture {fixture_id}: Status '{fixture_status}' (não finalizado)")
-                    jogos_futuros += 1
                     continue
-                
-                jogos_finalizados += 1
+
                 jogo_info = {
                     "fixture_id": fixture_id,
                     "date": jogo['fixture']['date'],
@@ -1482,37 +1410,23 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
                     "score": jogo.get('score', {}),
                     "home_goals": jogo.get('goals', {}).get('home', 0),
                     "away_goals": jogo.get('goals', {}).get('away', 0),
-                    "statistics": {}  # Será preenchido depois
+                    "statistics": {}
                 }
                 jogos_processados.append(jogo_info)
-                print(f"     ✅ INCLUÍDO Fixture {fixture_id}: {jogo_info['home_team']} vs {jogo_info['away_team']} (Status: {fixture_status})")
 
-            print(f"\n     📊 RESUMO: {jogos_finalizados} finalizados / {jogos_futuros} futuros ou em andamento")
-            print(f"     → Jogos válidos para análise: {len(jogos_processados)}")
-            
-            # 🔄 RETRY: Se nenhum jogo finalizado encontrado e ainda não tentamos com mais jogos
             if len(jogos_processados) == 0 and _tentativa < 3:
-                novo_limite = limite * 2  # Dobrar limite
-                print(f"\n     🔄 RETRY: Nenhum jogo finalizado encontrado, tentando com {novo_limite} jogos...")
+                novo_limite = limite * 2
                 return await buscar_ultimos_jogos_time(time_id, limite=novo_limite, _tentativa=_tentativa + 1)
-            
-            # ⚠️ GUARDRAIL: Se após 3 tentativas ainda não há jogos finalizados
+
             if len(jogos_processados) == 0:
-                print(f"\n     ❌ FALHA CRÍTICA: Nenhum jogo finalizado encontrado após {_tentativa} tentativas")
-                print(f"        → Time {time_id} pode não ter histórico na temporada {season}")
-                print(f"        → Ou todos os jogos são futuros/em andamento")
                 return []
-            
+
             cache_manager.set(cache_key, jogos_processados)
             _get_db_cache().set_cache_ultimos_jogos(time_id, limite, jogos_processados)
             return jogos_processados
-        else:
-            print(f"     ❌ Campo 'response' vazio")
-            
+
     except Exception as e:
         print(f"  ❌ ERRO buscando últimos jogos do time {time_id}: {e}")
-        import traceback
-        traceback.print_exc()
 
     return []
 
@@ -1825,75 +1739,43 @@ async def buscar_estatisticas_jogo(fixture_id: int):
     if cached_data := cache_manager.get(cache_key):
         return cached_data
 
+    db_data = _get_db_cache().get_cache_fixture_stats(fixture_id)
+    if db_data is not None:
+        cache_manager.set(cache_key, db_data, expiration_minutes=240)
+        return db_data
+
     params = {"fixture": str(fixture_id)}
     try:
         await asyncio.sleep(1.6)
         response = await api_request_with_retry("GET", API_URL + "fixtures/statistics", params=params)
         response.raise_for_status()
-        
-        response_json = response.json()
-        
-        # --- RAW API-FUTEBOL **STATS** RESPONSE ---
-        import json
-        print("--- RAW API-FUTEBOL **STATS** RESPONSE ---")
-        print(json.dumps(response_json, indent=2))
-        print("------------------------------------------")
-        
-        print(f"  🔍 DEBUG FIXTURE {fixture_id} - Resumo da Resposta:")
-        print(f"     Status code: {response.status_code}")
 
-        if data := response_json.get('response'):
+        if data := response.json().get('response'):
             if not data or len(data) == 0:
-                print(f"     ⚠️ Response vazio para fixture {fixture_id} - jogo pode não ter acontecido ainda")
                 return None
-                
-            # 🔍 DEBUG: Mostrar dados RAW completos da API
-            print(f"     ✅ {len(data)} times encontrados na resposta")
-            
-            # API retorna array com 2 elementos: [home_stats, away_stats]
-            stats_processadas = {
-                'home': {},
-                'away': {}
-            }
+
+            stats_processadas = {'home': {}, 'away': {}}
 
             for team_stats in data:
                 team_type = 'home' if team_stats['team']['id'] == data[0]['team']['id'] else 'away'
-                team_name = team_stats['team']['name']
-
-                # Extrair estatísticas relevantes
                 stats_dict = {}
                 for stat in team_stats.get('statistics', []):
                     tipo = stat.get('type', '')
                     valor = stat.get('value', 0)
-
-                    # Converter para número quando possível
                     if valor and isinstance(valor, str) and '%' not in valor:
                         try:
                             valor = int(valor)
                         except (ValueError, TypeError):
-                            # Manter valor original se conversão falhar
                             pass
-
                     stats_dict[tipo] = valor
-
                 stats_processadas[team_type] = stats_dict
-                
-                # 🔍 DEBUG: Mostrar dados processados de CANTOS, CARTÕES e FINALIZAÇÕES
-                print(f"     {team_type.upper()} ({team_name}):")
-                print(f"       🚩 Cantos: {stats_dict.get('Corner Kicks', 'N/A')}")
-                print(f"       ⚽ Finalizações: {stats_dict.get('Total Shots', 'N/A')} total, {stats_dict.get('Shots on Goal', 'N/A')} no gol")
-                print(f"       🟨 Cartões: {stats_dict.get('Yellow Cards', 'N/A')} amarelos, {stats_dict.get('Red Cards', 'N/A')} vermelhos")
 
             cache_manager.set(cache_key, stats_processadas, expiration_minutes=240)
+            _get_db_cache().set_cache_fixture_stats(fixture_id, stats_processadas)
             return stats_processadas
-        else:
-            print(f"     ⚠️ Campo 'response' não encontrado ou vazio no JSON")
-            return None
 
     except Exception as e:
         print(f"  ❌ ERRO buscando stats do jogo {fixture_id}: {e}")
-        import traceback
-        traceback.print_exc()
 
     return None
 

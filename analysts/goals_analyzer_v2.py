@@ -67,19 +67,28 @@ def analisar_mercado_gols(analysis_packet, odds):
     _has_real_lambdas = lambda_total > 0
 
     if _has_real_lambdas:
-        # FASE 3: Blending H2H quando houver 3+ confrontos históricos
+        # FASE 3: Blending H2H dinâmico quando houver 3+ confrontos históricos
         h2h_data = analysis_packet.get('h2h')
         if h2h_data and h2h_data.get('count', 0) >= 3:
             h2h_avg_goals = h2h_data.get('avg_goals', 0)
             if h2h_avg_goals > 0 and lambda_total > 0:
-                # Preservar proporção home/away, apenas ajustar a magnitude total
+                count = h2h_data['count']
+                # Base weight: 3→40%, 4→45%, 5+→50%
+                base_w = 0.40 + min(count - 3, 2) * 0.05
+                # Divergence bonus: +5% per 1.0 gol de divergência (max +10%)
+                divergence = abs(lambda_total - h2h_avg_goals)
+                div_bonus = min(divergence * 0.05, 0.10)
+                h2h_weight = min(base_w + div_bonus, 0.55)
+                model_weight = 1.0 - h2h_weight
+                # Preservar proporção home/away, ajustar magnitude total
                 ratio_home = lambda_home / lambda_total
                 ratio_away = lambda_away / lambda_total
-                lambda_total_blended = 0.6 * lambda_total + 0.4 * h2h_avg_goals
+                lambda_total_blended = model_weight * lambda_total + h2h_weight * h2h_avg_goals
+                # Floor: blended total never below h2h_avg * 0.75
+                lambda_total_blended = max(lambda_total_blended, h2h_avg_goals * 0.75)
                 lambda_home = lambda_total_blended * ratio_home
                 lambda_away = lambda_total_blended * ratio_away
                 lambda_total = lambda_total_blended
-                print(f"  🔗 H2H BLEND GOLS ({h2h_data['count']} jogos): h2h_avg={h2h_avg_goals:.2f} → λ_total={lambda_total:.2f}")
 
         # FASE 2: Calcular todas as linhas via Poisson com lambda real — sem offsets fixos
         lambda_ht = lambda_total * ht_ratio
@@ -110,6 +119,20 @@ def analisar_mercado_gols(analysis_packet, odds):
             p_home_scores = 1 - math.exp(-lambda_home)
             p_away_scores = 1 - math.exp(-lambda_away)
         btts_sim_prob = round(p_home_scores * p_away_scores * 100, 1)
+
+        # H2H BTTS frequency modifier: blend model BTTS with H2H empirical BTTS rate
+        h2h_data = analysis_packet.get('h2h')
+        if h2h_data and h2h_data.get('count', 0) >= 3:
+            games = h2h_data.get('games', [])
+            btts_count = sum(
+                1 for g in games
+                if (g.get('home_goals') or 0) > 0 and (g.get('away_goals') or 0) > 0
+            )
+            if games:
+                h2h_btts_rate = btts_count / len(games) * 100
+                count = h2h_data['count']
+                h2h_w = 0.40 + min(count - 3, 2) * 0.05
+                btts_sim_prob = round((1 - h2h_w) * btts_sim_prob + h2h_w * h2h_btts_rate, 1)
 
         print(f"  🧮 POISSON: λ_total={lambda_total:.2f} | λ_ht={lambda_ht:.2f} | λ_casa={lambda_home:.2f} | λ_fora={lambda_away:.2f}")
     else:

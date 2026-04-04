@@ -72,20 +72,24 @@ def analisar_mercado_cartoes(analysis_packet, odds):
         print(f"  📊 CARTÕES V4.0: Usando médias simples")
 
     if cartoes_casa == 0.0 and cartoes_fora == 0.0:
-        print("  ❌ CARTÕES BLOQUEADO: Dados insuficientes")
         return None
-
-    print(f"  📊 CARTÕES - Dados:")
-    print(f"     Casa: {cartoes_casa:.1f} total")
-    print(f"     Fora: {cartoes_fora:.1f} total")
-    print(f"     Script Tático: {script_name}")
 
     # STEP 2: CALCULAR MÉDIAS ESPERADAS
     media_exp_total = (cartoes_casa + cartoes_fora) / 2
     media_casa = cartoes_casa
     media_fora = cartoes_fora
 
-    print(f"  📊 Médias esperadas: Total={media_exp_total:.1f}, Casa={media_casa:.1f}, Fora={media_fora:.1f}")
+    # H2H blend dinâmico para cartões
+    h2h_data = analysis_packet.get('h2h')
+    if h2h_data and h2h_data.get('count', 0) >= 3:
+        h2h_avg_cards = h2h_data.get('avg_cards')
+        if h2h_avg_cards is not None and h2h_avg_cards > 0:
+            count = h2h_data['count']
+            base_w = 0.40 + min(count - 3, 2) * 0.05
+            divergence = abs(media_exp_total - h2h_avg_cards)
+            div_bonus = min(divergence * 0.05, 0.10)
+            h2h_weight = min(base_w + div_bonus, 0.55)
+            media_exp_total = (1.0 - h2h_weight) * media_exp_total + h2h_weight * h2h_avg_cards
 
     all_predictions = []
 
