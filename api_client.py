@@ -1172,12 +1172,15 @@ async def buscar_lesoes_jogo(fixture_id: int):
             injury_type = (entry.get('type') or
                            player_obj.get('type') or '')
             reason = entry.get('reason', '') or ''
+            # Include position when API provides it; used for directional lambda adjustment
+            player_position = player_obj.get('position') or ''
             if team_id and player_name:
                 result.append({
                     'name': player_name,
                     'type': injury_type,
                     'reason': reason,
-                    'team_id': team_id
+                    'team_id': team_id,
+                    'position': player_position,
                 })
 
         print(f"  🏥 LESÕES: {len(result)} ausências encontradas para fixture {fixture_id}")
@@ -1189,21 +1192,22 @@ async def buscar_lesoes_jogo(fixture_id: int):
     return result
 
 
-async def buscar_lineup_confirmado(fixture_id: int) -> bool:
+async def buscar_lineup_confirmado(fixture_id: int) -> set:
     """
-    TASK 7: Verifica se a escalação oficial foi anunciada para o jogo.
+    TASK 7: Verifica quais times divulgaram a escalação oficial para o jogo.
 
-    Usa o endpoint /fixtures/lineups — retorna True somente quando ao menos
-    um time divulgou o XI inicial oficial. É a gate para o ajuste de lambda
-    por desfalques: sem escalação confirmada, o modelo histórico é preservado.
+    Usa o endpoint /fixtures/lineups e retorna um set com os team IDs cujo XI
+    inicial (startXI) já foi publicado. Isso permite aplicar o ajuste de lambda
+    por desfalques SOMENTE para o time cuja escalação está confirmada, preservando
+    o modelo histórico para o time ainda sem escalação divulgada.
 
     Returns:
-        bool: True se a escalação de ao menos um time está confirmada.
+        set[int]: team IDs com escalação confirmada. Vazio se nenhum ou erro.
     """
-    cache_key = f"lineup_confirmed_{fixture_id}"
+    cache_key = f"lineup_confirmed_teams_{fixture_id}"
     cached = cache_manager.get(cache_key)
     if cached is not None:
-        return cached
+        return set(cached)
 
     try:
         await asyncio.sleep(0.5)
@@ -1211,20 +1215,25 @@ async def buscar_lineup_confirmado(fixture_id: int) -> bool:
             "GET", API_URL + "fixtures/lineups", params={"fixture": str(fixture_id)}
         )
         if response.status_code in (403, 404, 429):
-            cache_manager.set(cache_key, False, expiration_minutes=15)
-            return False
+            cache_manager.set(cache_key, [], expiration_minutes=15)
+            return set()
         response.raise_for_status()
         data = response.json().get("response", [])
-        confirmed = len(data) > 0 and any(
-            bool(entry.get("startXI")) for entry in data
+        confirmed_ids = {
+            entry["team"]["id"]
+            for entry in data
+            if bool(entry.get("startXI")) and entry.get("team", {}).get("id")
+        }
+        print(
+            f"  📋 [LINEUP] Fixture #{fixture_id}: "
+            f"{len(confirmed_ids)} time(s) com escalação confirmada → {confirmed_ids or 'nenhum'}"
         )
-        print(f"  📋 [LINEUP] Fixture #{fixture_id}: escalação {'CONFIRMADA' if confirmed else 'NÃO confirmada'}")
-        cache_manager.set(cache_key, confirmed, expiration_minutes=30)
-        return confirmed
+        cache_manager.set(cache_key, list(confirmed_ids), expiration_minutes=30)
+        return confirmed_ids
     except Exception as e:
         print(f"  ⚠️ [LINEUP] Não foi possível verificar escalação para fixture {fixture_id}: {e}")
-        cache_manager.set(cache_key, False, expiration_minutes=10)
-        return False
+        cache_manager.set(cache_key, [], expiration_minutes=10)
+        return set()
 
 
 async def buscar_contribuicao_gols_ultimos_jogos(

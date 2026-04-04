@@ -226,20 +226,27 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
     Só processa ausências com _injury_weight() >= 1.0 (suspensões, lesões graves
     confirmadas), garantindo que ausências questionáveis não alterem o modelo.
 
-    Quando disponível, usa 'goal_contribution_pct' (fração dos gols da equipe que
-    o jogador contribuiu na temporada) para dimensionar o impacto no lambda — derivado
-    de dados reais via /players. Caso contrário, recorre a heurística por posição.
+    Classificação de papel (ofensivo/defensivo) é feita EXCLUSIVAMENTE pelo campo
+    `position` retornado pela API — não por nome ou motivo da lesão, que são strings
+    livres e pouco confiáveis. Somente roles claramente identificados recebem ajuste
+    direcional. Posições desconhecidas não recebem ajuste heurístico para evitar
+    impacto incorreto na direção errada do lambda.
 
-    Método com contribuição real:
-      attack_reduction  = sum(goal_contribution_pct * w / 2.0)  capped at 25%
-      defense_reduction = sum(defensive_contribution_pct * w / 2.0) capped at 15%
+    Método com contribuição real (goal_contribution_pct preenchido):
+      Ofensivo (FWD): attack_reduction  += contrib_pct * w / 2.0
+      Defensivo (DEF/GK): defense_reduction += contrib_pct * w / 2.0
+      Desconhecido: attack_reduction   += contrib_pct * w / 2.0
+                    (gols/ass medem impacto ofensivo; sem divisão especulativa)
 
-    Método heurístico por posição:
-      attack_factor  = max(0.75, 1.0 - offensive_weight * 0.05)   → cap -25%
-      defense_factor = min(1.15, 1.0 + defensive_weight * 0.04)   → cap +15%
+    Método heurístico (sem dados da API para o jogador):
+      Ofensivo (FWD): offensive_weight += w → attack_factor via * 0.05
+      Defensivo (DEF/GK): defensive_weight += w → defense_factor via * 0.04
+      Desconhecido: sem ajuste (papel ambíguo, melhor preservar lambda intacto)
+
+    Ambos os acumuladores são somados antes das caps (-25% ataque / +15% defesa).
 
     Args:
-        injuries: lista de dicts {name, type, reason, team_id, position,
+        injuries: lista de dicts {name, type, team_id, position (from API),
                                   goal_contribution_pct (optional)}
         lambda_pre: lambda do time antes do ajuste (para exibir no note "X.xx → Y.yy")
 
@@ -255,16 +262,15 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
     _DEF_KW = frozenset({'defender', 'centre-back', 'center-back', 'fullback',
                          'back', 'defensor', 'zagueiro', 'lateral'})
 
-    # Per-player accumulators — each player uses real data OR heuristic independently.
-    # Both paths are summed together so mixed scenarios (some with API data, some without)
-    # are fully accounted for (fixes the silent-drop bug of the global flag approach).
-    attack_reduction_sum  = 0.0   # fractional reduction from real contribution data
-    defense_reduction_sum = 0.0   # fractional increase from real contribution data
-    offensive_weight      = 0.0   # heuristic offensive weight (when no real data)
-    defensive_weight      = 0.0   # heuristic defensive weight (when no real data)
+    # Per-player accumulators — each player independently contributes to EITHER
+    # real-data path OR heuristic path, then both are merged before caps.
+    attack_reduction_sum  = 0.0   # reduction from real goal-contribution data
+    defense_reduction_sum = 0.0   # increase from real goal-contribution data
+    offensive_weight      = 0.0   # heuristic weight for confirmed FWD absences
+    defensive_weight      = 0.0   # heuristic weight for confirmed DEF/GK absences
     offensive_names       = []
     defensive_names       = []
-    has_any_real          = False  # purely for note labeling
+    has_any_real          = False  # for note labeling only
 
     for p in injuries:
         w = _injury_weight(p)
@@ -274,21 +280,24 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
             continue
 
         name = p.get('name', '?')
-        combined = (
-            (p.get('name') or '') + ' ' +
-            (p.get('reason') or '') + ' ' +
-            (p.get('position') or '')
-        ).lower()
-
-        is_fwd = any(kw in combined for kw in _FWD_KW)
-        is_def = any(kw in combined for kw in _GK_KW | _DEF_KW)
+        # Role classification uses ONLY the `position` field from the API payload.
+        # This field is populated by buscar_lesoes_jogo from player_obj.get('position').
+        # Name and reason strings are deliberately excluded — they are free-form text
+        # that can produce false positives (e.g. "Back injury" matching DEF keywords).
+        position = (p.get('position') or '').lower()
+        is_fwd = any(kw in position for kw in _FWD_KW)
+        is_def = any(kw in position for kw in _GK_KW | _DEF_KW)
+        role_known = is_fwd or is_def
 
         contrib_pct = p.get('goal_contribution_pct')
 
         if contrib_pct is not None and contrib_pct > 0:
-            # Real contribution path: proportion of team goals this player accounts for.
-            # Divide by 2 because lambda = 50% own attack + 50% opponent defense,
-            # so player's share of team attack scales lambda by contrib_pct * w / 2.
+            # Real contribution path.
+            # For confirmed offensive players: the contribution directly reduces attack lambda.
+            # For confirmed defensive players: their rare goals still reflect offensive output;
+            #   use for defense adjustment (weakened defence increases opponent goals).
+            # For unknown role: treat as offensive signal only (goal contribution is by nature
+            #   offensive; avoid speculative defensive split for ambiguous positions).
             has_any_real = True
             if is_fwd and not is_def:
                 attack_reduction_sum += contrib_pct * w / 2.0
@@ -297,24 +306,22 @@ def _calcular_ajuste_lambda_por_desfalques(injuries: list, lambda_pre: float = N
                 defense_reduction_sum += contrib_pct * w / 2.0
                 defensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
             else:
-                # Midfield / unknown: split 50/50 between attack and defense impact
-                attack_reduction_sum += contrib_pct * w / 4.0
-                defense_reduction_sum += contrib_pct * w / 4.0
-        else:
-            # Heuristic path (no API data available for this player).
-            # Accumulates independently; combined with real-data accumulator below.
+                # Unknown role with real goal contribution → treat as offensive impact only.
+                attack_reduction_sum += contrib_pct * w / 2.0
+                offensive_names.append(f"{name} ({contrib_pct*100:.0f}%)")
+        elif role_known:
+            # Heuristic path — only when role is clearly established from API position field.
+            # Players with no API position data and no contribution data are skipped entirely
+            # to avoid incorrect directional adjustments.
             if is_fwd and not is_def:
                 offensive_weight += w
                 offensive_names.append(name)
             elif is_def and not is_fwd:
                 defensive_weight += w
                 defensive_names.append(name)
-            else:
-                offensive_weight += w * 0.5
-                defensive_weight += w * 0.5
+        # Unknown role + no real data → no adjustment (safer than a wrong-direction guess).
 
     # Merge both paths: real-data reduction + heuristic-derived reduction, then apply caps.
-    # attack_reduction_sum and offensive_weight * 0.05 are in the same "fractional" space.
     total_attack_reduction  = attack_reduction_sum + offensive_weight * 0.05
     total_defense_reduction = defense_reduction_sum + defensive_weight * 0.04
 
@@ -1602,11 +1609,18 @@ async def generate_match_analysis(jogo):
         away_injuries, away_team_id, _away_recent_ids, _away_recent_goals
     )
 
-    # TASK 7 GATE: Only adjust Poisson lambdas when lineup is officially confirmed.
-    # Without confirmation, the historical model must be preserved unchanged.
-    # demo fixtures (90001+) are treated as confirmed to enable testing.
+    # TASK 7 GATE: Only adjust Poisson lambdas for a team when ITS lineup is officially confirmed.
+    # buscar_lineup_confirmado returns a set of team IDs whose startXI was published.
+    # This prevents adjusting lambda for a team whose lineup hasn't been announced yet,
+    # while still allowing adjustment for the opposing team if theirs is confirmed.
+    # Demo fixtures (id >= 90000) bypass the API and treat BOTH teams as confirmed.
     _fixture_is_demo = int(fixture_id) >= 90000
-    _lineup_confirmed = _fixture_is_demo or await buscar_lineup_confirmado(fixture_id)
+    if _fixture_is_demo:
+        _confirmed_team_ids = {home_team_id, away_team_id}
+    else:
+        _confirmed_team_ids = await buscar_lineup_confirmado(fixture_id)
+    _home_lineup_confirmed = _fixture_is_demo or home_team_id in _confirmed_team_ids
+    _away_lineup_confirmed = _fixture_is_demo or away_team_id in _confirmed_team_ids
 
     injury_penalty_home = _calculate_injury_impact(home_injuries)
     injury_penalty_away = _calculate_injury_impact(away_injuries)
@@ -1747,36 +1761,46 @@ async def generate_match_analysis(jogo):
     home_attack_factor = home_defense_factor = 1.0
     away_attack_factor = away_defense_factor = 1.0
 
-    if _lineup_confirmed:
+    # Per-team gate: only compute adjustment for teams whose lineup IS confirmed.
+    # This prevents altering the opponent lambda based on unconfirmed injury reports.
+    if _home_lineup_confirmed:
         home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
             home_injuries, lambda_pre=lambda_effective_home
         )
+    else:
+        print(f"  ⏳ TASK 7 [{home_team_name}] — escalação não confirmada → lambda casa preservado")
+
+    if _away_lineup_confirmed:
         away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
             away_injuries, lambda_pre=lambda_effective_away
         )
+    else:
+        print(f"  ⏳ TASK 7 [{away_team_name}] — escalação não confirmada → lambda fora preservado")
 
-        # Desfalques ofensivos do time da casa → casa marca menos
+    # Apply home team's adjustments (only if its lineup was confirmed):
+    # Offensive absences → home team scores less
+    if _home_lineup_confirmed:
         lambda_effective_home *= home_attack_factor
-        # Desfalques ofensivos do time visitante → visitante marca menos
-        lambda_effective_away *= away_attack_factor
-        # Desfalques defensivos do time da casa → visitante marca mais (defesa caseira enfraquecida)
+        # Defensive absences → away team scores more (home defence weakened)
         lambda_effective_away *= home_defense_factor
-        # Desfalques defensivos do visitante → casa marca mais (defesa visitante enfraquecida)
+
+    # Apply away team's adjustments (only if its lineup was confirmed):
+    # Offensive absences → away team scores less
+    if _away_lineup_confirmed:
+        lambda_effective_away *= away_attack_factor
+        # Defensive absences → home team scores more (away defence weakened)
         lambda_effective_home *= away_defense_factor
 
-        # Garantir mínimos realistas após ajuste
-        lambda_effective_home = max(0.25, lambda_effective_home)
-        lambda_effective_away = max(0.20, lambda_effective_away)
-    else:
-        print(f"  ⏳ TASK 7 — Escalação NÃO confirmada → lambdas preservados (modelo histórico inalterado)")
-
+    # Ensure realistic floors after adjustments
+    lambda_effective_home = max(0.25, lambda_effective_home)
+    lambda_effective_away = max(0.20, lambda_effective_away)
     lambda_total_effective = lambda_effective_home + lambda_effective_away
 
     _all_lambda_notes = (
         [f"[{home_team_name}] {n}" for n in home_lambda_notes] +
         [f"[{away_team_name}] {n}" for n in away_lambda_notes]
     )
-    _lambda_adjusted = _lineup_confirmed and (
+    _lambda_adjusted = (
         home_attack_factor < 1.0 or home_defense_factor > 1.0 or
         away_attack_factor < 1.0 or away_defense_factor > 1.0
     )
@@ -1786,7 +1810,7 @@ async def generate_match_analysis(jogo):
         print(f"  ✅ TASK 7 — Lambdas pós-desfalques: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f}")
         for note in (home_lambda_notes + away_lambda_notes):
             print(f"     • {note}")
-    elif _lineup_confirmed:
+    elif _home_lineup_confirmed or _away_lineup_confirmed:
         print(f"  ✅ TASK 7 — Escalação confirmada mas sem desfalques com impacto posicional → lambda inalterado")
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -1952,7 +1976,8 @@ async def generate_match_analysis(jogo):
                     'away_attack_factor': away_attack_factor,
                     'away_defense_factor': away_defense_factor,
                     'adjusted': _lambda_adjusted,
-                    'lineup_confirmed': _lineup_confirmed,
+                    'home_lineup_confirmed': _home_lineup_confirmed,
+                    'away_lineup_confirmed': _away_lineup_confirmed,
                     'notes': _all_lambda_notes,
                 }
             }
