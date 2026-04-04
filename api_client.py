@@ -622,6 +622,8 @@ async def get_current_season(league_id):
     return fallback_season
 
 async def buscar_jogos_do_dia():
+    if not os.getenv("API_FOOTBALL_KEY", "").strip():
+        return []
     # Obter hora atual no horário de Brasília
     brasilia_tz = ZoneInfo("America/Sao_Paulo")
     agora_brasilia = datetime.now(brasilia_tz)

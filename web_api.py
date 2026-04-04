@@ -626,7 +626,19 @@ def _logo_liga(league_id: int) -> str:
 # DEMO DATA — Dados ricos para modo demonstração (sem API key)
 # ─────────────────────────────────────────────────────────────────────────
 
-_DEMO_FIXTURE_IDS = set(range(90001, 90101))
+_DEMO_FIXTURE_IDS = {
+    90001, 90002, 90003, 90004,
+    90010, 90011, 90012, 90013,
+    90020, 90021,
+    90030, 90031, 90032,
+    90040, 90041,
+    90050, 90051,
+    90060, 90061, 90062, 90063,
+    90070, 90071,
+    90080, 90081,
+    90090,
+    90100,
+}
 
 _DEMO_TEAM_LINEUPS: dict = {
     541:  {"t": [("Courtois","GK"),("Carvajal","RB"),("Militão","CB"),("Rüdiger","CB"),("Mendy","LB"),("Valverde","CM"),("Tchouaméni","CDM"),("Bellingham","CAM"),("Rodrygo","RW"),("Vinicius Jr.","LW"),("Mbappé","ST")], "r": [("Lunin","GK"),("Camavinga","CM"),("Arda Güler","CAM")]},
