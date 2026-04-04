@@ -170,10 +170,15 @@ def _formatar_jogo(jogo: dict, tem_analise: bool = False, analise_db: Optional[d
             dados = analise_db.get(chave) or {}
             for p in (dados.get("palpites") or []):
                 if isinstance(p, dict) and p.get("confianca"):
+                    prob = p.get("probabilidade")
+                    if prob is None:
+                        confianca_val = p.get("confianca", 0)
+                        prob = round(min(99, float(confianca_val) * 10), 1)
                     todos_palpites.append({
                         "tipo": p.get("tipo", ""),
                         "mercado": nome_m,
                         "confianca": p.get("confianca", 0),
+                        "probabilidade": prob,
                         "odd": p.get("odd"),
                     })
         todos_palpites.sort(key=lambda x: x["confianca"], reverse=True)

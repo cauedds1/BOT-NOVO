@@ -5,23 +5,25 @@ const AUTO_REFRESH_SECS = 600
 
 const MERCADOS_DISPONIVEIS = ['Gols', 'Resultado', 'BTTS', 'Cantos', 'Cartões', 'Handicaps', 'Dupla Chance', 'Placar Exato']
 
-function useCountdown(horarioBrt) {
+function useCountdown(dataIso) {
   const [label, setLabel] = useState('')
   const [minsLeft, setMinsLeft] = useState(null)
 
   useEffect(() => {
-    if (!horarioBrt) return
+    if (!dataIso) return
     const update = () => {
       const now = new Date()
-      const [h, m] = horarioBrt.split(':').map(Number)
-      const target = new Date(now)
-      target.setHours(h, m, 0, 0)
-      if (target < now) target.setDate(target.getDate() + 1)
+      const target = new Date(dataIso)
+      if (isNaN(target.getTime())) { setLabel(''); setMinsLeft(null); return }
       const diffMs = target - now
       const diffMins = Math.floor(diffMs / 60000)
       setMinsLeft(diffMins)
-      if (diffMins <= 0) {
-        setLabel('')
+      if (diffMins < -90) {
+        setLabel('encerrado')
+      } else if (diffMins < 0) {
+        setLabel('ao vivo')
+      } else if (diffMins === 0) {
+        setLabel('agora')
       } else if (diffMins < 60) {
         setLabel(`em ${diffMins}min`)
       } else {
@@ -33,7 +35,7 @@ function useCountdown(horarioBrt) {
     update()
     const iv = setInterval(update, 30000)
     return () => clearInterval(iv)
-  }, [horarioBrt])
+  }, [dataIso])
 
   return { label, minsLeft }
 }
@@ -66,7 +68,7 @@ function TeamLogo({ logo, name, size = 28 }) {
 function MatchCard({ jogo, compact = false }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
-  const { label: countdown, minsLeft } = useCountdown(jogo.horario_brt)
+  const { label: countdown, minsLeft } = useCountdown(jogo.data_iso)
 
   useEffect(() => {
     setStatus(jogo.tem_analise ? 'ready' : 'none')
@@ -208,7 +210,7 @@ function MatchCard({ jogo, compact = false }) {
 function FeaturedMatchCard({ jogo }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
-  const { label: countdown, minsLeft } = useCountdown(jogo.horario_brt)
+  const { label: countdown, minsLeft } = useCountdown(jogo.data_iso)
 
   useEffect(() => {
     setStatus(jogo.tem_analise ? 'ready' : 'none')
@@ -601,16 +603,29 @@ function matchesSearch(jogo, q) {
 function matchesFilters(jogo, filters) {
   if (filters.apenasAnalisados && !jogo.tem_analise) return false
   if (filters.ligaIds.length > 0 && !filters.ligaIds.includes(jogo.liga?.id)) return false
-  if (filters.mercados.length > 0 && jogo.best_palpites) {
-    const hasMercado = filters.mercados.some(m =>
-      (jogo.best_palpites || []).some(p => p.mercado === m)
-    )
-    if (!hasMercado) return false
+
+  const isActiveFilter = filters.confiancaMin > 60 || filters.mercados.length > 0
+
+  if (isActiveFilter) {
+    if (!jogo.tem_analise || !jogo.best_palpites?.length) return false
+
+    if (filters.mercados.length > 0) {
+      const hasMercado = filters.mercados.some(m =>
+        (jogo.best_palpites || []).some(p => p.mercado === m)
+      )
+      if (!hasMercado) return false
+    }
+
+    if (filters.confiancaMin > 60) {
+      const picks = (jogo.best_palpites || [])
+      const qualifyingPick = picks.some(p => {
+        const conf = p.confianca || 0
+        return (conf / 10 * 100) >= filters.confiancaMin
+      })
+      if (!qualifyingPick) return false
+    }
   }
-  if (filters.confiancaMin > 60 && jogo.best_palpites) {
-    const topConf = Math.max(0, ...(jogo.best_palpites || []).map(p => p.confianca || 0))
-    if (topConf > 0 && (topConf / 10 * 100) < filters.confiancaMin) return false
-  }
+
   return true
 }
 
