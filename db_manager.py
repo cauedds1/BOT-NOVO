@@ -154,6 +154,9 @@ class DatabaseManager:
 
         -- Fixtures do dia (jogos por data+liga combinados)
         -- TTL: 8 horas — fixtures mudam ao longo do dia (novas ligas)
+        -- Usa cache_key (não apenas date) porque após 20:30 BRT buscamos
+        -- HOJE+AMANHÃ como bloco único, gerando uma chave composta como
+        -- 'jogos_2026-04-04_2026-04-05_s2025' vs 'jogos_2026-04-04_s2025'.
         CREATE TABLE IF NOT EXISTS cache_fixtures_dia (
             cache_key TEXT PRIMARY KEY,
             data JSONB NOT NULL,

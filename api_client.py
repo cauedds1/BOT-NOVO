@@ -677,7 +677,7 @@ async def buscar_jogos_do_dia():
         cache_manager.set(cache_key, db_data)
         return db_data
 
-    print(f"⚡ CACHE MISS: Buscando jogos da API ({len(LIGAS_DE_INTERESSE)} ligas)")
+    print(f"💾 DB CACHE MISS: fixtures_dia → buscando da API ({len(LIGAS_DE_INTERESSE)} ligas)")
     todos_os_jogos = []
     plano_bloqueado = False
 
@@ -779,6 +779,7 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         cache_manager.set(cache_key, db_data)
         return db_data
 
+    print(f"💾 DB CACHE MISS: stats time {time_id} liga {id_liga} → buscando da API")
     season = await get_current_season(id_liga)
 
     params = {"team": str(time_id), "league": str(id_liga), "season": season}
@@ -1367,6 +1368,7 @@ async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
         cache_manager.set(cache_key, db_data)
         return db_data
 
+    print(f"💾 DB CACHE MISS: h2h {time1_id}x{time2_id} → buscando da API")
     params = {"h2h": f"{time1_id}-{time2_id}", "last": str(limite)}
     try:
         await asyncio.sleep(1.6)
@@ -1422,12 +1424,12 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
     if cached_data := cache_manager.get(cache_key):
         return cached_data
 
-    if _tentativa == 1:
-        db_data = _get_db_cache().get_cache_ultimos_jogos(time_id, limite)
-        if db_data is not None:
-            cache_manager.set(cache_key, db_data)
-            return db_data
+    db_data = _get_db_cache().get_cache_ultimos_jogos(time_id, limite)
+    if db_data is not None:
+        cache_manager.set(cache_key, db_data)
+        return db_data
 
+    print(f"💾 DB CACHE MISS: ultimos_jogos time {time_id} limite {limite} → buscando da API")
     # Determinar temporada atual automaticamente (horário de Brasília)
     brasilia_tz = ZoneInfo("America/Sao_Paulo")
     agora = datetime.now(brasilia_tz)
@@ -1502,8 +1504,7 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
                 return []
             
             cache_manager.set(cache_key, jogos_processados)
-            if _tentativa == 1:
-                _get_db_cache().set_cache_ultimos_jogos(time_id, limite, jogos_processados)
+            _get_db_cache().set_cache_ultimos_jogos(time_id, limite, jogos_processados)
             return jogos_processados
         else:
             print(f"     ❌ Campo 'response' vazio")
