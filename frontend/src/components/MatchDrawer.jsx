@@ -43,24 +43,45 @@ function useCountdown(isoDate) {
   return h > 0 ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m ${String(s).padStart(2,'0')}s`
 }
 
+function ArcGauge({ pct, color, label, size = 90 }) {
+  const r = 34; const cx = size / 2; const cy = size / 2
+  const circumference = 2 * Math.PI * r
+  const filled = (pct / 100) * circumference
+  const gap = circumference - filled
+  const startAngle = -Math.PI / 2
+  const startX = cx + r * Math.cos(startAngle)
+  const startY = cy + r * Math.sin(startAngle)
+  return (
+    <div className="prob-block" style={{ padding: '12px 6px' }}>
+      <div style={{ position: 'relative', width: size, height: size }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={7} />
+          <circle
+            cx={cx} cy={cy} r={r} fill="none"
+            stroke={color} strokeWidth={7}
+            strokeDasharray={`${filled} ${gap}`}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)' }}
+          />
+        </svg>
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color, letterSpacing: '-0.03em', lineHeight: 1 }}>{pct}%</span>
+        </div>
+      </div>
+      <div className="prob-label" style={{ marginTop: 4 }}>{label}</div>
+    </div>
+  )
+}
+
 function ProbArcs({ home, draw, away }) {
   return (
     <div className="prob-section" style={{ margin: '16px 0' }}>
-      <div className="prob-block">
-        <div className="prob-pct" style={{ color: 'var(--accent-light)' }}>{home ?? 33}%</div>
-        <div className="prob-label">Casa</div>
-        <div style={{ width: '100%', height: 3, borderRadius: 3, background: 'var(--accent)', marginTop: 4, opacity: 0.7 }} />
-      </div>
-      <div className="prob-block">
-        <div className="prob-pct" style={{ color: 'var(--amber-light)' }}>{draw ?? 33}%</div>
-        <div className="prob-label">Empate</div>
-        <div style={{ width: '100%', height: 3, borderRadius: 3, background: 'var(--amber)', marginTop: 4, opacity: 0.7 }} />
-      </div>
-      <div className="prob-block">
-        <div className="prob-pct" style={{ color: 'var(--green-light)' }}>{away ?? 33}%</div>
-        <div className="prob-label">Fora</div>
-        <div style={{ width: '100%', height: 3, borderRadius: 3, background: 'var(--green)', marginTop: 4, opacity: 0.7 }} />
-      </div>
+      <ArcGauge pct={Number(home) || 33} color="#818cf8" label="Casa" />
+      <ArcGauge pct={Number(draw) || 33} color="#fbbf24" label="Empate" />
+      <ArcGauge pct={Number(away) || 34} color="#4ade80" label="Fora" />
     </div>
   )
 }
@@ -493,19 +514,19 @@ function PicksTab({ analise }) {
   )
 }
 
-export default function MatchDrawer({ fixtureId, jogo, onClose }) {
+export default function MatchDrawer({ fixtureId, jogo, onClose, initialReady = false }) {
   const [tab, setTab] = useState('overview')
   const [analise, setAnalise] = useState(null)
   const [jogadores, setJogadores] = useState(null)
-  const [status, setStatus] = useState(jogo?.tem_analise ? 'ready' : 'none')
+  const [status, setStatus] = useState((jogo?.tem_analise || initialReady) ? 'ready' : 'none')
   const [loadingAnalise, setLoadingAnalise] = useState(false)
 
   useEffect(() => {
     setTab('overview')
     setAnalise(null)
     setJogadores(null)
-    setStatus(jogo?.tem_analise ? 'ready' : 'none')
-  }, [fixtureId])
+    setStatus((jogo?.tem_analise || initialReady) ? 'ready' : 'none')
+  }, [fixtureId, jogo?.tem_analise, initialReady])
 
   useEffect(() => {
     if (status !== 'ready' || !fixtureId) return

@@ -95,7 +95,7 @@ function MatchRow({ jogo, onOpen, featured = false }) {
   const [status, setStatus] = useState(jogo.tem_analise ? 'ready' : 'none')
   const [loading, setLoading] = useState(false)
   const { label: countdown, minsLeft } = useCountdown(jogo.data_iso)
-  useEffect(() => { setStatus(jogo.tem_analise ? 'ready' : 'none') }, [jogo.tem_analise])
+  useEffect(() => { if (jogo.tem_analise) setStatus('ready') }, [jogo.tem_analise])
 
   useEffect(() => {
     if (status !== 'processing') return
@@ -148,7 +148,7 @@ function MatchRow({ jogo, onOpen, featured = false }) {
     <div
       className={`match-row${isReady ? ' analyzed' : ''}${isLiveSoon ? ' live-soon' : ''}`}
       style={{ padding: '11px 14px', marginBottom: 4, cursor: 'pointer' }}
-      onClick={() => onOpen(jogo.fixture_id, jogo)}
+      onClick={() => onOpen(jogo.fixture_id, jogo, isReady)}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 40, flexShrink: 0 }}>
@@ -229,7 +229,7 @@ function MatchRow({ jogo, onOpen, featured = false }) {
   )
 }
 
-function LeagueSection({ liga, jogos, onOpen }) {
+function LeagueSection({ liga, jogos, onOpen, featuredIds }) {
   const [open, setOpen] = useState(true)
   return (
     <div style={{ marginBottom: 2 }}>
@@ -242,14 +242,14 @@ function LeagueSection({ liga, jogos, onOpen }) {
       </button>
       {open && (
         <div style={{ paddingLeft: 2 }}>
-          {jogos.map(j => <MatchRow key={j.fixture_id} jogo={j} onOpen={onOpen} compact />)}
+          {jogos.map(j => <MatchRow key={j.fixture_id} jogo={j} onOpen={onOpen} featured={featuredIds?.has(j.fixture_id)} />)}
         </div>
       )}
     </div>
   )
 }
 
-function CountrySection({ pais, ligas, onOpen }) {
+function CountrySection({ pais, ligas, onOpen, featuredIds }) {
   const [open, setOpen] = useState(true)
   const totalJogos = ligas.reduce((acc, l) => acc + l.jogos.length, 0)
   const bandeira = ligas[0]?.liga?.bandeira || ''
@@ -265,7 +265,7 @@ function CountrySection({ pais, ligas, onOpen }) {
       </button>
       {open && (
         <div style={{ paddingLeft: 6 }}>
-          {ligas.map(g => <LeagueSection key={g.liga.id} liga={g.liga} jogos={g.jogos} onOpen={onOpen} />)}
+          {ligas.map(g => <LeagueSection key={g.liga.id} liga={g.liga} jogos={g.jogos} onOpen={onOpen} featuredIds={featuredIds} />)}
         </div>
       )}
     </div>
@@ -397,6 +397,7 @@ export default function Home() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerFixtureId, setDrawerFixtureId] = useState(null)
   const [drawerJogo, setDrawerJogo] = useState(null)
+  const [drawerInitialReady, setDrawerInitialReady] = useState(false)
   const timerRef = useRef(null); const countRef = useRef(AUTO_REFRESH_SECS)
 
   const fetchJogos = useCallback(async () => {
@@ -419,9 +420,10 @@ export default function Home() {
     return () => clearInterval(timerRef.current)
   }, [fetchJogos])
 
-  const openDrawer = useCallback((fixtureId, jogo) => {
+  const openDrawer = useCallback((fixtureId, jogo, rowIsReady = false) => {
     setDrawerFixtureId(fixtureId)
     setDrawerJogo(jogo)
+    setDrawerInitialReady(rowIsReady || Boolean(jogo?.tem_analise))
     setDrawerOpen(true)
   }, [])
 
@@ -441,12 +443,6 @@ export default function Home() {
     return out
   }, [data])
 
-  const filteredPrincipais = useMemo(() => {
-    if (!data?.principais) return []
-    const q = search.trim()
-    return sortJogos(data.principais.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)), filters.sort).slice(0, 8)
-  }, [data, search, filters])
-
   const filteredPorPais = useMemo(() => {
     if (!data?.por_pais) return []
     const q = search.trim()
@@ -460,6 +456,8 @@ export default function Home() {
     const q = search.trim()
     return sortJogos(allJogos.filter(j => matchesSearch(j, q) && matchesFilters(j, filters)), filters.sort)
   }, [allJogos, search, filters])
+
+  const featuredIds = useMemo(() => new Set((data?.principais || []).map(j => j.fixture_id)), [data])
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, gap: 14, paddingTop: 60 }}>
@@ -534,30 +532,20 @@ export default function Home() {
         </div>
       ) : (
         <>
-          {filteredPrincipais.length > 0 && (
-            <section style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>⭐ Principais Jogos</span>
-                <span className="chip chip-amber">Top {filteredPrincipais.length}</span>
-              </div>
-              {filteredPrincipais.map(j => <MatchRow key={j.fixture_id} jogo={j} onOpen={openDrawer} featured />)}
-            </section>
-          )}
-
           {filteredPorPais.length > 0 && (
             <section>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 10 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>🌍 Todos os Jogos</span>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>por país e liga</span>
               </div>
-              {filteredPorPais.map(({ pais, ligas }) => <CountrySection key={pais} pais={pais} ligas={ligas} onOpen={openDrawer} />)}
+              {filteredPorPais.map(({ pais, ligas }) => <CountrySection key={pais} pais={pais} ligas={ligas} onOpen={openDrawer} featuredIds={featuredIds} />)}
             </section>
           )}
         </>
       )}
 
       {drawerOpen && drawerFixtureId && (
-        <MatchDrawer fixtureId={drawerFixtureId} jogo={drawerJogo} onClose={closeDrawer} />
+        <MatchDrawer fixtureId={drawerFixtureId} jogo={drawerJogo} onClose={closeDrawer} initialReady={drawerInitialReady} />
       )}
     </div>
   )
