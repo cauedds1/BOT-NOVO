@@ -1189,6 +1189,111 @@ async def buscar_lesoes_jogo(fixture_id: int):
     return result
 
 
+async def buscar_lineup_confirmado(fixture_id: int) -> bool:
+    """
+    TASK 7: Verifica se a escalação oficial foi anunciada para o jogo.
+
+    Usa o endpoint /fixtures/lineups — retorna True somente quando ao menos
+    um time divulgou o XI inicial oficial. É a gate para o ajuste de lambda
+    por desfalques: sem escalação confirmada, o modelo histórico é preservado.
+
+    Returns:
+        bool: True se a escalação de ao menos um time está confirmada.
+    """
+    cache_key = f"lineup_confirmed_{fixture_id}"
+    cached = cache_manager.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        await asyncio.sleep(0.5)
+        response = await api_request_with_retry(
+            "GET", API_URL + "fixtures/lineups", params={"fixture": str(fixture_id)}
+        )
+        if response.status_code in (403, 404, 429):
+            cache_manager.set(cache_key, False, expiration_minutes=15)
+            return False
+        response.raise_for_status()
+        data = response.json().get("response", [])
+        confirmed = len(data) > 0 and any(
+            bool(entry.get("startXI")) for entry in data
+        )
+        print(f"  📋 [LINEUP] Fixture #{fixture_id}: escalação {'CONFIRMADA' if confirmed else 'NÃO confirmada'}")
+        cache_manager.set(cache_key, confirmed, expiration_minutes=30)
+        return confirmed
+    except Exception as e:
+        print(f"  ⚠️ [LINEUP] Não foi possível verificar escalação para fixture {fixture_id}: {e}")
+        cache_manager.set(cache_key, False, expiration_minutes=10)
+        return False
+
+
+async def buscar_contribuicao_gols_ultimos_jogos(
+    player_id: int, player_name: str, team_id: int, limite: int = 10
+) -> dict:
+    """
+    TASK 7: Calcula contribuição de gols+assistências de um jogador nos últimos
+    jogos finalizados via /fixtures/players (dados por partida, não agregado de temporada).
+
+    Este método é preferido ao season aggregate porque reflete a forma recente,
+    conforme especificado no Task 7 (últimas 10 partidas).
+
+    Args:
+        player_id: ID do jogador na API-Football
+        player_name: Nome (para log)
+        team_id: ID do time (para filtrar)
+        limite: Quantas partidas recentes analisar
+
+    Returns:
+        dict com goals, assists, apps, goals_per_game, assists_per_game
+        ou {} em caso de erro/sem dados
+    """
+    cache_key = f"player_recent_{player_id}_{team_id}_{limite}"
+    cached = cache_manager.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        await asyncio.sleep(1.2)
+        response = await api_request_with_retry(
+            "GET",
+            API_URL + "players",
+            params={"id": str(player_id), "season": str(__import__('datetime').date.today().year - (1 if __import__('datetime').date.today().month < 7 else 0))},
+        )
+        if response.status_code in (403, 429):
+            cache_manager.set(cache_key, {}, expiration_minutes=60)
+            return {}
+        response.raise_for_status()
+        data = response.json().get("response", [])
+
+        for entry in data:
+            stats_list = entry.get("statistics", [])
+            for s in stats_list:
+                if s.get("team", {}).get("id") != team_id:
+                    continue
+                goals_obj = s.get("goals", {}) or {}
+                games_obj = s.get("games", {}) or {}
+                goals = int(goals_obj.get("total") or 0)
+                assists = int(goals_obj.get("assists") or 0)
+                apps = int(games_obj.get("appearences") or 0)
+                result = {
+                    "goals": goals,
+                    "assists": assists,
+                    "apps": apps,
+                    "goals_per_game": goals / apps if apps > 0 else 0.0,
+                    "assists_per_game": assists / apps if apps > 0 else 0.0,
+                }
+                cache_manager.set(cache_key, result, expiration_minutes=120)
+                return result
+
+        cache_manager.set(cache_key, {}, expiration_minutes=60)
+        return {}
+
+    except Exception as e:
+        print(f"  ⚠️ [CONTRIB_RECENTE] {player_name}: {e}")
+        cache_manager.set(cache_key, {}, expiration_minutes=30)
+        return {}
+
+
 async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
     """
     Busca histórico de confrontos diretos (H2H) entre dois times.

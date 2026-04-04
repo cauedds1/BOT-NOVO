@@ -9,6 +9,7 @@ from api_client import (
     buscar_h2h,
     buscar_lesoes_jogo,
     buscar_contribuicao_gols_jogador,
+    buscar_lineup_confirmado,
 )
 
 
@@ -1567,6 +1568,12 @@ async def generate_match_analysis(jogo):
     home_injuries = await _enrich_injuries_with_contribution(home_injuries, home_team_id, _home_total_goals_season)
     away_injuries = await _enrich_injuries_with_contribution(away_injuries, away_team_id, _away_total_goals_season)
 
+    # TASK 7 GATE: Only adjust Poisson lambdas when lineup is officially confirmed.
+    # Without confirmation, the historical model must be preserved unchanged.
+    # demo fixtures (90001+) are treated as confirmed to enable testing.
+    _fixture_is_demo = int(fixture_id) >= 90000
+    _lineup_confirmed = _fixture_is_demo or await buscar_lineup_confirmado(fixture_id)
+
     injury_penalty_home = _calculate_injury_impact(home_injuries)
     injury_penalty_away = _calculate_injury_impact(away_injuries)
 
@@ -1694,48 +1701,59 @@ async def generate_match_analysis(jogo):
     # ─────────────────────────────────────────────────────────────────────────
 
     # ─── TASK 7: AJUSTE DE LAMBDA POR DESFALQUES CONFIRMADOS ──────────────────
-    # Aplica fatores multiplicativos baseados no papel (ofensivo/defensivo) e
-    # importância (peso) dos jogadores ausentes. O ajuste ocorre APÓS o xG blend
-    # para que propague em cascata a TODOS os mercados Poisson downstream.
-    # Só são processadas ausências com _injury_weight() >= 1.0 (confirmadas).
-    home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
-        home_injuries, lambda_pre=lambda_effective_home
-    )
-    away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
-        away_injuries, lambda_pre=lambda_effective_away
-    )
-
+    # Gate: ajuste SOMENTE quando a escalação oficial foi anunciada.
+    # Sem escalação confirmada (lineup_confirmed=False) o modelo histórico é
+    # preservado integralmente — lambdas não são alterados.
+    # O ajuste ocorre APÓS o xG blend para propagar em cascata a TODOS os
+    # mercados Poisson downstream (Over/Under, BTTS, Placar Exato, Handicaps).
     lambda_effective_home_pre = lambda_effective_home
     lambda_effective_away_pre = lambda_effective_away
+    home_lambda_notes: list = []
+    away_lambda_notes: list = []
+    home_attack_factor = home_defense_factor = 1.0
+    away_attack_factor = away_defense_factor = 1.0
 
-    # Desfalques ofensivos do time da casa → casa marca menos
-    lambda_effective_home *= home_attack_factor
-    # Desfalques ofensivos do time visitante → visitante marca menos
-    lambda_effective_away *= away_attack_factor
-    # Desfalques defensivos do time da casa → visitante marca mais (defesa caseira enfraquecida)
-    lambda_effective_away *= home_defense_factor
-    # Desfalques defensivos do visitante → casa marca mais (defesa visitante enfraquecida)
-    lambda_effective_home *= away_defense_factor
+    if _lineup_confirmed:
+        home_attack_factor, home_defense_factor, home_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
+            home_injuries, lambda_pre=lambda_effective_home
+        )
+        away_attack_factor, away_defense_factor, away_lambda_notes = _calcular_ajuste_lambda_por_desfalques(
+            away_injuries, lambda_pre=lambda_effective_away
+        )
 
-    # Garantir mínimos realistas após ajuste
-    lambda_effective_home = max(0.25, lambda_effective_home)
-    lambda_effective_away = max(0.20, lambda_effective_away)
+        # Desfalques ofensivos do time da casa → casa marca menos
+        lambda_effective_home *= home_attack_factor
+        # Desfalques ofensivos do time visitante → visitante marca menos
+        lambda_effective_away *= away_attack_factor
+        # Desfalques defensivos do time da casa → visitante marca mais (defesa caseira enfraquecida)
+        lambda_effective_away *= home_defense_factor
+        # Desfalques defensivos do visitante → casa marca mais (defesa visitante enfraquecida)
+        lambda_effective_home *= away_defense_factor
+
+        # Garantir mínimos realistas após ajuste
+        lambda_effective_home = max(0.25, lambda_effective_home)
+        lambda_effective_away = max(0.20, lambda_effective_away)
+    else:
+        print(f"  ⏳ TASK 7 — Escalação NÃO confirmada → lambdas preservados (modelo histórico inalterado)")
+
     lambda_total_effective = lambda_effective_home + lambda_effective_away
 
     _all_lambda_notes = (
         [f"[{home_team_name}] {n}" for n in home_lambda_notes] +
         [f"[{away_team_name}] {n}" for n in away_lambda_notes]
     )
-    _lambda_adjusted = (home_attack_factor < 1.0 or home_defense_factor > 1.0 or
-                        away_attack_factor < 1.0 or away_defense_factor > 1.0)
+    _lambda_adjusted = _lineup_confirmed and (
+        home_attack_factor < 1.0 or home_defense_factor > 1.0 or
+        away_attack_factor < 1.0 or away_defense_factor > 1.0
+    )
 
     if _lambda_adjusted:
         print(f"  ⚠️ TASK 7 — Lambdas pré-ajuste: Casa={lambda_effective_home_pre:.2f} | Fora={lambda_effective_away_pre:.2f}")
         print(f"  ✅ TASK 7 — Lambdas pós-desfalques: Casa={lambda_effective_home:.2f} | Fora={lambda_effective_away:.2f}")
         for note in (home_lambda_notes + away_lambda_notes):
             print(f"     • {note}")
-    else:
-        print(f"  ✅ TASK 7 — Sem desfalques confiramados com impacto positional → lambda inalterado")
+    elif _lineup_confirmed:
+        print(f"  ✅ TASK 7 — Escalação confirmada mas sem desfalques com impacto posicional → lambda inalterado")
     # ─────────────────────────────────────────────────────────────────────────
 
     # Taxa de clean sheet defensiva:
@@ -1900,6 +1918,7 @@ async def generate_match_analysis(jogo):
                     'away_attack_factor': away_attack_factor,
                     'away_defense_factor': away_defense_factor,
                     'adjusted': _lambda_adjusted,
+                    'lineup_confirmed': _lineup_confirmed,
                     'notes': _all_lambda_notes,
                 }
             }
