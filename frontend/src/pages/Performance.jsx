@@ -499,7 +499,7 @@ export default function Performance() {
                   >
                     <AcertouBadge acertou={p.acertou} />
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0', flex: 1, minWidth: 120 }}>
-                      {p.tipo}
+                      {p.linha || p.tipo || '—'}
                     </span>
                     <span style={{ fontSize: 11, color: '#64748b', background: 'rgba(255,255,255,0.04)', borderRadius: 5, padding: '2px 8px' }}>
                       {p.mercado}
@@ -509,10 +509,10 @@ export default function Performance() {
                         @{Number(p.odd).toFixed(2)}
                       </span>
                     )}
-                    <RoiBadge roi={p.roi} />
-                    {p.liga_nome && (
+                    <RoiBadge roi={p.roi_unitario ?? p.roi} />
+                    {(p.liga || p.liga_nome) && (
                       <span style={{ fontSize: 10, color: '#4b5563', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>
-                        {p.liga_nome}
+                        {p.liga || p.liga_nome}
                       </span>
                     )}
                   </div>
