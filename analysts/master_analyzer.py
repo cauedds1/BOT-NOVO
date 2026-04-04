@@ -1553,27 +1553,38 @@ async def generate_match_analysis(jogo):
     _away_recent_fixtures_raw = await buscar_ultimos_jogos_time(away_team_id, limite=10)
 
     def _extract_team_goals_from_fixtures(fixtures_raw, team_id):
-        """Soma gols marcados pelo time nos últimos jogos para usar como denominador."""
+        """Soma gols marcados pelo time nos últimos jogos para usar como denominador.
+
+        buscar_ultimos_jogos_time retorna dicts com keys: fixture_id, home_goals, away_goals,
+        teams.home.id, teams.away.id — NÃO o shape raw da API.
+        """
         total = 0
         for f in fixtures_raw:
             teams = f.get('teams') or {}
-            goals = f.get('goals') or {}
-            if (teams.get('home') or {}).get('id') == team_id:
-                total += int(goals.get('home') or 0)
-            elif (teams.get('away') or {}).get('id') == team_id:
-                total += int(goals.get('away') or 0)
+            home_id = (teams.get('home') or {}).get('id')
+            away_id = (teams.get('away') or {}).get('id')
+            if home_id == team_id:
+                total += int(f.get('home_goals') or 0)
+            elif away_id == team_id:
+                total += int(f.get('away_goals') or 0)
         return float(total) if total > 0 else 1.0
 
+    # buscar_ultimos_jogos_time returns {'fixture_id': int, ...}, not raw API shape
     _home_recent_ids = [
-        f['fixture']['id'] for f in _home_recent_fixtures_raw
-        if (f.get('fixture') or {}).get('id')
+        f['fixture_id'] for f in _home_recent_fixtures_raw
+        if f.get('fixture_id')
     ]
     _away_recent_ids = [
-        f['fixture']['id'] for f in _away_recent_fixtures_raw
-        if (f.get('fixture') or {}).get('id')
+        f['fixture_id'] for f in _away_recent_fixtures_raw
+        if f.get('fixture_id')
     ]
     _home_recent_goals = _extract_team_goals_from_fixtures(_home_recent_fixtures_raw, home_team_id)
     _away_recent_goals = _extract_team_goals_from_fixtures(_away_recent_fixtures_raw, away_team_id)
+
+    print(
+        f"  📊 [CONTRIB] Jogos recentes: Casa {len(_home_recent_ids)}, "
+        f"Fora {len(_away_recent_ids)} | Gols: Casa {_home_recent_goals:.0f}, Fora {_away_recent_goals:.0f}"
+    )
 
     async def _enrich_injuries_with_contribution(injuries, team_id, recent_fixture_ids, recent_team_goals):
         """Busca contribuição recente de gols via /fixtures/players e calcula goal_contribution_pct."""
