@@ -1159,7 +1159,7 @@ async def _analyze_strength_of_schedule(team_id, league_id):
             continue
 
         # Only use opponent stats if already cached — never fire fresh API calls during SoS
-        from db_manager import _get_db_cache
+        from api_client import _get_db_cache
         cache_key_opp = f"stats_{opponent_id}_liga_{league_id}"
         from cache_manager import cache_manager as _cm
         opponent_stats = _cm.get(cache_key_opp) or _get_db_cache().get_cache_stats_time(opponent_id, league_id)
