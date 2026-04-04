@@ -289,7 +289,16 @@ async def _executar_analise_completa(fixture_id: int, jogo: dict):
             return
 
         # 2. Odds e classificação
-        odds = await buscar_odds_do_jogo(fixture_id)
+        _home_team = jogo["teams"]["home"]["name"]
+        _away_team = jogo["teams"]["away"]["name"]
+        _match_date = jogo["fixture"].get("date", "")
+        odds = await buscar_odds_do_jogo(
+            fixture_id,
+            home_team=_home_team,
+            away_team=_away_team,
+            match_date=_match_date,
+            league_id=id_liga,
+        )
         classificacao = await buscar_classificacao_liga(id_liga)
 
         pos_casa = "N/A"

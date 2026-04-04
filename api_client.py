@@ -1557,10 +1557,43 @@ def normalizar_odds(odds_formatadas):
 
     return odds_normalizadas
 
-async def buscar_odds_do_jogo(id_jogo: int):
+async def buscar_odds_do_jogo(
+    id_jogo: int,
+    home_team: str = "",
+    away_team: str = "",
+    match_date: str = "",
+    league_id: int = 0,
+):
+    """
+    Busca odds para um fixture usando estratégia híbrida:
+      1. The Odds API (quando ODDS_API_KEY configurada) → 1X2, O/U gols, BTTS, Handicap
+      2. API-Football odds endpoint → cantos, cartões, placar exato, HT/FT e complementos
+
+    Os dois resultados são mesclados. The Odds API tem prioridade para as chaves que cobre.
+    """
     cache_key = f"odds_{id_jogo}"
     if cached_data := cache_manager.get(cache_key): return cached_data
 
+    odds_finais: dict = {}
+
+    # ── FASE 1: The Odds API (quando configurada e liga mapeada) ────────────
+    if home_team and away_team and match_date and league_id:
+        try:
+            from odds_api_client import buscar_odds_the_odds_api
+            odds_the_odds = await buscar_odds_the_odds_api(
+                fixture_id=id_jogo,
+                home_team=home_team,
+                away_team=away_team,
+                match_date=match_date,
+                league_id=league_id,
+            )
+            if odds_the_odds:
+                odds_finais.update(odds_the_odds)
+                print(f"  ✅ [OddsAPI] Fixture {id_jogo}: {len(odds_the_odds)} chaves obtidas")
+        except Exception as e:
+            print(f"  ⚠️ [OddsAPI] Erro ao buscar odds para fixture {id_jogo}: {e}")
+
+    # ── FASE 2: API-Football (complemento para cantos, cartões, etc.) ────────
     params = {"fixture": str(id_jogo)}
     odds_formatadas = {}
 
@@ -1573,20 +1606,21 @@ async def buscar_odds_do_jogo(id_jogo: int):
 
         if data := response_json.get('response'):
             if not data:
-                return {}
+                if odds_finais:
+                    cache_manager.set(cache_key, odds_finais)
+                return odds_finais
 
             bookmaker_data = data[0].get('bookmakers', [])
             if not bookmaker_data:
-                return {}
+                if odds_finais:
+                    cache_manager.set(cache_key, odds_finais)
+                return odds_finais
 
-            # Usar primeira casa de apostas (geralmente Bet365)
             bookmaker = bookmaker_data[0]
             all_bets = bookmaker.get('bets', [])
             
-            # 🔍 DEBUG: Mostrar TODOS os mercados disponíveis
             mercados_disponiveis = [bet['name'] for bet in all_bets]
-            print(f"  📊 DEBUG ODDS - Mercados disponíveis para fixture {id_jogo}:")
-            print(f"     {mercados_disponiveis}")
+            print(f"  📊 [APIFootball] Mercados para fixture {id_jogo}: {mercados_disponiveis}")
 
             for bet in all_bets:
                 bet_name = bet['name']
@@ -1671,11 +1705,21 @@ async def buscar_odds_do_jogo(id_jogo: int):
     except Exception as e:
         print(f"  ⚠️ Erro ao buscar odds do jogo {id_jogo}: {e}")
 
-    # Normalizar odds para formato usado pelos analisadores
+    # Normalizar odds da API-Football e mesclar com The Odds API
+    # The Odds API tem prioridade (já está em odds_finais); API-Football complementa
     if odds_formatadas:
-        odds_normalizadas = normalizar_odds(odds_formatadas)
-        cache_manager.set(cache_key, odds_normalizadas)
-        return odds_normalizadas
+        odds_apif = normalizar_odds(odds_formatadas)
+        # Adicionar chaves da API-Football que ainda não estão em odds_finais
+        for k, v in odds_apif.items():
+            if k not in odds_finais:
+                odds_finais[k] = v
+
+    if odds_finais:
+        total_src = ("híbridas" if odds_formatadas else "The Odds API only") if odds_formatadas else ""
+        if odds_formatadas:
+            print(f"  📦 Odds {total_src} para fixture {id_jogo}: {len(odds_finais)} chaves totais")
+        cache_manager.set(cache_key, odds_finais)
+        return odds_finais
 
     return {}
 

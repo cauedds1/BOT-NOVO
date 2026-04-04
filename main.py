@@ -401,7 +401,13 @@ async def gerar_analise_completa_todos_mercados(jogo):
     print(f"--- ✅ MASTER ANALYZER COMPLETE - Script: {analysis_packet['analysis_summary']['selected_script']} ---")
     
     # 2️⃣ BUSCAR DADOS ADICIONAIS (odds, classificação)
-    odds = await buscar_odds_do_jogo(id_jogo)
+    odds = await buscar_odds_do_jogo(
+        id_jogo,
+        home_team=jogo['teams']['home']['name'],
+        away_team=jogo['teams']['away']['name'],
+        match_date=jogo['fixture'].get('date', ''),
+        league_id=id_liga,
+    )
     classificacao = await buscar_classificacao_liga(id_liga)
     
     # Extrair posições da classificação
@@ -714,7 +720,13 @@ async def gerar_palpite_completo(jogo, filtro_mercado=None, filtro_tipo_linha=No
     if not analise_db:
         stats_casa = await buscar_estatisticas_gerais_time(jogo['teams']['home']['id'], id_liga)
         stats_fora = await buscar_estatisticas_gerais_time(jogo['teams']['away']['id'], id_liga)
-        odds = await buscar_odds_do_jogo(id_jogo)
+        odds = await buscar_odds_do_jogo(
+            id_jogo,
+            home_team=jogo['teams']['home']['name'],
+            away_team=jogo['teams']['away']['name'],
+            match_date=jogo['fixture'].get('date', ''),
+            league_id=id_liga,
+        )
 
         if not stats_casa or not stats_fora or not odds:
             if not stats_casa:
@@ -1092,7 +1104,13 @@ async def coletar_todos_palpites_disponiveis():
             classificacao = await buscar_classificacao_liga(liga_id)
 
         # Buscar odds do jogo
-        odds = await buscar_odds_do_jogo(fixture_id)
+        odds = await buscar_odds_do_jogo(
+            fixture_id,
+            home_team=jogo['teams']['home']['name'],
+            away_team=jogo['teams']['away']['name'],
+            match_date=jogo['fixture'].get('date', ''),
+            league_id=jogo['league']['id'],
+        )
 
         if not stats_casa or not stats_fora or not odds:
             continue
