@@ -146,6 +146,54 @@ class DatabaseManager:
         CREATE INDEX IF NOT EXISTS idx_analises_jogos_data_jogo ON analises_jogos(data_jogo);
         CREATE INDEX IF NOT EXISTS idx_analises_jogos_atualizado_em ON analises_jogos(atualizado_em);
 
+        -- ═══════════════════════════════════════════════════════════════
+        -- CAMADA DE CACHE PERSISTENTE (Task #9)
+        -- Evita re-chamadas à API em restarts e entre sessões.
+        -- Lógica: memória → DB → API
+        -- ═══════════════════════════════════════════════════════════════
+
+        -- Fixtures do dia (jogos por data+liga combinados)
+        -- TTL: 8 horas — fixtures mudam ao longo do dia (novas ligas)
+        CREATE TABLE IF NOT EXISTS cache_fixtures_dia (
+            cache_key TEXT PRIMARY KEY,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        -- Estatísticas gerais de time por liga/temporada
+        -- TTL: 48 horas — stats só mudam depois de jogos disputados
+        CREATE TABLE IF NOT EXISTS cache_stats_time (
+            team_id INTEGER NOT NULL,
+            league_id INTEGER NOT NULL,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (team_id, league_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_stats_time_fetched ON cache_stats_time(fetched_at);
+
+        -- Últimos jogos finalizados de um time
+        -- TTL: 24 horas — lista muda só quando o time joga de novo
+        CREATE TABLE IF NOT EXISTS cache_ultimos_jogos (
+            team_id INTEGER NOT NULL,
+            limite INTEGER NOT NULL,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (team_id, limite)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_ultimos_jogos_fetched ON cache_ultimos_jogos(fetched_at);
+
+        -- Confrontos diretos (H2H) entre dois times
+        -- TTL: 30 dias — histórico ultra-estável, muda só se os times se encontrarem
+        CREATE TABLE IF NOT EXISTS cache_h2h (
+            team1_id INTEGER NOT NULL,
+            team2_id INTEGER NOT NULL,
+            limite INTEGER NOT NULL,
+            data JSONB NOT NULL,
+            fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (team1_id, team2_id, limite)
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_h2h_fetched ON cache_h2h(fetched_at);
+
         -- Nova tabela para sistema de fila de análises diárias
         CREATE TABLE IF NOT EXISTS daily_analyses (
             id SERIAL PRIMARY KEY,
@@ -376,6 +424,7 @@ class DatabaseManager:
                 
                 print("✅ Database schema inicializado com sucesso!")
                 print("   📋 Tabelas: analises_jogos, daily_analyses, palpites_historico, resultado_jogos, performance_mercados, estatisticas_jogadores, perfis_jogadores")
+                print("   📦 Cache persistente: cache_fixtures_dia, cache_stats_time, cache_ultimos_jogos, cache_h2h")
                 return True
                 
         except Exception as e:
@@ -387,6 +436,225 @@ class DatabaseManager:
         if self.pool:
             self.pool.closeall()
             print("✅ Connection pool fechado")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # CAMADA DE CACHE PERSISTENTE (Task #9)
+    # Padrão: get retorna None em caso de miss/erro; set silencia erros
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def get_cache_fixtures_dia(self, cache_key: str) -> Optional[list]:
+        """Busca fixtures do dia no DB. TTL: 8 horas. Retorna None em caso de miss."""
+        if not self.enabled:
+            return None
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data, fetched_at FROM cache_fixtures_dia WHERE cache_key = %s",
+                    (cache_key,)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[1]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_hours = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 3600
+                    if age_hours < 8:
+                        print(f"✅ DB CACHE HIT: fixtures_dia '{cache_key}' ({age_hours:.1f}h atrás)")
+                        return row[0]
+                    print(f"⏰ DB CACHE EXPIRADO: fixtures_dia '{cache_key}' ({age_hours:.1f}h > 8h)")
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_fixtures_dia get erro: {e}")
+            return None
+
+    def set_cache_fixtures_dia(self, cache_key: str, data: list) -> None:
+        """Salva fixtures do dia no DB."""
+        if not self.enabled:
+            return
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_fixtures_dia (cache_key, data, fetched_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (cache_key) DO UPDATE
+                        SET data = EXCLUDED.data, fetched_at = NOW()
+                    """,
+                    (cache_key, Json(data))
+                )
+                conn.commit()
+                cur.close()
+                print(f"💾 DB CACHE SAVE: fixtures_dia '{cache_key}' ({len(data)} jogos)")
+        except Exception as e:
+            print(f"⚠️ DB cache_fixtures_dia set erro: {e}")
+
+    def get_cache_stats_time(self, team_id: int, league_id: int) -> Optional[dict]:
+        """Busca stats gerais de time no DB. TTL: 48 horas. Retorna None em caso de miss."""
+        if not self.enabled:
+            return None
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data, fetched_at FROM cache_stats_time WHERE team_id = %s AND league_id = %s",
+                    (team_id, league_id)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[1]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_hours = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 3600
+                    if age_hours < 48:
+                        print(f"✅ DB CACHE HIT: stats time {team_id} liga {league_id} ({age_hours:.1f}h atrás)")
+                        return row[0]
+                    print(f"⏰ DB CACHE EXPIRADO: stats time {team_id} ({age_hours:.1f}h > 48h)")
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_stats_time get erro: {e}")
+            return None
+
+    def set_cache_stats_time(self, team_id: int, league_id: int, data: dict) -> None:
+        """Salva stats gerais de time no DB."""
+        if not self.enabled:
+            return
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_stats_time (team_id, league_id, data, fetched_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (team_id, league_id) DO UPDATE
+                        SET data = EXCLUDED.data, fetched_at = NOW()
+                    """,
+                    (team_id, league_id, Json(data))
+                )
+                conn.commit()
+                cur.close()
+                print(f"💾 DB CACHE SAVE: stats time {team_id} liga {league_id}")
+        except Exception as e:
+            print(f"⚠️ DB cache_stats_time set erro: {e}")
+
+    def get_cache_ultimos_jogos(self, team_id: int, limite: int) -> Optional[list]:
+        """Busca últimos jogos de um time no DB. TTL: 24 horas. Retorna None em caso de miss."""
+        if not self.enabled:
+            return None
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data, fetched_at FROM cache_ultimos_jogos WHERE team_id = %s AND limite = %s",
+                    (team_id, limite)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[1]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_hours = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 3600
+                    if age_hours < 24:
+                        print(f"✅ DB CACHE HIT: ultimos_jogos time {team_id} limite {limite} ({age_hours:.1f}h atrás)")
+                        return row[0]
+                    print(f"⏰ DB CACHE EXPIRADO: ultimos_jogos time {team_id} ({age_hours:.1f}h > 24h)")
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_ultimos_jogos get erro: {e}")
+            return None
+
+    def set_cache_ultimos_jogos(self, team_id: int, limite: int, data: list) -> None:
+        """Salva últimos jogos de um time no DB."""
+        if not self.enabled:
+            return
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_ultimos_jogos (team_id, limite, data, fetched_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (team_id, limite) DO UPDATE
+                        SET data = EXCLUDED.data, fetched_at = NOW()
+                    """,
+                    (team_id, limite, Json(data))
+                )
+                conn.commit()
+                cur.close()
+                print(f"💾 DB CACHE SAVE: ultimos_jogos time {team_id} limite {limite} ({len(data)} jogos)")
+        except Exception as e:
+            print(f"⚠️ DB cache_ultimos_jogos set erro: {e}")
+
+    def get_cache_h2h(self, team1_id: int, team2_id: int, limite: int) -> Optional[list]:
+        """Busca H2H entre dois times no DB. TTL: 30 dias. Retorna None em caso de miss."""
+        if not self.enabled:
+            return None
+        t1, t2 = min(team1_id, team2_id), max(team1_id, team2_id)
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return None
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT data, fetched_at FROM cache_h2h WHERE team1_id = %s AND team2_id = %s AND limite = %s",
+                    (t1, t2, limite)
+                )
+                row = cur.fetchone()
+                cur.close()
+                if row:
+                    fetched_at = row[1]
+                    if fetched_at.tzinfo is None:
+                        fetched_at = fetched_at.replace(tzinfo=BRASILIA_TZ)
+                    age_days = (datetime.now(BRASILIA_TZ) - fetched_at).total_seconds() / 86400
+                    if age_days < 30:
+                        print(f"✅ DB CACHE HIT: h2h {t1}x{t2} limite {limite} ({age_days:.1f}d atrás)")
+                        return row[0]
+                    print(f"⏰ DB CACHE EXPIRADO: h2h {t1}x{t2} ({age_days:.1f}d > 30d)")
+                return None
+        except Exception as e:
+            print(f"⚠️ DB cache_h2h get erro: {e}")
+            return None
+
+    def set_cache_h2h(self, team1_id: int, team2_id: int, limite: int, data: list) -> None:
+        """Salva H2H entre dois times no DB."""
+        if not self.enabled:
+            return
+        t1, t2 = min(team1_id, team2_id), max(team1_id, team2_id)
+        try:
+            with self._get_connection() as conn:
+                if not conn:
+                    return
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    INSERT INTO cache_h2h (team1_id, team2_id, limite, data, fetched_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                    ON CONFLICT (team1_id, team2_id, limite) DO UPDATE
+                        SET data = EXCLUDED.data, fetched_at = NOW()
+                    """,
+                    (t1, t2, limite, Json(data))
+                )
+                conn.commit()
+                cur.close()
+                print(f"💾 DB CACHE SAVE: h2h {t1}x{t2} limite {limite} ({len(data)} confrontos)")
+        except Exception as e:
+            print(f"⚠️ DB cache_h2h set erro: {e}")
 
     def salvar_analise(self, fixture_id: int, dados_jogo: dict, analises: dict, stats: dict):
         """

@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import cache_manager
+import db_manager as _db_module
 
 import os
 from dotenv import load_dotenv
@@ -28,6 +29,18 @@ HEADERS = {
 # Cliente HTTP será gerenciado pelo Application context
 # Não usar variável global para evitar conflitos de event loop
 _http_client_instance = None
+
+# ── Cache DB persistente (Task #9) ──────────────────────────────────────────
+# Instância leve (pool 1-2 conexões) exclusiva do api_client.
+# Inicializada na primeira chamada para evitar erros ao importar o módulo.
+_db_cache_instance = None
+
+def _get_db_cache() -> _db_module.DatabaseManager:
+    """Retorna (ou cria) a instância de DB usada para cache persistente."""
+    global _db_cache_instance
+    if _db_cache_instance is None:
+        _db_cache_instance = _db_module.DatabaseManager(min_conn=1, max_conn=3)
+    return _db_cache_instance
 
 def set_http_client(client):
     """Define o cliente HTTP gerenciado pelo Application."""
@@ -659,6 +672,11 @@ async def buscar_jogos_do_dia():
         print(f"✅ CACHE HIT: {len(cached_data)} jogos encontrados no cache")
         return cached_data
 
+    db_data = _get_db_cache().get_cache_fixtures_dia(cache_key)
+    if db_data is not None:
+        cache_manager.set(cache_key, db_data)
+        return db_data
+
     print(f"⚡ CACHE MISS: Buscando jogos da API ({len(LIGAS_DE_INTERESSE)} ligas)")
     todos_os_jogos = []
     plano_bloqueado = False
@@ -725,7 +743,8 @@ async def buscar_jogos_do_dia():
 
     print(f"\n✅ Busca completa: {len(todos_os_jogos)} jogos encontrados")
     if not plano_bloqueado:
-        cache_manager.set(cache_key, todos_os_jogos)  # Usa padrão de 240 min (4h)
+        cache_manager.set(cache_key, todos_os_jogos)
+        _get_db_cache().set_cache_fixtures_dia(cache_key, todos_os_jogos)
     return todos_os_jogos
 
 async def buscar_classificacao_liga(id_liga: int):
@@ -754,6 +773,11 @@ async def buscar_classificacao_liga(id_liga: int):
 async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
     cache_key = f"stats_{time_id}_liga_{id_liga}"
     if cached_data := cache_manager.get(cache_key): return cached_data
+
+    db_data = _get_db_cache().get_cache_stats_time(time_id, id_liga)
+    if db_data is not None:
+        cache_manager.set(cache_key, db_data)
+        return db_data
 
     season = await get_current_season(id_liga)
 
@@ -1036,6 +1060,7 @@ async def buscar_estatisticas_gerais_time(time_id: int, id_liga: int):
         }
 
         cache_manager.set(cache_key, analise)
+        _get_db_cache().set_cache_stats_time(time_id, id_liga, analise)
         return analise
 
     except httpx.TimeoutException:
@@ -1336,7 +1361,12 @@ async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
     cache_key = f"h2h_{time1_id}_{time2_id}_{limite}"
     if cached_data := cache_manager.get(cache_key):
         return cached_data
-    
+
+    db_data = _get_db_cache().get_cache_h2h(time1_id, time2_id, limite)
+    if db_data is not None:
+        cache_manager.set(cache_key, db_data)
+        return db_data
+
     params = {"h2h": f"{time1_id}-{time2_id}", "last": str(limite)}
     try:
         await asyncio.sleep(1.6)
@@ -1368,6 +1398,7 @@ async def buscar_h2h(time1_id: int, time2_id: int, limite: int = 5):
                 })
             
             cache_manager.set(cache_key, confrontos)
+            _get_db_cache().set_cache_h2h(time1_id, time2_id, limite, confrontos)
             return confrontos
         else:
             print(f"     ⚠️ Nenhum H2H encontrado")
@@ -1390,6 +1421,12 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
     cache_key = f"ultimos_jogos_finalizados_{time_id}_{limite}"
     if cached_data := cache_manager.get(cache_key):
         return cached_data
+
+    if _tentativa == 1:
+        db_data = _get_db_cache().get_cache_ultimos_jogos(time_id, limite)
+        if db_data is not None:
+            cache_manager.set(cache_key, db_data)
+            return db_data
 
     # Determinar temporada atual automaticamente (horário de Brasília)
     brasilia_tz = ZoneInfo("America/Sao_Paulo")
@@ -1465,6 +1502,8 @@ async def buscar_ultimos_jogos_time(time_id: int, limite: int = 5, _tentativa: i
                 return []
             
             cache_manager.set(cache_key, jogos_processados)
+            if _tentativa == 1:
+                _get_db_cache().set_cache_ultimos_jogos(time_id, limite, jogos_processados)
             return jogos_processados
         else:
             print(f"     ❌ Campo 'response' vazio")
